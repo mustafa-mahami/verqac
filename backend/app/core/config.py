@@ -24,6 +24,16 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
     app_url: str = "http://localhost:5173"
 
+    invitation_days: int = 14
+
+    # E-mail is optional: without SMTP the invitation link is shown to the inviter to send by hand.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "Verqac <no-reply@verqac.com>"
+    smtp_starttls: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

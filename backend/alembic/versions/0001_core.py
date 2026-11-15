@@ -141,7 +141,9 @@ CREATE POLICY audit_insert ON audit_log FOR INSERT WITH CHECK (true);
 
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
-    Base.metadata.create_all(bind=op.get_bind())
+    # Only this migration's tables. Later migrations add columns with ADD COLUMN IF NOT EXISTS,
+    # so they also run cleanly on a fresh database built from the current models.
+    Base.metadata.create_all(bind=op.get_bind(), tables=[Base.metadata.tables[t] for t in TABLES])
     op.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower ON users (lower(email))")
     op.execute(HELPERS)
     op.execute(POLICIES)

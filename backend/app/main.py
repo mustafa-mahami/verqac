@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, meta, projects
+from app.api import auth, invitations, meta, orgs, projects, team
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth.router, projects.router, meta.router):
+for r in (auth.router, projects.router, team.router, orgs.router, invitations.router, meta.router):
     app.include_router(r, prefix="/api/v1")
 
 

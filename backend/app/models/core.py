@@ -210,6 +210,7 @@ class Invitation(Base):
     project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     party_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("project_parties.id", ondelete="CASCADE"))
     role_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("roles.id"))
+    org_role: Mapped[str | None] = mapped_column(String(10))  # org_member invitations: admin | member
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

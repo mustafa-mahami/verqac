@@ -115,3 +115,100 @@ class DisciplineOut(Out):
     code: str
     name_ar: str
     name_en: str
+
+
+# ---- team, parties, invitations (phase 1)
+from datetime import datetime  # noqa: E402
+
+
+class InviteOut(BaseModel):
+    link: str
+    email: str
+    email_sent: bool
+    expires_at: datetime
+
+
+class PendingInvite(BaseModel):
+    email: str
+    expires_at: datetime
+
+
+class TeamParty(PartyOut):
+    can_manage_team: bool
+    pending_invite: PendingInvite | None
+
+
+class MemberOut(BaseModel):
+    id: UUID
+    user: UserOut
+    party_id: UUID
+    role: RoleOut
+    discipline_ids: list[UUID]
+    is_active: bool
+
+
+class TeamOut(BaseModel):
+    project: ProjectOut
+    can_manage_project: bool
+    my_party_id: UUID | None
+    parties: list[TeamParty]
+    members: list[MemberOut]
+
+
+class PartyIn(BaseModel):
+    kind: Literal["consultant", "owner"]
+    placeholder_name: str = Field(min_length=2, max_length=200)
+    email: EmailStr | None = None
+
+
+class PartyInviteIn(BaseModel):
+    email: EmailStr
+
+
+class MemberIn(BaseModel):
+    party_id: UUID
+    user_id: UUID
+    role_id: UUID
+    discipline_ids: list[UUID] = []
+
+
+class MemberPatch(BaseModel):
+    role_id: UUID | None = None
+    discipline_ids: list[UUID] | None = None
+    is_active: bool | None = None
+
+
+class OrgMemberOut(BaseModel):
+    user: UserOut
+    org_role: str
+
+
+class OrgInviteIn(BaseModel):
+    email: EmailStr
+    org_role: Literal["admin", "member"] = "member"
+
+
+class InvitationInfo(BaseModel):
+    kind: str
+    email: str
+    status: Literal["valid", "accepted", "expired"]
+    user_exists: bool
+    inviter_name_ar: str
+    inviter_name_en: str
+    org: OrgOut | None  # the org joined (org_member) or the inviting project owner org
+    project: ProjectOut | None
+    party_kind: str | None
+    party_placeholder: str | None
+    role: RoleOut | None
+
+
+class AcceptIn(BaseModel):
+    # new user (when the e-mail is not registered yet)
+    full_name_ar: str | None = Field(default=None, min_length=2, max_length=200)
+    full_name_en: str | None = Field(default=None, min_length=2, max_length=200)
+    password: str | None = Field(default=None, min_length=10, max_length=128)
+    locale: Locale = "ar"
+    # project party: join with an existing organization, or create one
+    org_id: UUID | None = None
+    org_name_ar: str | None = Field(default=None, min_length=2, max_length=200)
+    org_name_en: str | None = Field(default=None, min_length=2, max_length=200)
