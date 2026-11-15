@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if lang == 'ar' else 'ltr' }}">
+<head>
+<meta charset="utf-8">
+<style>
+{{ font_css }}
+* { box-sizing: border-box; }
+body { font-family: 'Plex Arabic', sans-serif; font-size: 10.5pt; color: #1a1a1a; margin: 0; line-height: 1.5; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1f3a5f; padding-bottom: 8px; }
+.org { font-size: 13pt; font-weight: 700; color: #1f3a5f; }
+.org small { display: block; font-size: 9pt; font-weight: 400; color: #555; }
+.doc-title { text-align: end; }
+.doc-title h1 { font-size: 15pt; margin: 0; }
+.doc-title .num { font-size: 11pt; font-weight: 600; direction: ltr; unicode-bidi: isolate; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { border: 1px solid #c9ced6; padding: 5px 7px; text-align: start; vertical-align: top; }
+th { background: #eef2f7; font-weight: 600; width: 22%; }
+.items th { width: auto; }
+.section { margin-top: 14px; font-weight: 700; color: #1f3a5f; font-size: 11pt; }
+.decision { display: flex; gap: 14px; margin-top: 6px; flex-wrap: wrap; }
+.box { display: inline-flex; align-items: center; gap: 6px; }
+.tick { width: 12px; height: 12px; border: 1.3px solid #333; display: inline-block; text-align: center; line-height: 10px; font-size: 10pt; }
+.signs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+.sign { border: 1px solid #c9ced6; padding: 8px; min-height: 80px; }
+.sign b { display: block; margin-bottom: 4px; }
+.stamp { margin-top: 14px; font-size: 8pt; color: #555; border-top: 1px dashed #aaa; padding-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="org">{{ org_name }}<small>{{ project_name }} · <span class="ltr">{{ project_code }}</span></small></div>
+    <div class="doc-title">
+      <h1>{{ t.title }}</h1>
+      <div class="num">{{ number }} · Rev. {{ rev }}</div>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>{{ t.consultant }}</th><td>{{ consultant }}</td><th>{{ t.owner }}</th><td>{{ owner }}</td></tr>
+    <tr><th>{{ t.discipline }}</th><td>{{ discipline }}</td><th>{{ t.date }}</th><td class="ltr">{{ date }}</td></tr>
+    <tr><th>{{ t.subject }}</th><td colspan="3">{{ subject }}</td></tr>
+    <tr><th>{{ t.boq }}</th><td><span class="ltr">{{ boq }}</span></td><th>{{ t.due }}</th><td class="ltr">{{ due }}</td></tr>
+  </table>
+
+  <div class="section">{{ t.items_title }}</div>
+  <table class="items">
+    <tr><th>#</th><th>{{ t.item }}</th><th>{{ t.manufacturer }}</th><th>{{ t.qty }}</th></tr>
+    {% for it in items %}
+    <tr><td>{{ loop.index }}</td><td>{{ it.name }}</td><td>{{ it.maker }}</td><td>{{ it.qty }}</td></tr>
+    {% endfor %}
+  </table>
+
+  <div class="section">{{ t.decision }}</div>
+  <div class="decision">
+    {% for code, label in t.decisions %}
+    <span class="box"><span class="tick">{{ '✓' if code == decision else '' }}</span>{{ label }}</span>
+    {% endfor %}
+  </div>
+  <table><tr><th>{{ t.comments }}</th><td>{{ comments }}</td></tr></table>
+
+  <div class="signs">
+    <div class="sign"><b>{{ t.submitted_by }}</b>{{ submitted_by }}<br><span class="ltr">{{ submitted_at }}</span></div>
+    <div class="sign"><b>{{ t.answered_by }}</b>{{ answered_by }}<br><span class="ltr">{{ answered_at }}</span></div>
+  </div>
+
+  <div class="stamp">{{ t.stamp }}: <span class="ltr">SHA-256 {{ stamp }}</span></div>
+</body>
+</html>

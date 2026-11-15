@@ -1,0 +1,53 @@
+{
+  "app": { "name": "Verqac", "tagline": "Quality management for construction projects" },
+  "lang": { "switch": "العربية" },
+  "auth": {
+    "login": "Sign in",
+    "logout": "Sign out",
+    "email": "Email",
+    "password": "Password",
+    "noAccount": "New organization? Register it",
+    "haveAccount": "Have an account? Sign in",
+    "register": "Register a new organization",
+    "registerHint": "The organization admin registers the organization once, then adds the users. Employees do not register separate accounts.",
+    "orgKind": "Organization type",
+    "orgNameAr": "Organization name (Arabic)",
+    "orgNameEn": "Organization name (English)",
+    "fullNameAr": "Your name (Arabic)",
+    "fullNameEn": "Your name (English)",
+    "passwordHint": "At least 10 characters",
+    "submitRegister": "Register organization"
+  },
+  "orgKind": { "contractor": "Contractor", "consultant": "Consultant", "owner": "Owner" },
+  "party": { "contractor": "Contractor", "consultant": "Consultant", "owner": "Owner" },
+  "partyStatus": { "invited": "Not joined yet", "active": "Active", "removed": "Removed" },
+  "projects": {
+    "title": "Projects",
+    "new": "New project",
+    "empty": "No projects yet.",
+    "myRole": "My role",
+    "code": "Project code",
+    "codeHint": "Latin letters and digits, used in record numbers",
+    "nameAr": "Name (Arabic)",
+    "nameEn": "Name (English)",
+    "client": "Client",
+    "donor": "Donor",
+    "contractNo": "Contract no.",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "consultantName": "Consultant (invited later)",
+    "ownerName": "Owner (invited later)",
+    "create": "Create project",
+    "org": "Organization"
+  },
+  "errors": {
+    "invalid_credentials": "Wrong email or password.",
+    "account_inactive": "This account is inactive.",
+    "email_taken": "This email is already registered.",
+    "project_code_taken": "This project code is already used in your organization.",
+    "org_admin_required": "Only the organization admin can create projects.",
+    "org_kind_cannot_create_projects": "An owner organization does not create projects; it is invited to them.",
+    "generic": "Something went wrong, try again."
+  },
+  "common": { "cancel": "Cancel", "save": "Save", "required": "Required" }
+}

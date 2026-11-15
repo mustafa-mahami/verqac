@@ -1,0 +1,53 @@
+{
+  "app": { "name": "Verqac", "tagline": "إدارة الجودة في مشاريع البناء" },
+  "lang": { "switch": "English" },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "logout": "خروج",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "noAccount": "جهة جديدة؟ سجّل جهتك",
+    "haveAccount": "لديك حساب؟ سجّل الدخول",
+    "register": "تسجيل جهة جديدة",
+    "registerHint": "مدير الجهة يسجّل الجهة مرة واحدة، ثم يضيف المستخدمين. لا يسجّل كل موظف حساباً منفصلاً.",
+    "orgKind": "نوع الجهة",
+    "orgNameAr": "اسم الجهة بالعربية",
+    "orgNameEn": "اسم الجهة بالإنجليزية",
+    "fullNameAr": "اسمك بالعربية",
+    "fullNameEn": "اسمك بالإنجليزية",
+    "passwordHint": "10 أحرف على الأقل",
+    "submitRegister": "تسجيل الجهة"
+  },
+  "orgKind": { "contractor": "مقاول", "consultant": "استشاري", "owner": "مالك" },
+  "party": { "contractor": "المقاول", "consultant": "الاستشاري", "owner": "المالك" },
+  "partyStatus": { "invited": "لم ينضم بعد", "active": "نشط", "removed": "محذوف" },
+  "projects": {
+    "title": "المشاريع",
+    "new": "مشروع جديد",
+    "empty": "لا توجد مشاريع بعد.",
+    "myRole": "دوري",
+    "code": "رمز المشروع",
+    "codeHint": "حروف إنجليزية وأرقام، يظهر في ترقيم السجلات",
+    "nameAr": "الاسم بالعربية",
+    "nameEn": "الاسم بالإنجليزية",
+    "client": "العميل",
+    "donor": "الجهة المانحة",
+    "contractNo": "رقم العقد",
+    "startDate": "تاريخ البدء",
+    "endDate": "تاريخ الانتهاء",
+    "consultantName": "الاستشاري (يُدعى لاحقاً)",
+    "ownerName": "المالك (يُدعى لاحقاً)",
+    "create": "إنشاء المشروع",
+    "org": "الجهة"
+  },
+  "errors": {
+    "invalid_credentials": "البريد أو كلمة المرور غير صحيحة.",
+    "account_inactive": "هذا الحساب غير نشط.",
+    "email_taken": "هذا البريد مسجّل مسبقاً.",
+    "project_code_taken": "رمز المشروع مستخدم في جهتك.",
+    "org_admin_required": "إنشاء المشاريع لمدير الجهة فقط.",
+    "org_kind_cannot_create_projects": "جهة المالك لا تنشئ مشاريع، بل تُدعى إليها.",
+    "generic": "حدث خطأ، حاول مرة أخرى."
+  },
+  "common": { "cancel": "إلغاء", "save": "حفظ", "required": "مطلوب" }
+}
