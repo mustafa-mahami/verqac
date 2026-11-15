@@ -6,8 +6,17 @@ touch Mahami's database, files or Nginx sites.
 
 ## 1. DNS
 
-At the registrar of verqac.com add an A record: `app` → `109.199.127.99`.
-(Later: `verqac.com` and `www` for the marketing site.)
+At NameSilo, verqac.com must have exactly these A records (delete the parking records
+172.232.24.235, 172.232.24.161 and 172.234.25.42 for `@` and `www`):
+
+| Name | Type | Value |
+| --- | --- | --- |
+| `@` | A | 109.199.127.99 |
+| `www` | A | 109.199.127.99 |
+| `app` | A | 109.199.127.99 |
+
+`verqac.com` and `www` redirect to `app.verqac.com` until the marketing site exists.
+Check before certbot: `dig +short app.verqac.com` returns only 109.199.127.99.
 
 ## 2. Docker (once)
 
@@ -41,7 +50,7 @@ curl -s http://127.0.0.1:8300/api/health
 cp deploy/nginx/verqac.conf /etc/nginx/sites-available/verqac
 ln -s /etc/nginx/sites-available/verqac /etc/nginx/sites-enabled/verqac
 nginx -t && systemctl reload nginx
-certbot --nginx -d app.verqac.com
+certbot --nginx -d app.verqac.com -d verqac.com -d www.verqac.com
 ```
 
 Then open https://app.verqac.com and register the first organization.
