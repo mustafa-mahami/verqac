@@ -4,6 +4,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { api, ApiError, type ProjectItem } from '../api';
 import { useAuth } from '../auth';
 import { pick } from '../i18n';
@@ -12,7 +13,7 @@ function ProjectCard({ item }: { item: ProjectItem }) {
   const { t } = useTranslation();
   const p = item.project;
   return (
-    <Card withBorder padding="md">
+    <Card withBorder padding="md" component={Link} to={`/projects/${p.id}`} style={{ cursor: 'pointer' }}>
       <Group justify="space-between" align="flex-start" wrap="nowrap">
         <div>
           <Text fw={600}>{pick(p, 'name')}</Text>

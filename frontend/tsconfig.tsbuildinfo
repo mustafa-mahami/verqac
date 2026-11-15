@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/api.ts","./src/auth.tsx","./src/i18n.ts","./src/main.tsx","./src/pages/AuthLayout.tsx","./src/pages/Login.tsx","./src/pages/Projects.tsx","./src/pages/Register.tsx"],"version":"5.7.3"}
+{"root":["./src/App.tsx","./src/api.ts","./src/auth.tsx","./src/i18n.ts","./src/main.tsx","./src/pages/AuthLayout.tsx","./src/pages/Invite.tsx","./src/pages/InviteLink.tsx","./src/pages/Login.tsx","./src/pages/OrgUsers.tsx","./src/pages/ProjectTeam.tsx","./src/pages/Projects.tsx","./src/pages/Register.tsx"],"version":"5.7.3"}

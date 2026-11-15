@@ -1,6 +1,11 @@
 {
-  "app": { "name": "Verqac", "tagline": "Quality management for construction projects" },
-  "lang": { "switch": "العربية" },
+  "app": {
+    "name": "Verqac",
+    "tagline": "Quality management for construction projects"
+  },
+  "lang": {
+    "switch": "العربية"
+  },
   "auth": {
     "login": "Sign in",
     "logout": "Sign out",
@@ -18,9 +23,21 @@
     "passwordHint": "At least 10 characters",
     "submitRegister": "Register organization"
   },
-  "orgKind": { "contractor": "Contractor", "consultant": "Consultant", "owner": "Owner" },
-  "party": { "contractor": "Contractor", "consultant": "Consultant", "owner": "Owner" },
-  "partyStatus": { "invited": "Not joined yet", "active": "Active", "removed": "Removed" },
+  "orgKind": {
+    "contractor": "Contractor",
+    "consultant": "Consultant",
+    "owner": "Owner"
+  },
+  "party": {
+    "contractor": "Contractor",
+    "consultant": "Consultant",
+    "owner": "Owner"
+  },
+  "partyStatus": {
+    "invited": "Not joined yet",
+    "active": "Active",
+    "removed": "Removed"
+  },
   "projects": {
     "title": "Projects",
     "new": "New project",
@@ -47,7 +64,85 @@
     "project_code_taken": "This project code is already used in your organization.",
     "org_admin_required": "Only the organization admin can create projects.",
     "org_kind_cannot_create_projects": "An owner organization does not create projects; it is invited to them.",
-    "generic": "Something went wrong, try again."
+    "generic": "Something went wrong, try again.",
+    "party_exists": "This party is already in the project.",
+    "party_already_joined": "This party has joined and cannot be changed here.",
+    "manage_project_required": "Only the project manager or the contractor's admin can do this.",
+    "manage_team_required": "You cannot manage this party's team.",
+    "already_member": "This user is already a project member.",
+    "already_org_member": "This email is already in the organization.",
+    "cannot_remove_self": "You cannot deactivate yourself.",
+    "invitation_invalid": "The invitation has expired or was used.",
+    "login_required": "Sign in with this email first.",
+    "org_already_party": "Your organization is already a party in this project.",
+    "role_not_for_party": "This role does not fit this party.",
+    "org_name_required": "Enter the organization name in Arabic and English."
   },
-  "common": { "cancel": "Cancel", "save": "Save", "required": "Required" }
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "required": "Required",
+    "close": "Close"
+  },
+  "nav": {
+    "projects": "Projects",
+    "orgUsers": "Organization users"
+  },
+  "team": {
+    "title": "Project team",
+    "back": "All projects",
+    "parties": "Parties",
+    "members": "Members",
+    "addParty": "Add party",
+    "invite": "Invite",
+    "reinvite": "Invite again",
+    "remove": "Remove",
+    "pendingTo": "Invitation sent to {{email}}",
+    "partyName": "Organization name",
+    "inviteEmail": "Email of the party's lead",
+    "inviteEmailHint": "They get a link to create their organization's account and join the project",
+    "addMember": "Add member",
+    "user": "User",
+    "role": "Role",
+    "disciplines": "Disciplines",
+    "allDisciplines": "All disciplines",
+    "inactive": "Inactive",
+    "deactivate": "Deactivate",
+    "activate": "Activate",
+    "noMembers": "No members yet.",
+    "noUsersToAdd": "Everyone in your organization is already in the project. Invite new users from \"Organization users\".",
+    "you": "You",
+    "partyKind": "Party"
+  },
+  "invite": {
+    "linkTitle": "Invitation link",
+    "emailSent": "The link was emailed to {{email}}.",
+    "emailNotSent": "Email is not set up on the server yet. Copy the link and send it to {{email}} yourself (WhatsApp or email).",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "validDays": "Valid until {{date}}",
+    "title": "Invitation to Verqac",
+    "toProject": "{{inviter}} invites you to the project \"{{project}}\" as {{party}}.",
+    "toOrg": "{{inviter}} invites you to join \"{{org}}\".",
+    "forEmail": "Invitation for {{email}}",
+    "accepted": "This invitation was already used.",
+    "expired": "This invitation has expired or was withdrawn.",
+    "loginFirst": "This email already has a Verqac account. Sign in with it first, then open the link again.",
+    "otherEmail": "You are signed in as {{email}}. Sign out and sign in as {{invited}}.",
+    "joinWith": "Join with organization",
+    "newOrg": "New organization",
+    "orgNameAr": "Your organization's name (Arabic)",
+    "orgNameEn": "Your organization's name (English)",
+    "accept": "Accept invitation",
+    "yourRole": "Your role: {{role}}"
+  },
+  "org": {
+    "title": "Organization users",
+    "invite": "Invite user",
+    "pending": "Pending invitations",
+    "admin": "Admin",
+    "member": "User",
+    "orgRole": "Organization access",
+    "hint": "Once they accept, they belong to your organization; then add them to projects from the project team page."
+  }
 }

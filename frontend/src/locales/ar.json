@@ -1,6 +1,11 @@
 {
-  "app": { "name": "Verqac", "tagline": "إدارة الجودة في مشاريع البناء" },
-  "lang": { "switch": "English" },
+  "app": {
+    "name": "Verqac",
+    "tagline": "إدارة الجودة في مشاريع البناء"
+  },
+  "lang": {
+    "switch": "English"
+  },
   "auth": {
     "login": "تسجيل الدخول",
     "logout": "خروج",
@@ -18,9 +23,21 @@
     "passwordHint": "10 أحرف على الأقل",
     "submitRegister": "تسجيل الجهة"
   },
-  "orgKind": { "contractor": "مقاول", "consultant": "استشاري", "owner": "مالك" },
-  "party": { "contractor": "المقاول", "consultant": "الاستشاري", "owner": "المالك" },
-  "partyStatus": { "invited": "لم ينضم بعد", "active": "نشط", "removed": "محذوف" },
+  "orgKind": {
+    "contractor": "مقاول",
+    "consultant": "استشاري",
+    "owner": "مالك"
+  },
+  "party": {
+    "contractor": "المقاول",
+    "consultant": "الاستشاري",
+    "owner": "المالك"
+  },
+  "partyStatus": {
+    "invited": "لم ينضم بعد",
+    "active": "نشط",
+    "removed": "محذوف"
+  },
   "projects": {
     "title": "المشاريع",
     "new": "مشروع جديد",
@@ -47,7 +64,85 @@
     "project_code_taken": "رمز المشروع مستخدم في جهتك.",
     "org_admin_required": "إنشاء المشاريع لمدير الجهة فقط.",
     "org_kind_cannot_create_projects": "جهة المالك لا تنشئ مشاريع، بل تُدعى إليها.",
-    "generic": "حدث خطأ، حاول مرة أخرى."
+    "generic": "حدث خطأ، حاول مرة أخرى.",
+    "party_exists": "هذا الطرف موجود في المشروع.",
+    "party_already_joined": "انضم هذا الطرف للمشروع ولا يمكن تغييره من هنا.",
+    "manage_project_required": "هذا الإجراء لمدير المشروع أو مدير جهة المقاول.",
+    "manage_team_required": "لا تملك إدارة فريق هذا الطرف.",
+    "already_member": "هذا المستخدم عضو في المشروع.",
+    "already_org_member": "هذا البريد عضو في الجهة.",
+    "cannot_remove_self": "لا يمكنك إيقاف عضويتك بنفسك.",
+    "invitation_invalid": "الدعوة منتهية أو مستخدمة.",
+    "login_required": "سجّل الدخول بهذا البريد أولاً.",
+    "org_already_party": "جهتك طرف في هذا المشروع مسبقاً.",
+    "role_not_for_party": "هذا الدور لا يناسب هذا الطرف.",
+    "org_name_required": "اكتب اسم الجهة بالعربية والإنجليزية."
   },
-  "common": { "cancel": "إلغاء", "save": "حفظ", "required": "مطلوب" }
+  "common": {
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "required": "مطلوب",
+    "close": "إغلاق"
+  },
+  "nav": {
+    "projects": "المشاريع",
+    "orgUsers": "مستخدمو الجهة"
+  },
+  "team": {
+    "title": "فريق المشروع",
+    "back": "كل المشاريع",
+    "parties": "أطراف المشروع",
+    "members": "الأعضاء",
+    "addParty": "إضافة طرف",
+    "invite": "دعوة",
+    "reinvite": "إعادة الدعوة",
+    "remove": "حذف",
+    "pendingTo": "دعوة مرسلة إلى {{email}}",
+    "partyName": "اسم الجهة",
+    "inviteEmail": "بريد مسؤول الجهة",
+    "inviteEmailHint": "يصله رابط ينشئ به حساب جهته وينضم للمشروع",
+    "addMember": "إضافة عضو",
+    "user": "المستخدم",
+    "role": "الدور",
+    "disciplines": "التخصصات",
+    "allDisciplines": "كل التخصصات",
+    "inactive": "موقوف",
+    "deactivate": "إيقاف",
+    "activate": "تفعيل",
+    "noMembers": "لا أعضاء بعد.",
+    "noUsersToAdd": "كل مستخدمي جهتك أعضاء في المشروع. ادعُ مستخدمين جدداً من صفحة «مستخدمو الجهة».",
+    "you": "أنت",
+    "partyKind": "الطرف"
+  },
+  "invite": {
+    "linkTitle": "رابط الدعوة",
+    "emailSent": "أُرسل الرابط إلى {{email}}.",
+    "emailNotSent": "البريد غير مفعّل بعد على الخادم. انسخ الرابط وأرسله إلى {{email}} بنفسك (واتساب أو بريد).",
+    "copy": "نسخ الرابط",
+    "copied": "نُسخ",
+    "validDays": "صالح حتى {{date}}",
+    "title": "دعوة إلى Verqac",
+    "toProject": "{{inviter}} يدعوك إلى مشروع «{{project}}» بصفة {{party}}.",
+    "toOrg": "{{inviter}} يدعوك للانضمام إلى «{{org}}».",
+    "forEmail": "الدعوة للبريد {{email}}",
+    "accepted": "هذه الدعوة استُخدمت من قبل.",
+    "expired": "هذه الدعوة منتهية أو أُلغيت.",
+    "loginFirst": "هذا البريد مسجّل في Verqac. سجّل الدخول به أولاً ثم افتح الرابط مرة أخرى.",
+    "otherEmail": "أنت مسجّل الدخول بحساب آخر ({{email}}). اخرج وادخل بحساب {{invited}}.",
+    "joinWith": "الانضمام بجهة",
+    "newOrg": "جهة جديدة",
+    "orgNameAr": "اسم جهتك بالعربية",
+    "orgNameEn": "اسم جهتك بالإنجليزية",
+    "accept": "قبول الدعوة",
+    "yourRole": "دورك: {{role}}"
+  },
+  "org": {
+    "title": "مستخدمو الجهة",
+    "invite": "دعوة مستخدم",
+    "pending": "دعوات لم تُقبل بعد",
+    "admin": "مدير الجهة",
+    "member": "مستخدم",
+    "orgRole": "الصلاحية في الجهة",
+    "hint": "المستخدم يقبل الدعوة فيصبح من جهتك، ثم تضيفه إلى المشاريع من صفحة فريق المشروع."
+  }
 }

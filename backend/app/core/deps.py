@@ -33,7 +33,11 @@ def request_meta(request: Request) -> RequestMeta:
 
 
 def system_db() -> Iterator[Session]:
-    """Session for the few anonymous system paths (sign-up, login, refresh)."""
+    """Session for the few anonymous system paths (sign-up, login, refresh).
+
+    Always use with Depends(..., scope="function"): the transaction must commit before
+    the response is sent, or a fast client can call the next endpoint before its data exists.
+    """
     session = SessionLocal()
     try:
         with session.begin():
@@ -68,7 +72,7 @@ def user_db(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> It
         session.close()
 
 
-def ctx(dbu: tuple[Session, UUID] = Depends(user_db), meta: RequestMeta = Depends(request_meta)) -> Ctx:
+def ctx(dbu: tuple[Session, UUID] = Depends(user_db, scope="function"), meta: RequestMeta = Depends(request_meta)) -> Ctx:
     db, uid = dbu
     user = db.scalar(select(User).where(User.id == uid))
     if user is None or not user.is_active:

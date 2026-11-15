@@ -44,7 +44,7 @@ def _status(inv: Invitation, db: Session) -> str:
 
 
 @router.get("/{token}", response_model=InvitationInfo)
-def get_invitation(token: str, db: Session = Depends(system_db)):
+def get_invitation(token: str, db: Session = Depends(system_db, scope="function")):
     inv = _load(db, token)
     inviter = db.get(User, inv.created_by)
     project = db.get(Project, inv.project_id) if inv.project_id else None
@@ -78,7 +78,7 @@ def _new_org(db: Session, kind: str, name_ar: str, name_en: str, locale: str, ad
 
 
 @router.post("/{token}/accept", response_model=TokenOut)
-def accept(token: str, body: AcceptIn, response: Response, db: Session = Depends(system_db),
+def accept(token: str, body: AcceptIn, response: Response, db: Session = Depends(system_db, scope="function"),
            creds: HTTPAuthorizationCredentials | None = Depends(_bearer), meta: RequestMeta = Depends(request_meta)):
     inv = _load(db, token)
     if _status(inv, db) != "valid":
@@ -144,7 +144,7 @@ def accept(token: str, body: AcceptIn, response: Response, db: Session = Depends
 
 
 @router.get("/{token}/my-orgs", response_model=list[OrgOut])
-def my_orgs_for_invite(token: str, db: Session = Depends(system_db),
+def my_orgs_for_invite(token: str, db: Session = Depends(system_db, scope="function"),
                        creds: HTTPAuthorizationCredentials | None = Depends(_bearer)):
     """For a signed-in invitee: the organizations of the right kind they administer and could join with."""
     inv = _load(db, token)

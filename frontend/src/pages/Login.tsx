@@ -2,7 +2,7 @@ import { Alert, Anchor, Button, PasswordInput, Stack, TextInput } from '@mantine
 import { useForm } from '@mantine/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import AuthLayout from './AuthLayout';
@@ -11,6 +11,8 @@ export default function Login() {
   const { t } = useTranslation();
   const { signIn } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
   const form = useForm({ initialValues: { email: '', password: '' } });
 
   const submit = form.onSubmit(async (values) => {
@@ -18,6 +20,8 @@ export default function Login() {
     try {
       const r = await api<{ access_token: string }>('/auth/login', { method: 'POST', body: JSON.stringify(values) });
       await signIn(r.access_token);
+      const next = params.get('next');
+      navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/projects', { replace: true });
     } catch (e) {
       setError(e instanceof ApiError ? e.code : 'generic');
     }

@@ -37,7 +37,7 @@ def _issue(db: Session, user: User, response: Response, meta: RequestMeta) -> To
 
 
 @router.post("/register-org", response_model=TokenOut, status_code=201)
-def register_org(body: RegisterOrgIn, response: Response, db: Session = Depends(system_db),
+def register_org(body: RegisterOrgIn, response: Response, db: Session = Depends(system_db, scope="function"),
                  meta: RequestMeta = Depends(request_meta)):
     """The organization admin registers the organization once, then adds the users."""
     email = body.email.lower()
@@ -59,7 +59,7 @@ def register_org(body: RegisterOrgIn, response: Response, db: Session = Depends(
 
 
 @router.post("/login", response_model=TokenOut)
-def login(body: LoginIn, response: Response, db: Session = Depends(system_db),
+def login(body: LoginIn, response: Response, db: Session = Depends(system_db, scope="function"),
           meta: RequestMeta = Depends(request_meta)):
     user = db.scalar(select(User).where(func.lower(User.email) == body.email.lower()))
     if user is None or not verify_password(body.password, user.password_hash):
@@ -76,7 +76,7 @@ def login(body: LoginIn, response: Response, db: Session = Depends(system_db),
 
 
 @router.post("/refresh", response_model=TokenOut)
-def refresh(request: Request, response: Response, db: Session = Depends(system_db),
+def refresh(request: Request, response: Response, db: Session = Depends(system_db, scope="function"),
             meta: RequestMeta = Depends(request_meta)):
     """Rotates the refresh token: the old one is revoked, a new one is set."""
     token = request.cookies.get(get_settings().refresh_cookie_name)
@@ -100,7 +100,7 @@ def refresh(request: Request, response: Response, db: Session = Depends(system_d
 
 
 @router.post("/logout", status_code=204)
-def logout(request: Request, response: Response, db: Session = Depends(system_db)):
+def logout(request: Request, response: Response, db: Session = Depends(system_db, scope="function")):
     s = get_settings()
     token = request.cookies.get(s.refresh_cookie_name)
     if token:

@@ -62,3 +62,18 @@ export interface Project {
   description: string | null; start_date: string | null; end_date: string | null;
 }
 export interface ProjectItem { project: Project; my_role: Role | null; parties: Party[] }
+
+export interface Discipline { id: string; code: string; name_ar: string; name_en: string }
+export interface InviteOut { link: string; email: string; email_sent: boolean; expires_at: string }
+export interface PendingInvite { email: string; expires_at: string }
+export interface TeamParty extends Party { can_manage_team: boolean; pending_invite: PendingInvite | null }
+export interface Member { id: string; user: User; party_id: string; role: Role; discipline_ids: string[]; is_active: boolean }
+export interface Team {
+  project: Project; can_manage_project: boolean; my_party_id: string | null; parties: TeamParty[]; members: Member[];
+}
+export interface OrgMember { user: User; org_role: string }
+export interface InvitationInfo {
+  kind: 'org_member' | 'project_party'; email: string; status: 'valid' | 'accepted' | 'expired'; user_exists: boolean;
+  inviter_name_ar: string; inviter_name_en: string; org: Org | null; project: Project | null;
+  party_kind: string | null; party_placeholder: string | null; role: Role | null;
+}
