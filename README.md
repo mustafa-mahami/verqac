@@ -16,7 +16,15 @@ Quality management SaaS for construction projects: submittals, inspections, RFIs
 | Web shell: Arabic RTL / English LTR, login, sign-up, projects | `frontend/src` |
 | Arabic PDF through Chromium | `backend/app/reports`, `python -m scripts.sample_pdf` |
 
-Next (phase 1): invitations, project team screen, record engine (types, workflow states with the 7 `dr` status categories, numbering, revisions), submittals, inspections, RFI.
+Phase 1 so far:
+
+| Done | |
+| --- | --- |
+| Project parties, team, organization users, e-mail/link invitations | `app/api/team.py`, `orgs.py`, `invitations.py` |
+| Record engine: types, workflows and states (7 `dr` categories) as data, numbering, revisions, files, comments, history | `app/api/records.py`, migration 0003 |
+| Submittals end to end, PDF in Arabic and English | `frontend/src/pages/Submittals.tsx`, `RecordPage.tsx` |
+
+Next: inspection requests and RFI on the same engine, then lab tests and NCR.
 
 ## Layout
 

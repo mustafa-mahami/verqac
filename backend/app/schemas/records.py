@@ -157,3 +157,10 @@ class RecordDetail(BaseModel):
     comments: list[CommentOut]
     attachments: list[AttachmentOut]
     revisions: list[RevisionRef]
+
+
+class RecordMeta(BaseModel):
+    record_type: RecordTypeOut
+    can_create: bool
+    disciplines: list[DisciplineOut]  # the ones the user may create records in
+    party_kind: str | None

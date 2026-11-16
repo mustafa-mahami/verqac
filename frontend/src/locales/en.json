@@ -76,7 +76,17 @@
     "login_required": "Sign in with this email first.",
     "org_already_party": "Your organization is already a party in this project.",
     "role_not_for_party": "This role does not fit this party.",
-    "org_name_required": "Enter the organization name in Arabic and English."
+    "org_name_required": "Enter the organization name in Arabic and English.",
+    "attachment_required": "Attach at least one file before submitting.",
+    "comment_required": "Comments are required for this action.",
+    "transition_not_available": "The record changed before your action. Reload the page.",
+    "number_taken": "This number is already used in the project.",
+    "cannot_create": "Your role cannot create this type.",
+    "locked_after_submit": "A submitted record cannot be edited. Create a new revision.",
+    "cannot_respond": "Your role cannot answer this record.",
+    "cannot_revise": "A new revision is made from the latest revision only.",
+    "file_too_large": "The file is over the limit (50 MB).",
+    "cannot_attach": "Files cannot be added now."
   },
   "common": {
     "cancel": "Cancel",
@@ -144,5 +154,93 @@
     "member": "User",
     "orgRole": "Organization access",
     "hint": "Once they accept, they belong to your organization; then add them to projects from the project team page."
+  },
+  "project": {
+    "tabs": {
+      "submittals": "Submittals",
+      "team": "Team"
+    }
+  },
+  "rec": {
+    "new": "New submittal",
+    "number": "Number",
+    "rev": "Rev.",
+    "title": "Subject",
+    "state": "Status",
+    "discipline": "Discipline",
+    "submitted": "Submitted",
+    "due": "Reply due",
+    "answered": "Answered",
+    "overdue": "Overdue",
+    "empty": "No submittals yet.",
+    "allRevisions": "All revisions",
+    "latestOnly": "Latest revision only",
+    "search": "Search number or subject",
+    "description": "Description",
+    "numberHint": "Leave empty for automatic numbering",
+    "files": "Attachments",
+    "filesHint": "PDF of the materials or drawings. More files can be added before submitting.",
+    "create": "Create draft",
+    "back": "Register",
+    "edit": "Edit",
+    "save": "Save",
+    "details": "Details",
+    "submittedBy": "Submitted by",
+    "answeredBy": "Answered by",
+    "onBehalf": "on behalf of",
+    "response": "Consultant's answer",
+    "newRevision": "New revision",
+    "pdfAr": "PDF عربي",
+    "pdfEn": "PDF English",
+    "revisions": "Revisions",
+    "history": "History",
+    "comments": "Discussion",
+    "addComment": "Add comment",
+    "internal": "Internal to my party",
+    "internalBadge": "Internal",
+    "send": "Send",
+    "upload": "Upload file",
+    "noFiles": "No attachments.",
+    "draftNote": "Draft: the consultant and owner do not see it until it is submitted.",
+    "comment": "Comments",
+    "commentRequired": "Comments are required for this action",
+    "confirm": "Confirm",
+    "onBehalfOf": "Answer on behalf of",
+    "myself": "Myself",
+    "stamp": "Approval stamp",
+    "kind": {
+      "submission": "Submission",
+      "response": "Response",
+      "photo": "Photo",
+      "other": "Other"
+    },
+    "events": {
+      "create": "Created",
+      "revise": "Returned for revision",
+      "submit": "Submitted",
+      "approve": "Approved",
+      "approve_as_noted": "Approved as noted",
+      "reject": "Rejected",
+      "cancel": "Cancelled",
+      "new_revision": "New revision"
+    },
+    "f": {
+      "submittal_kind": "Submittal type",
+      "item": "Item / material",
+      "manufacturer": "Manufacturer",
+      "supplier": "Supplier / agent",
+      "drawing_ref": "Drawing no.",
+      "spec_ref": "Spec section",
+      "boq_ref": "BOQ item",
+      "quantity": "Quantity",
+      "unit": "Unit"
+    },
+    "kinds": [
+      "Material",
+      "Shop drawing",
+      "Method statement",
+      "Sample",
+      "Document"
+    ]
   }
 }

@@ -32,6 +32,8 @@ services:
     env_file: .env
     environment:
       VERQAC_DATABASE_URL: postgresql+psycopg://verqac_app:${VERQAC_APP_PASSWORD}@db:5432/verqac
+    volumes:
+      - files:/data/files
     depends_on:
       migrate: { condition: service_completed_successfully }
     ports:
@@ -45,3 +47,4 @@ services:
 
 volumes:
   pgdata:
+  files:

@@ -75,6 +75,12 @@ def login(body: LoginIn, response: Response, db: Session = Depends(system_db, sc
     return _issue(db, user, response, meta)
 
 
+# A token renewed less than this long ago may be presented once more: a reload or a second
+# tab can send the old cookie before the browser has stored the new one. Outside the window,
+# a renewed token coming back is treated as stolen.
+REUSE_GRACE = timedelta(minutes=2)
+
+
 @router.post("/refresh", response_model=TokenOut)
 def refresh(request: Request, response: Response, db: Session = Depends(system_db, scope="function"),
             meta: RequestMeta = Depends(request_meta)):
@@ -82,20 +88,25 @@ def refresh(request: Request, response: Response, db: Session = Depends(system_d
     token = request.cookies.get(get_settings().refresh_cookie_name)
     row = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == hash_token(token))) if token else None
     now = datetime.now(UTC)
-    if row is None or row.revoked_at is not None or row.expires_at <= now:
-        if row is not None and row.revoked_at is not None:
-            # a revoked token used again = possible theft: revoke every session of that user,
-            # in its own transaction so the 401 below does not roll it back
-            with session_scope(bypass=True) as side:
-                side.execute(update(RefreshToken).where(RefreshToken.user_id == row.user_id,
-                                                        RefreshToken.revoked_at.is_(None)).values(revoked_at=now))
-                audit(side, entity="user", action="refresh_token_reuse", entity_id=row.user_id,
-                      ip=meta.ip, user_agent=meta.user_agent)
+    if row is None or row.expires_at <= now:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
+    if row.revoked_at is not None:
+        in_grace = row.rotated_at is not None and now - row.rotated_at <= REUSE_GRACE
+        if not in_grace:
+            # possible theft: revoke every session of that user, in its own transaction so the
+            # 401 below does not roll it back
+            if row.rotated_at is not None:
+                with session_scope(bypass=True) as side:
+                    side.execute(update(RefreshToken).where(RefreshToken.user_id == row.user_id,
+                                                            RefreshToken.revoked_at.is_(None)).values(revoked_at=now))
+                    audit(side, entity="user", action="refresh_token_reuse", entity_id=row.user_id,
+                          ip=meta.ip, user_agent=meta.user_agent)
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
     user = db.get(User, row.user_id)
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
-    row.revoked_at = now
+    if row.revoked_at is None:
+        row.revoked_at = row.rotated_at = now
     return _issue(db, user, response, meta)
 
 

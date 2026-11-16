@@ -6,7 +6,8 @@ import { applyLanguage, pick } from './i18n';
 import Invite from './pages/Invite';
 import Login from './pages/Login';
 import OrgUsers from './pages/OrgUsers';
-import ProjectTeam from './pages/ProjectTeam';
+import ProjectPage from './pages/ProjectPage';
+import RecordPage from './pages/RecordPage';
 import Projects from './pages/Projects';
 import Register from './pages/Register';
 
@@ -62,7 +63,8 @@ function Shell() {
       <AppShell.Main>
         <Routes>
           <Route path="/projects" element={<Projects />} />
-          <Route path="/projects/:id" element={<ProjectTeam />} />
+          <Route path="/projects/:id" element={<ProjectPage />} />
+          <Route path="/records/:id" element={<RecordPage />} />
           <Route path="/org" element={<OrgUsers />} />
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>

@@ -46,6 +46,16 @@ def test_reused_refresh_token_revokes_all_sessions(client):
     stolen = client.cookies.get("verqac_refresh")
     assert client.post("/api/v1/auth/refresh").status_code == 200   # rotates, `stolen` is now revoked
     current = client.cookies.get("verqac_refresh")
+    # within the grace window (reload, second tab) the old token still works once more
+    client.cookies.clear()
+    client.cookies.set("verqac_refresh", stolen, path="/api/v1/auth")
+    assert client.post("/api/v1/auth/refresh").status_code == 200
+    # after the window it is treated as stolen
+    owner = create_engine(os.environ["VERQAC_MIGRATION_DATABASE_URL"])
+    with owner.begin() as conn:
+        conn.execute(text("UPDATE refresh_tokens SET rotated_at = rotated_at - interval '10 minutes' "
+                          "WHERE rotated_at IS NOT NULL"))
+    owner.dispose()
     client.cookies.clear()
     client.cookies.set("verqac_refresh", stolen, path="/api/v1/auth")
     assert client.post("/api/v1/auth/refresh").status_code == 401   # reuse detected

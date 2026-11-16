@@ -1,12 +1,12 @@
 import {
-  ActionIcon, Alert, Anchor, Badge, Button, Card, Group, Menu, Modal, MultiSelect, Select, SimpleGrid, Stack, Table,
+  ActionIcon, Alert, Badge, Button, Card, Group, Menu, Modal, MultiSelect, Select, SimpleGrid, Stack, Table,
   Text, TextInput, Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   api, ApiError, type Discipline, type InviteOut, type OrgMember, type Role, type Team, type TeamParty,
 } from '../api';
@@ -132,15 +132,10 @@ export default function ProjectTeam() {
   const afterInvite = (inv: InviteOut | null) => { refresh(); setDialog(inv ? { kind: 'link', invite: inv } : null); };
 
   return (
-    <Stack maw={1100} mx="auto">
-      <Anchor component={Link} to="/projects" size="sm">{t('team.back')}</Anchor>
-      <div>
-        <Title order={3}>{pick(data.project, 'name')}</Title>
-        <Text c="dimmed" size="sm" dir="ltr" ta="start">{data.project.code}</Text>
-      </div>
+    <Stack>
       {error && <Alert color="red" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
 
-      <Group justify="space-between" mt="sm">
+      <Group justify="space-between">
         <Title order={4}>{t('team.parties')}</Title>
         {data.can_manage_project && missingKinds.length > 0 && (
           <Button variant="light" onClick={() => setDialog({ kind: 'addParty' })}>{t('team.addParty')}</Button>

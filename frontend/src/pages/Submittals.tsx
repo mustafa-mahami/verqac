@@ -1,0 +1,152 @@
+import {
+  Alert, Badge, Button, Card, FileInput, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Text, Textarea,
+  TextInput,
+} from '@mantine/core';
+import { useForm } from '@mantine/form';
+import { useQuery } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { api, ApiError, type RecordDetail, type RecordMeta, type RecordRow } from '../api';
+import { fmtDate, stateColor } from '../format';
+import { pick } from '../i18n';
+
+const DETAIL_KEYS = ['item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
+
+function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: RecordMeta; onClose: () => void }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const kinds = t('rec.kinds', { returnObjects: true }) as string[];
+  const form = useForm({
+    initialValues: {
+      title: '', discipline_id: meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0],
+      item: '', manufacturer: '', supplier: '', drawing_ref: '', spec_ref: '', boq_ref: '', quantity: '', unit: '',
+      files: [] as File[],
+    },
+  });
+
+  const submit = form.onSubmit(async (v) => {
+    setError(null);
+    setBusy(true);
+    const blank = (x: string) => (x.trim() === '' ? null : x.trim());
+    try {
+      const rec = await api<RecordDetail>(`/projects/${projectId}/records`, {
+        method: 'POST',
+        body: JSON.stringify({
+          record_type: 'submittal', title: v.title.trim(), description: blank(v.description),
+          discipline_id: v.discipline_id || null, number: blank(v.number),
+          details: {
+            submittal_kind: v.submittal_kind, item: blank(v.item), manufacturer: blank(v.manufacturer),
+            supplier: blank(v.supplier), drawing_ref: blank(v.drawing_ref), spec_ref: blank(v.spec_ref),
+            boq_ref: blank(v.boq_ref), quantity: blank(v.quantity), unit: blank(v.unit),
+          },
+        }),
+      });
+      for (const f of v.files) {
+        const fd = new FormData();
+        fd.append('file', f);
+        fd.append('kind', 'submission');
+        await api(`/records/${rec.id}/attachments`, { method: 'POST', body: fd });
+      }
+      navigate(`/records/${rec.id}`);
+    } catch (e) {
+      setError(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic')));
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  return (
+    <form onSubmit={submit}>
+      <Stack>
+        {error && <Alert color="red">{error}</Alert>}
+        <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />
+        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+          <Select label={t('rec.discipline')} allowDeselect={false}
+            data={meta.disciplines.map((d) => ({ value: d.id, label: pick(d, 'name') }))} {...form.getInputProps('discipline_id')} />
+          <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} {...form.getInputProps('submittal_kind')} />
+          <TextInput label={t('rec.number')} placeholder={t('rec.numberHint')} dir="ltr" {...form.getInputProps('number')} />
+        </SimpleGrid>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          {DETAIL_KEYS.map((k) => (
+            <TextInput key={k} label={t(`rec.f.${k}`)} dir={['drawing_ref', 'spec_ref', 'boq_ref', 'quantity'].includes(k) ? 'ltr' : undefined}
+              {...form.getInputProps(k)} />
+          ))}
+        </SimpleGrid>
+        <Textarea label={t('rec.description')} autosize minRows={2} {...form.getInputProps('description')} />
+        <FileInput label={t('rec.files')} description={t('rec.filesHint')} multiple clearable {...form.getInputProps('files')} />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button type="submit" loading={busy}>{t('rec.create')}</Button>
+        </Group>
+      </Stack>
+    </form>
+  );
+}
+
+export default function Submittals({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [allRevs, setAllRevs] = useState(false);
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const meta = useQuery({ queryKey: ['recMeta', projectId], queryFn: () => api<RecordMeta>(`/projects/${projectId}/records/meta?type=submittal`) });
+  const rows = useQuery({
+    queryKey: ['records', projectId, allRevs],
+    queryFn: () => api<RecordRow[]>(`/projects/${projectId}/records?type=submittal&all_revisions=${allRevs}`),
+  });
+  const shown = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return (rows.data ?? []).filter((r) => !s || r.number.toLowerCase().includes(s) || r.title.toLowerCase().includes(s));
+  }, [rows.data, q]);
+
+  return (
+    <Stack>
+      <Group justify="space-between">
+        <Group>
+          <TextInput placeholder={t('rec.search')} value={q} onChange={(e) => setQ(e.currentTarget.value)} w={260} />
+          <Switch label={t('rec.allRevisions')} checked={allRevs} onChange={(e) => setAllRevs(e.currentTarget.checked)} />
+        </Group>
+        {meta.data?.can_create && <Button onClick={() => setOpen(true)}>{t('rec.new')}</Button>}
+      </Group>
+      {rows.isSuccess && shown.length === 0 ? <Text c="dimmed">{t('rec.empty')}</Text> : (
+        <Card withBorder p={0}>
+          <Table.ScrollContainer minWidth={760}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>{t('rec.number')}</Table.Th>
+                  <Table.Th>{t('rec.title')}</Table.Th>
+                  <Table.Th>{t('rec.discipline')}</Table.Th>
+                  <Table.Th>{t('rec.state')}</Table.Th>
+                  <Table.Th>{t('rec.submitted')}</Table.Th>
+                  <Table.Th>{t('rec.due')}</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {shown.map((r) => (
+                  <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/records/${r.id}`)}>
+                    <Table.Td><Text size="sm" fw={500} dir="ltr" ta="start" style={{ whiteSpace: 'nowrap' }}>{r.number} · R{r.rev_no}</Text></Table.Td>
+                    <Table.Td><Text size="sm" lineClamp={2}>{r.title}</Text></Table.Td>
+                    <Table.Td><Text size="sm">{r.discipline ? pick(r.discipline, 'name') : ''}</Text></Table.Td>
+                    <Table.Td><Badge tt="none" variant="light" color={stateColor(r.state.color)}>{pick(r.state, 'name')}</Badge></Table.Td>
+                    <Table.Td><Text size="sm">{fmtDate(r.submitted_at)}</Text></Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c={r.overdue ? 'red' : undefined} fw={r.overdue ? 600 : undefined}>{fmtDate(r.due_at)}</Text>
+                      {r.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Card>
+      )}
+      <Modal opened={open} onClose={() => setOpen(false)} title={t('rec.new')} size="xl">
+        {meta.data && <NewSubmittal projectId={projectId} meta={meta.data} onClose={() => setOpen(false)} />}
+      </Modal>
+    </Stack>
+  );
+}

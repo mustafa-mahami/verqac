@@ -65,6 +65,13 @@ The `migrate` service runs `alembic upgrade head` before the API starts.
 
 ## 7. Backup (set up on day one)
 
+Uploaded files live in the Docker volume `verqac_files`; back them up with the database:
+
+```bash
+docker run --rm -v verqac_files:/f -v /root/backups/verqac:/b alpine tar czf /b/files_$(date +%F).tgz -C /f .
+```
+
+
 ```bash
 # /root/verqac_pg_backup.sh  (nightly cron, keep 14 days)
 docker compose -f /opt/verqac/docker-compose.yml exec -T db \

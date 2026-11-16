@@ -25,7 +25,7 @@ from app.models.records import (Attachment, Record, RecordComment, RecordEvent, 
                                 SubmittalDetails, WorkflowState, WorkflowTransition)
 from app.schemas.core import DisciplineOut, UserOut
 from app.schemas.records import (AttachmentOut, CommentIn, CommentOut, EventOut, RecordDetail, RecordIn,
-                                 RecordPatch, RecordRow, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
+                                 RecordMeta, RecordPatch, RecordRow, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
                                  TransitionIn, TransitionOut)
 
 router = APIRouter(tags=["records"])
@@ -225,6 +225,23 @@ def list_types(c: Ctx = Depends(ctx)):
     return c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort)).all()
 
 
+@router.get("/projects/{project_id}/records/meta", response_model=RecordMeta)
+def records_meta(project_id: uuid.UUID, type: str = Query("submittal"), c: Ctx = Depends(ctx)):
+    """What the screens need before showing a register: can I create, and with which disciplines."""
+    a = project_access(c, project_id)
+    rt = _rtype(c, type)
+    p = Perms(c, a, rt)
+    discs = []
+    if a.party is not None and a.party.org_id:
+        discs = c.db.scalars(select(Discipline).where(Discipline.org_id == a.party.org_id, Discipline.is_active)
+                             .order_by(Discipline.sort)).all()
+        if p.my_codes:
+            discs = [d for d in discs if d.code in p.my_codes]
+    return RecordMeta(record_type=RecordTypeOut.model_validate(rt), can_create=a.party is not None and p.can("create"),
+                      disciplines=[DisciplineOut.model_validate(d) for d in discs],
+                      party_kind=a.party.kind if a.party else None)
+
+
 @router.get("/projects/{project_id}/records", response_model=list[RecordRow])
 def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revisions: bool = False,
                  c: Ctx = Depends(ctx)):
@@ -391,7 +408,7 @@ def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
     except IntegrityError:
         raise HTTPException(status.HTTP_409_CONFLICT, "revision_exists") from None
     c.db.add(SubmittalDetails(record_id=new.id, **_details(c, rec).model_dump()))
-    c.db.add(RecordEvent(record_id=new.id, action="revise", to_state_id=initial.id, actor_id=c.user.id,
+    c.db.add(RecordEvent(record_id=new.id, action="new_revision", to_state_id=initial.id, actor_id=c.user.id,
                          comment=f"R{rec.rev_no} → R{new.rev_no}"))
     _audit(c, new, "revise", {"from_record": str(rec.id), "rev": new.rev_no}, a)
     c.db.flush()

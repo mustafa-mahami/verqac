@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
  && rm -rf /var/lib/apt/lists/*
 
 COPY . .
-RUN useradd --system --uid 1001 verqac && chown -R verqac /app
+RUN useradd --system --uid 1001 verqac && mkdir -p /data/files && chown -R verqac /app /data/files
 USER verqac
 
 EXPOSE 8000

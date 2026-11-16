@@ -36,7 +36,7 @@ DECISIONS = {
     "en": [("approved", "Approved"), ("approved_as_noted", "Approved as noted"),
            ("revise_and_resubmit", "Revise and resubmit"), ("rejected", "Rejected")],
 }
-LTR_FIELDS = {"drawing_ref", "spec_ref", "boq_ref", "quantity"}
+LTR_FIELDS = {"drawing_ref", "spec_ref", "boq_ref"}
 
 
 def _n(obj, lang: str, base: str = "name") -> str:
@@ -58,7 +58,7 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
     t = T[lang]
     det = d.details.model_dump()
     if det.get("quantity") is not None:
-        det["quantity"] = f"{det['quantity']:g} {det.get('unit') or ''}".strip()
+        det["quantity"] = f"{float(det['quantity']):g} {det.get('unit') or ''}".strip()
     pairs = [(t["fields"][k], det.get(k) or "", k in LTR_FIELDS) for k in t["fields"]]
     rows = [(*pairs[i], *(pairs[i + 1] if i + 1 < len(pairs) else ("", "", False))) for i in range(0, len(pairs), 2)]
     ctx = dict(
