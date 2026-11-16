@@ -1,18 +1,90 @@
-import { ActionIcon, Button, Divider, Indicator, Popover, ScrollArea, Stack, Text, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Button, Divider, Indicator, Popover, ScrollArea, Stack, Switch, Text, UnstyledButton } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, type NotificationItem, type Notifications } from '../api';
 import { fmtDate } from '../format';
 import { pick } from '../i18n';
 
+// ---- browser alerts (while a Verqac tab is open, even in the background)
+const PREF = 'verqac.alerts';
+type Prefs = { desktop: boolean; sound: boolean };
+function loadPrefs(): Prefs {
+  try { return { desktop: false, sound: true, ...JSON.parse(localStorage.getItem(PREF) ?? '{}') }; } catch { return { desktop: false, sound: true }; }
+}
+function savePrefs(p: Prefs) { try { localStorage.setItem(PREF, JSON.stringify(p)); } catch { /* private mode */ } }
+
+let audio: AudioContext | null = null;
+// browsers allow sound only after the user has interacted with the page once
+if (typeof window !== 'undefined') {
+  const unlock = () => {
+    try { audio ??= new AudioContext(); void audio.resume(); } catch { /* no audio */ }
+    window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock);
+  };
+  window.addEventListener('pointerdown', unlock); window.addEventListener('keydown', unlock);
+}
+
+/** A short, soft two-note chime made in the browser (no sound file). */
+export function chime() {
+  try {
+    audio ??= new AudioContext();
+    const now = audio.currentTime;
+    [[880, 0], [1320, 0.16]].forEach(([freq, at]) => {
+      const o = audio!.createOscillator(), g = audio!.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, now + at);
+      g.gain.exponentialRampToValueAtTime(0.25, now + at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.45);
+      o.connect(g).connect(audio!.destination);
+      o.start(now + at); o.stop(now + at + 0.5);
+    });
+  } catch { /* no audio */ }
+}
+
+const canDesktop = () => typeof window !== 'undefined' && 'Notification' in window;
+
 export default function Bell() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const data = useQuery({ queryKey: ['notifications'], queryFn: () => api<Notifications>('/notifications'), refetchInterval: 60_000 });
+  const data = useQuery({ queryKey: ['notifications'], queryFn: () => api<Notifications>('/notifications'), refetchInterval: 30_000,
+    refetchIntervalInBackground: true });
+  const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+  const [permission, setPermission] = useState(canDesktop() ? Notification.permission : 'denied');
+  const lastSeen = useRef<number | null>(null);
+  const setPref = (p: Prefs) => { setPrefs(p); savePrefs(p); };
+  const toggleDesktop = async (on: boolean) => {
+    if (on && canDesktop() && Notification.permission !== 'granted') setPermission(await Notification.requestPermission());
+    setPref({ ...prefs, desktop: on });
+  };
+
+  // new notifications since the last poll: sound + a system notification
+  useEffect(() => {
+    const items = data.data?.items;
+    if (!items) return;
+    const top = items.reduce((m, n) => Math.max(m, n.id), 0);
+    if (lastSeen.current === null) { lastSeen.current = top; return; }  // first load: nothing is "new"
+    const fresh = items.filter((n) => !n.read && n.id > (lastSeen.current ?? 0));
+    lastSeen.current = Math.max(lastSeen.current, top);
+    if (!fresh.length) return;
+    qc.invalidateQueries({ queryKey: ['inbox'] });
+    if (prefs.sound) chime();
+    if (prefs.desktop && canDesktop() && Notification.permission === 'granted') {
+      for (const n of fresh.slice(0, 3)) {
+        const note = new Notification(pick(n, 'title'), { body: n.body ?? '', tag: `verqac-${n.id}`, icon: '/favicon.svg' });
+        note.onclick = () => { window.focus(); note.close(); openItem(n); };
+      }
+    }
+  }, [data.data]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // unread count in the tab title: "(2) Verqac"
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\+?\) /, '');
+    const n = data.data?.unread ?? 0;
+    document.title = n ? `(${n > 99 ? '99+' : n}) ${base}` : base;
+  }, [data.data?.unread]);
 
   const read = async (body: { ids?: number[]; all?: boolean }) => {
     await api('/notifications/read', { method: 'POST', body: JSON.stringify(body) }).catch(() => undefined);
@@ -60,6 +132,15 @@ export default function Bell() {
             <Button variant="subtle" fullWidth size="xs" onClick={() => read({ all: true })}>{t('bell.readAll')}</Button>
           </>
         )}
+        <Divider />
+        <Stack gap={6} p="sm">
+          <Switch size="xs" label={t('bell.desktop')} checked={prefs.desktop && permission === 'granted'} disabled={!canDesktop() || permission === 'denied'}
+            description={permission === 'denied' ? t('bell.blocked') : undefined}
+            onChange={(e) => void toggleDesktop(e.currentTarget.checked)} />
+          <Switch size="xs" label={t('bell.sound')} checked={prefs.sound}
+            onChange={(e) => { setPref({ ...prefs, sound: e.currentTarget.checked }); if (e.currentTarget.checked) chime(); }} />
+          <Text size="xs" c="dimmed">{t('bell.whileOpen')}</Text>
+        </Stack>
       </Popover.Dropdown>
     </Popover>
   );

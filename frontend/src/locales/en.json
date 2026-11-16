@@ -346,7 +346,11 @@
   "bell": {
     "title": "Notifications",
     "empty": "No notifications.",
-    "readAll": "Mark all as read"
+    "readAll": "Mark all as read",
+    "desktop": "Desktop notifications",
+    "sound": "Alert sound",
+    "blocked": "The browser blocks notifications for this site; allow them from the lock icon next to the address.",
+    "whileOpen": "Works while Verqac is open in a tab, even minimized or behind other windows."
   },
   "assign": {
     "label": "Assign to engineer",
