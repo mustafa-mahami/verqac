@@ -1,13 +1,17 @@
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.core.audit import audit
+from app.core.access import project_access, require
+from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
 from app.models.core import Organization, OrgMember, Project, ProjectMember, ProjectParty, Role
-from app.schemas.core import OrgOut, PartyOut, ProjectIn, ProjectListItem, ProjectOut, RoleOut
+from app.models.records import Record, RecordType
+from app.schemas.core import (OrgOut, PartyOut, ProjectIn, ProjectListItem, ProjectOut, ProjectSettingsIn,
+                              ProjectSettingsOut, ProjectStats, RoleOut)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -38,9 +42,27 @@ def list_projects(c: Ctx = Depends(ctx)):
         .where(Project.is_archived.is_(False))
         .order_by(Project.created_at.desc())
     ).all()
-    parties = _parties(c, [p.id for p, _ in rows])
+    ids = [p.id for p, _ in rows]
+    parties = _parties(c, ids)
+    stats = _stats(c, ids)
     return [ProjectListItem(project=ProjectOut.model_validate(p), my_role=RoleOut.model_validate(r) if r else None,
-                            parties=parties.get(p.id, [])) for p, r in rows]
+                            parties=parties.get(p.id, []), stats=stats.get(p.id, ProjectStats()))
+            for p, r in rows]
+
+
+def _stats(c: Ctx, project_ids: list[UUID]) -> dict[UUID, ProjectStats]:
+    """Counts over the records the user can see (RLS hides other parties' drafts)."""
+    if not project_ids:
+        return {}
+    now = datetime.now(UTC)
+    rows = c.db.execute(
+        select(Record.project_id,
+               func.count(func.distinct(Record.revision_group_id)),
+               func.count().filter(Record.state_category == "submitted"),
+               func.count().filter((Record.state_category == "submitted") & (Record.due_at < now)))
+        .where(Record.project_id.in_(project_ids)).group_by(Record.project_id)
+    ).all()
+    return {pid: ProjectStats(records=n, open=o, overdue=od) for pid, n, o, od in rows}
 
 
 @router.post("", response_model=ProjectListItem, status_code=201)
@@ -95,3 +117,32 @@ def get_project(project_id: UUID, c: Ctx = Depends(ctx)):
     return ProjectListItem(project=ProjectOut.model_validate(project),
                            my_role=RoleOut.model_validate(role) if role else None,
                            parties=_parties(c, [project_id]).get(project_id, []))
+
+
+@router.get("/{project_id}/settings", response_model=ProjectSettingsOut)
+def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
+    a = project_access(c, project_id)
+    saved = (a.project.settings or {}).get("review_days", {})
+    days = {rt.code: int(saved.get(rt.code, rt.review_days))
+            for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort))}
+    return ProjectSettingsOut(review_days=days, can_edit=a.can_manage_project)
+
+
+@router.put("/{project_id}/settings", response_model=ProjectSettingsOut)
+def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx)):
+    """Reply periods per record type (contract / QMP). New periods apply to records submitted afterwards."""
+    a = project_access(c, project_id)
+    require(a.can_manage_project, "manage_project_required")
+    codes = set(c.db.scalars(select(RecordType.code).where(RecordType.org_id.is_(None))))
+    for code, days in body.review_days.items():
+        if code not in codes or not 1 <= days <= 365:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_review_days")
+    settings = dict(a.project.settings or {})
+    before = dict(settings.get("review_days", {}))
+    settings["review_days"] = {**before, **body.review_days}
+    a.project.settings = settings  # new dict object so the JSONB change is saved
+    audit(c.db, entity="project", action="settings", entity_id=project_id, actor=c.user.id,
+          org_id=a.project.owner_org_id, project_id=project_id, changes=diff(before, settings["review_days"]),
+          ip=c.meta.ip, user_agent=c.meta.user_agent)
+    c.db.flush()
+    return get_settings(project_id, c)

@@ -104,10 +104,26 @@ class ProjectOut(Out):
     end_date: date | None
 
 
+class ProjectStats(BaseModel):
+    records: int = 0  # record numbers (all revisions of a number count once)
+    open: int = 0  # submitted, waiting for an answer
+    overdue: int = 0  # open past the reply date
+
+
 class ProjectListItem(BaseModel):
     project: ProjectOut
     my_role: RoleOut | None
     parties: list[PartyOut]
+    stats: ProjectStats = ProjectStats()
+
+
+class ProjectSettingsOut(BaseModel):
+    review_days: dict[str, int]  # record type code -> days the responder has to answer
+    can_edit: bool
+
+
+class ProjectSettingsIn(BaseModel):
+    review_days: dict[str, int]
 
 
 class DisciplineOut(Out):

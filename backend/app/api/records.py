@@ -373,8 +373,6 @@ def transition(record_id: uuid.UUID, body: TransitionIn, c: Ctx = Depends(ctx)):
     to = c.db.get(WorkflowState, t.to_state_id)
     now = datetime.now(UTC)
     if t.effect == "submit":
-        if rt.code == "submittal" and not c.db.scalar(select(Attachment.id).where(Attachment.record_id == rec.id)):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "attachment_required")
         rec.submitted_by, rec.submitted_at = c.user.id, now
         rec.due_at = now + timedelta(days=_review_days(a, rt))
     elif t.effect == "respond":

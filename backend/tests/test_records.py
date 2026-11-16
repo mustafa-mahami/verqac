@@ -100,10 +100,9 @@ def test_draft_is_private_to_contractor(client, site):
     assert client.get(f"/api/v1/records/{rec['id']}", headers=site["hk"]).status_code == 200
 
 
-def test_submit_needs_attachment_and_sets_due_date(client, site):
+def test_submit_without_attachment_and_due_date(client, site):
     rec = new_sub(client, site)
-    assert act(client, site["hqa"], rec["id"], "submit").json()["detail"] == "attachment_required"
-    done = submit(client, site, rec)
+    done = act(client, site["hqa"], rec["id"], "submit").json()  # a file is optional
     assert done["state"]["category"] == "submitted"
     days = (datetime.fromisoformat(done["due_at"]) - datetime.fromisoformat(done["submitted_at"])).days
     assert days == 14
@@ -190,3 +189,57 @@ def test_pdf(client, site):
     act(client, site["hce"], rec["id"], "approve")
     r = client.get(f"/api/v1/records/{rec['id']}/pdf?lang=ar", headers=site["hqa"])
     assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content[:4] == b"%PDF"
+
+
+def test_project_settings_review_days(client, site):
+    s = client.get(f"/api/v1/projects/{site['pid']}/settings", headers=site["hc"]).json()
+    assert s["review_days"]["submittal"] == 14 and s["can_edit"] is True
+    # the consultant cannot change the contract periods
+    assert client.put(f"/api/v1/projects/{site['pid']}/settings", headers=site["hk"],
+                      json={"review_days": {"submittal": 3}}).status_code == 403
+    assert client.put(f"/api/v1/projects/{site['pid']}/settings", headers=site["hc"],
+                      json={"review_days": {"submittal": 0}}).status_code == 422
+    r = client.put(f"/api/v1/projects/{site['pid']}/settings", headers=site["hc"], json={"review_days": {"submittal": 7}})
+    assert r.status_code == 200 and r.json()["review_days"]["submittal"] == 7
+    done = act(client, site["hqa"], new_sub(client, site)["id"], "submit").json()
+    assert (datetime.fromisoformat(done["due_at"]) - datetime.fromisoformat(done["submitted_at"])).days == 7
+
+
+def test_project_list_stats(client, site):
+    submit(client, site, new_sub(client, site))
+    new_sub(client, site)  # draft: counted for the contractor, invisible to the consultant
+    mine = next(i for i in client.get("/api/v1/projects", headers=site["hc"]).json() if i["project"]["id"] == site["pid"])
+    theirs = next(i for i in client.get("/api/v1/projects", headers=site["hk"]).json() if i["project"]["id"] == site["pid"])
+    assert (mine["stats"]["records"], mine["stats"]["open"]) == (2, 1)
+    assert (theirs["stats"]["records"], theirs["stats"]["open"], theirs["stats"]["overdue"]) == (1, 1, 0)
+
+
+def test_replacement_engineer_sees_predecessor_records(client, site):
+    """Records belong to the discipline, not to the engineer who answered them."""
+    answered = submit(client, site, new_sub(client, site))
+    act(client, site["hce"], answered["id"], "approve")
+    pending = submit(client, site, new_sub(client, site))
+
+    # the civil engineer leaves: deactivated in the project team
+    team = client.get(f"/api/v1/projects/{site['pid']}/team", headers=site["hk"]).json()
+    old = next(m for m in team["members"] if m["user"]["id"] == site["ce"])
+    assert client.patch(f"/api/v1/projects/{site['pid']}/members/{old['id']}", headers=site["hk"],
+                        json={"is_active": False}).status_code == 200
+    assert client.get(f"/api/v1/records/{pending['id']}", headers=site["hce"]).status_code == 404
+
+    # a new civil engineer joins with his own account
+    korg = client.get("/api/v1/auth/me", headers=site["hk"]).json()["orgs"][0]["org"]["id"]
+    from tests.test_records import _join_org
+    hnew, new = _join_org(client, site["hk"], korg, "civil2")
+    roles = {x["code"]: x["id"] for x in client.get("/api/v1/roles", headers=site["hk"]).json()}
+    kdisc = {d["code"]: d["id"] for d in client.get(f"/api/v1/orgs/{korg}/disciplines", headers=site["hk"]).json()}
+    consultant = next(p for p in team["parties"] if p["kind"] == "consultant")
+    assert client.post(f"/api/v1/projects/{site['pid']}/members", headers=site["hk"], json={
+        "party_id": consultant["id"], "user_id": new, "role_id": roles["consultant_engineer"],
+        "discipline_ids": [kdisc["C"]]}).status_code == 201
+
+    numbers = {r["number"] for r in client.get(f"/api/v1/projects/{site['pid']}/records", headers=hnew).json()}
+    assert {answered["number"], pending["number"]} <= numbers
+    assert client.get(f"/api/v1/records/{answered['id']}", headers=hnew).status_code == 200
+    r = act(client, hnew, pending["id"], "approve_as_noted", comment="1- ...\n2- ...\n3- ...")
+    assert r.status_code == 200 and r.json()["response_comment"].count("\n") == 2
