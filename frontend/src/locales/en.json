@@ -100,7 +100,8 @@
     "kind_duplicate": "Two types have the same name.",
     "kind_name_required": "Enter the type name in Arabic and English.",
     "kind_one_active": "At least one type must stay active.",
-    "invalid_kind": "This submittal type is not in the project's list."
+    "invalid_kind": "This submittal type is not in the project's list.",
+    "cannot_set_required_by": "You cannot change the needed-by date of this request now."
   },
   "common": {
     "cancel": "Cancel",
@@ -264,7 +265,19 @@
       "quantity": "Quantity",
       "unit": "Unit"
     },
-    "noEngineer": "No consultant engineer covers this discipline in the project team yet. On submission it reaches only the consultant's project manager."
+    "noEngineer": "No consultant engineer covers this discipline in the project team yet. On submission it reaches only the consultant's project manager.",
+    "requiredBy": "Answer needed by",
+    "requiredByShort": "Needed by",
+    "requiredByNote": "Reason (e.g. delivery date in the supply schedule)",
+    "requiredByHint": "The latest date you need this approved, from the supply schedule, for critical items. The consultant sees it; it is not printed.",
+    "requiredBySet": "Set an answer-needed-by date",
+    "requiredByChange": "Change",
+    "requiredByClear": "Remove",
+    "daysLeft": "in {{count}} days",
+    "dueToday": "today",
+    "daysLate": "{{count}} days past the date",
+    "requiredByWas": "Was needed by {{date}}",
+    "notPrinted": "Seen by the contractor and consultant only; not printed."
   },
   "back": {
     "projects": "All projects",

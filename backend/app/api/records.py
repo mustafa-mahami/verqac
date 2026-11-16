@@ -8,7 +8,7 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
@@ -27,7 +27,7 @@ from app.models.records import (Attachment, Record, RecordComment, RecordEvent, 
                                 SubmittalDetails, WorkflowState, WorkflowTransition)
 from app.schemas.core import DisciplineOut, SubmittalKind, UserOut
 from app.schemas.records import (AssignIn, AttachmentOut, CommentIn, InboxItem, CommentOut, EventOut, RecordDetail, RecordIn,
-                                 RecordMeta, RecordPatch, RecordRow, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
+                                 RecordMeta, RecordPatch, RecordRow, RequiredByIn, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
                                  TransitionIn, TransitionOut)
 
 router = APIRouter(tags=["records"])
@@ -212,7 +212,8 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         submitted_by=_user(c, rec.submitted_by), submitted_at=rec.submitted_at, due_at=rec.due_at,
         overdue=_overdue(rec), answered_by=_user(c, rec.answered_by),
         answered_on_behalf_of=_user(c, rec.answered_on_behalf_of), answered_at=rec.answered_at,
-        response_comment=rec.response_comment, details=(det := _details(c, rec)),
+        response_comment=rec.response_comment, required_by=rec.required_by, required_by_note=rec.required_by_note,
+        can_set_required_by=_can_set_required_by(rec, a, p), details=(det := _details(c, rec)),
         submittal_kind_name=kind_name(a.project, det.submittal_kind), transitions=trans,
         can_edit=is_draft and p.can("edit", rec), can_revise=can_revise, can_attach=attach,
         can_act_on_behalf=bool(a.role and a.role.act_on_behalf and p.can("respond", rec)),
@@ -294,8 +295,14 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
                              state=StateOut.model_validate(_state(c, r.state_id)),
                              discipline=DisciplineOut.model_validate(d) if d else None,
                              submitted_at=r.submitted_at, due_at=r.due_at, answered_at=r.answered_at,
-                             overdue=_overdue(r), revisions=counts[r.revision_group_id]))
+                             overdue=_overdue(r), revisions=counts[r.revision_group_id], required_by=r.required_by))
     return out
+
+
+def _can_set_required_by(rec: Record, a: ProjectAccess, p: "Perms") -> bool:
+    """The author side sets it while the record waits for an answer (draft or submitted)."""
+    return (a.party is not None and rec.from_party_id == a.party.id and rec.state_category in ("draft", "submitted")
+            and (p.can("edit", rec) or p.can("submit", rec)))
 
 
 def _check_kind(a, code: str | None) -> None:
@@ -319,7 +326,8 @@ def create_record(project_id: uuid.UUID, body: RecordIn, c: Ctx = Depends(ctx)):
     rec = Record(project_id=project_id, record_type_id=rt.id, number=number, rev_no=0,
                  revision_group_id=uuid.uuid4(), discipline_id=body.discipline_id, title=body.title,
                  description=body.description, state_id=initial.id, state_category=initial.category,
-                 from_party_id=a.party.id, to_party_id=responder, created_by=c.user.id)
+                 from_party_id=a.party.id, to_party_id=responder, created_by=c.user.id,
+                 required_by=body.required_by, required_by_note=(body.required_by_note or "").strip() or None)
     c.db.add(rec)
     try:
         c.db.flush()
@@ -447,6 +455,29 @@ def _initial_id(c: Ctx, rt: RecordType):
     return c.db.scalar(select(WorkflowState.id).where(WorkflowState.workflow_id == rt.workflow_id, WorkflowState.is_initial))
 
 
+@router.put("/records/{record_id}/required-by", response_model=RecordDetail)
+def set_required_by(record_id: uuid.UUID, body: RequiredByIn, bg: BackgroundTasks, c: Ctx = Depends(ctx)):
+    """Latest date the contractor needs the answer by (supply schedule). Shown to both sides, never printed."""
+    rec, a, rt, p = _load(c, record_id, lock=True)
+    require(_can_set_required_by(rec, a, p), "cannot_set_required_by")
+    note = (body.required_by_note or "").strip() or None if body.required_by else None
+    if (rec.required_by, rec.required_by_note) == (body.required_by, note):
+        return _detail(c, rec, a, rt, p)
+    _audit(c, rec, "required_by", {"required_by": [str(rec.required_by) if rec.required_by else None,
+                                                    str(body.required_by) if body.required_by else None],
+                                   "note": [rec.required_by_note, note]}, a)
+    rec.required_by, rec.required_by_note, rec.updated_at = body.required_by, note, datetime.now(UTC)
+    c.db.flush()
+    if rec.state_category == "submitted" and body.required_by:
+        users = {m.user_id for m, r in _responders(c, rec, rt) if rec.assigned_to is None or r.act_on_behalf
+                 or m.user_id == rec.assigned_to}
+        d = body.required_by.isoformat()
+        notify(c, bg, project=a.project, rec=rec, event="required_by", user_ids=users,
+               title_ar=f"{rt.name_ar} {rec.number} R{rec.rev_no}: مطلوب الاعتماد قبل {d}",
+               title_en=f"{rt.name_en} {rec.number} R{rec.rev_no}: answer needed by {d}", body=note or rec.title)
+    return _detail(c, rec, a, rt, p)
+
+
 @router.post("/records/{record_id}/assign", response_model=RecordDetail)
 def assign(record_id: uuid.UUID, body: AssignIn, bg: BackgroundTasks, c: Ctx = Depends(ctx)):
     """The consultant PM hands a submitted record to one engineer of the discipline (or clears it)."""
@@ -501,10 +532,15 @@ def inbox(c: Ctx = Depends(ctx)):
                                      project_name_ar=a.project.name_ar, project_name_en=a.project.name_en,
                                      record_type=RecordTypeOut.model_validate(rt), number=r.number, rev_no=r.rev_no,
                                      title=r.title, state=StateOut.model_validate(_state(c, r.state_id)),
-                                     reason=reason, due_at=r.due_at, overdue=_overdue(r),
+                                     reason=reason, due_at=r.due_at, overdue=_overdue(r), required_by=r.required_by,
                                      assigned_to_me=r.assigned_to == c.user.id, updated_at=r.updated_at))
     order = {"reply": 0, "returned": 1, "draft": 2}
-    out.sort(key=lambda x: (not x.overdue, order[x.reason], x.due_at or x.updated_at))
+    def soonest(x: InboxItem) -> datetime:
+        when = [x.due_at or x.updated_at]
+        if x.required_by:
+            when.append(datetime.combine(x.required_by, time.max, UTC))
+        return min(when)
+    out.sort(key=lambda x: (not x.overdue, order[x.reason], soonest(x)))
     return out
 
 
@@ -519,7 +555,8 @@ def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
     new = Record(project_id=rec.project_id, record_type_id=rt.id, number=rec.number, rev_no=rec.rev_no + 1,
                  revision_group_id=rec.revision_group_id, discipline_id=rec.discipline_id, title=rec.title,
                  description=rec.description, state_id=initial.id, state_category=initial.category,
-                 from_party_id=a.party.id, to_party_id=rec.to_party_id, created_by=c.user.id, custom=rec.custom)
+                 from_party_id=a.party.id, to_party_id=rec.to_party_id, created_by=c.user.id, custom=rec.custom,
+                 required_by=rec.required_by, required_by_note=rec.required_by_note)
     c.db.add(new)
     try:
         c.db.flush()

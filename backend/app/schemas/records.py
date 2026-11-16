@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -59,6 +59,13 @@ class RecordIn(BaseModel):
     discipline_id: UUID | None = None
     number: str | None = Field(default=None, max_length=60)  # manual number (e.g. migrated); else generated
     details: SubmittalDetailsIO = SubmittalDetailsIO()
+    required_by: date | None = None
+    required_by_note: str | None = Field(default=None, max_length=300)
+
+
+class RequiredByIn(BaseModel):
+    required_by: date | None
+    required_by_note: str | None = Field(default=None, max_length=300)
 
 
 class RecordPatch(BaseModel):
@@ -91,6 +98,7 @@ class RecordRow(BaseModel):
     answered_at: datetime | None
     overdue: bool
     revisions: int  # how many revisions this number has
+    required_by: date | None = None
 
 
 class EventOut(BaseModel):
@@ -152,6 +160,9 @@ class RecordDetail(BaseModel):
     answered_on_behalf_of: UserOut | None
     answered_at: datetime | None
     response_comment: str | None
+    required_by: date | None = None  # the author's "answer needed by" (supply schedule); not printed
+    required_by_note: str | None = None
+    can_set_required_by: bool = False
     details: SubmittalDetailsIO
     submittal_kind_name: KindName | None = None  # details.submittal_kind shown in both languages
     transitions: list[TransitionOut]
@@ -194,6 +205,7 @@ class InboxItem(BaseModel):
     state: StateOut
     reason: Literal["reply", "returned", "draft"]
     due_at: datetime | None
+    required_by: date | None = None
     overdue: bool
     assigned_to_me: bool
     updated_at: datetime

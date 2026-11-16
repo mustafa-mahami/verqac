@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type RecordDetail, type RecordMeta, type RecordRow } from '../api';
-import { fmtDate, stateColor } from '../format';
+import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
 
 const DETAIL_KEYS = ['item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
@@ -23,7 +23,7 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
     initialValues: {
       title: '', discipline_id: meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0]?.value ?? '',
       item: '', manufacturer: '', supplier: '', drawing_ref: '', spec_ref: '', boq_ref: '', quantity: '', unit: '',
-      files: [] as File[],
+      required_by: '', required_by_note: '', files: [] as File[],
     },
   });
 
@@ -37,6 +37,7 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
         body: JSON.stringify({
           record_type: 'submittal', title: v.title.trim(), description: blank(v.description),
           discipline_id: v.discipline_id || null, number: blank(v.number),
+          required_by: v.required_by || null, required_by_note: v.required_by ? blank(v.required_by_note) : null,
           details: {
             submittal_kind: v.submittal_kind || null, item: blank(v.item), manufacturer: blank(v.manufacturer),
             supplier: blank(v.supplier), drawing_ref: blank(v.drawing_ref), spec_ref: blank(v.spec_ref),
@@ -76,6 +77,11 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
           ))}
         </SimpleGrid>
         <Textarea label={t('rec.description')} autosize minRows={2} {...form.getInputProps('description')} />
+        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+          <TextInput type="date" label={t('rec.requiredBy')} description={t('rec.requiredByHint')} {...form.getInputProps('required_by')} />
+          <TextInput style={{ gridColumn: 'span 2' }} label={t('rec.requiredByNote')} disabled={!form.values.required_by}
+            description="&nbsp;" maxLength={300} {...form.getInputProps('required_by_note')} />
+        </SimpleGrid>
         <FileInput label={t('rec.files')} description={t('rec.filesHint')} multiple clearable {...form.getInputProps('files')} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>{t('common.cancel')}</Button>
@@ -136,6 +142,11 @@ export default function Submittals({ projectId }: { projectId: string }) {
                     <Table.Td>
                       <Text size="sm" c={r.overdue ? 'red' : undefined} fw={r.overdue ? 600 : undefined}>{fmtDate(r.due_at)}</Text>
                       {r.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
+                      {r.required_by && ['draft', 'submitted'].includes(r.state.category) && (
+                        <Badge size="xs" tt="none" variant="light" color={requiredColor(r.required_by)} style={{ display: 'block' }}>
+                          {t('rec.requiredByShort')} {fmtDate(r.required_by)}
+                        </Badge>
+                      )}
                     </Table.Td>
                   </Table.Tr>
                 ))}

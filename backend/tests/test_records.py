@@ -308,3 +308,31 @@ def test_submittal_kinds_per_project(client, site):
         db.execute(text("UPDATE submittal_details SET submittal_kind = 'مخططات تنفيذية' WHERE record_id = :i"), {"i": legacy["id"]})
     got = client.get(f"/api/v1/records/{legacy['id']}", headers=site["hqa"]).json()
     assert got["submittal_kind_name"] == {"ar": "مخططات تنفيذية", "en": "Shop drawing"}
+
+
+def test_required_by_date(client, site):
+    from datetime import date, timedelta
+    soon = (date.today() + timedelta(days=5)).isoformat()
+    r = client.post(f"/api/v1/projects/{site['pid']}/records", headers=site["hqa"], json={
+        "title": "مصاعد", "discipline_id": site["cdisc"]["C"], "required_by": soon, "required_by_note": "التوريد حسب الجدول"})
+    rec = r.json()
+    assert rec["required_by"] == soon and rec["required_by_note"] == "التوريد حسب الجدول" and rec["can_set_required_by"]
+    rid = rec["id"]
+    act(client, site["hqa"], rid, "submit")
+    # the consultant sees it but cannot change it; the contractor can while it waits for an answer
+    got = client.get(f"/api/v1/records/{rid}", headers=site["hce"]).json()
+    assert got["required_by"] == soon and got["can_set_required_by"] is False
+    url = f"/api/v1/records/{rid}/required-by"
+    assert client.put(url, headers=site["hce"], json={"required_by": None}).status_code == 403
+    sooner = (date.today() + timedelta(days=2)).isoformat()
+    r = client.put(url, headers=site["hqa"], json={"required_by": sooner, "required_by_note": "مؤكد"})
+    assert r.status_code == 200 and r.json()["required_by"] == sooner
+    notes = client.get("/api/v1/notifications", headers=site["hce"]).json()["items"]
+    assert any(n["event"] == "required_by" for n in notes)
+    rows = client.get(f"/api/v1/projects/{site['pid']}/records", headers=site["hce"]).json()
+    assert next(x for x in rows if x["id"] == rid)["required_by"] == sooner
+    inbox = client.get("/api/v1/inbox", headers=site["hce"]).json()
+    assert next(x for x in inbox if x["id"] == rid)["required_by"] == sooner
+    # after the answer it is history: no more changes
+    act(client, site["hce"], rid, "approve")
+    assert client.put(url, headers=site["hqa"], json={"required_by": None}).status_code == 403

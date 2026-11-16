@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, type InboxItem } from '../api';
-import { fmtDate, stateColor } from '../format';
+import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
 
 const reasonColor = { reply: 'blue', returned: 'orange', draft: 'gray' } as const;
@@ -50,6 +50,11 @@ export default function Inbox() {
                     <Table.Td>
                       <Text size="sm" c={i.overdue ? 'red' : undefined} fw={i.overdue ? 600 : undefined}>{fmtDate(i.due_at)}</Text>
                       {i.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
+                      {i.required_by && (
+                        <Badge size="xs" tt="none" variant="light" color={requiredColor(i.required_by)} style={{ display: 'block' }}>
+                          {t('rec.requiredByShort')} {fmtDate(i.required_by)}
+                        </Badge>
+                      )}
                     </Table.Td>
                   </Table.Tr>
                 ))}

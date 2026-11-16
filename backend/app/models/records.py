@@ -6,10 +6,10 @@ seven fixed categories (the `dr` status codes); KPIs and visibility rules use th
 category, never the state's name.
 """
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint,
+    BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -117,6 +117,9 @@ class Record(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # optional: the consultant PM hands the record to one engineer of the discipline
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    # latest date the author needs the answer by (e.g. from the supply schedule); never printed
+    required_by: Mapped[date | None] = mapped_column(Date)
+    required_by_note: Mapped[str | None] = mapped_column(String(300))
     answered_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     answered_on_behalf_of: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

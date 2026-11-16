@@ -10,7 +10,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   api, ApiError, openProtected, type RecordDetail, type RecordMeta, type Team, type Transition,
 } from '../api';
-import { fmtDate, fmtSize, stateColor } from '../format';
+import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../format';
 import i18n, { pick } from '../i18n';
 import BackButton from './BackButton';
 
@@ -120,6 +120,60 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
         ))}
       </Group>
     </Card>
+  );
+}
+
+/** The contractor's "answer needed by" date (supply schedule). Both sides see it; it is never printed. */
+function RequiredBy({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail) => void }) {
+  const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const [day, setDay] = useState(rec.required_by ?? '');
+  const [note, setNote] = useState(rec.required_by_note ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: (clear: boolean) => api<RecordDetail>(`/records/${rec.id}/required-by`, {
+      method: 'PUT', body: JSON.stringify(clear ? { required_by: null } : { required_by: day || null, required_by_note: note.trim() || null }),
+    }),
+    onSuccess: (r) => { onDone(r); setEditing(false); setError(null); },
+    onError: (e) => setError(errText(e)),
+  });
+  const open = ['draft', 'submitted'].includes(rec.state.category);
+  if (!rec.required_by && !rec.can_set_required_by) return null;
+  if (editing)
+    return (
+      <Card withBorder>
+        <Stack gap="sm">
+          {error && <Alert color="red">{error}</Alert>}
+          <Group align="flex-end" wrap="wrap">
+            <TextInput type="date" label={t('rec.requiredBy')} value={day} onChange={(e) => setDay(e.currentTarget.value)} />
+            <TextInput flex={1} miw={220} label={t('rec.requiredByNote')} maxLength={300} value={note} onChange={(e) => setNote(e.currentTarget.value)} />
+          </Group>
+          <Text size="xs" c="dimmed">{t('rec.requiredByHint')}</Text>
+          <Group gap="xs">
+            <Button size="xs" disabled={!day} loading={save.isPending} onClick={() => save.mutate(false)}>{t('rec.save')}</Button>
+            <Button size="xs" variant="default" onClick={() => setEditing(false)}>{t('common.cancel')}</Button>
+          </Group>
+        </Stack>
+      </Card>
+    );
+  if (!rec.required_by)
+    return <Group><Button size="xs" variant="subtle" onClick={() => setEditing(true)}>+ {t('rec.requiredBySet')}</Button></Group>;
+  const n = daysUntil(rec.required_by);
+  const when = n < 0 ? t('rec.daysLate', { count: -n }) : n === 0 ? t('rec.dueToday') : t('rec.daysLeft', { count: n });
+  return (
+    <Alert color={open ? requiredColor(rec.required_by) : 'gray'} variant="light"
+      title={open ? `${t('rec.requiredBy')}: ${fmtDate(rec.required_by)} — ${when}` : t('rec.requiredByWas', { date: fmtDate(rec.required_by) })}>
+      <Group justify="space-between" wrap="nowrap" align="flex-start">
+        <Text size="sm">{rec.required_by_note || ''}</Text>
+        {rec.can_set_required_by && (
+          <Group gap={4} wrap="nowrap">
+            <Button size="compact-xs" variant="subtle" onClick={() => setEditing(true)}>{t('rec.requiredByChange')}</Button>
+            <Button size="compact-xs" variant="subtle" color="red" loading={save.isPending} onClick={() => save.mutate(true)}>{t('rec.requiredByClear')}</Button>
+          </Group>
+        )}
+      </Group>
+      {open && <Text size="xs" c="dimmed" mt={4}>{t('rec.notPrinted')}</Text>}
+    </Alert>
   );
 }
 
@@ -241,6 +295,7 @@ export default function RecordPage() {
       {error && <Alert color="red" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
       {isDraft && <Alert color="gray">{t('rec.draftNote')}</Alert>}
       {isDraft && r.no_discipline_engineer && <Alert color="yellow">{t('rec.noEngineer')}</Alert>}
+      <RequiredBy key={`${r.id}-${r.required_by}-${r.required_by_note}`} rec={r} onDone={put} />
 
       {(others.length > 0 || r.can_edit || r.can_revise) && (
         <Group gap="xs">

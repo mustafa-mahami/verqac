@@ -103,7 +103,7 @@ export interface SubmittalKind { code: string | null; name_ar: string; name_en: 
 export interface RecordMeta { record_type: RecordType; can_create: boolean; disciplines: Discipline[]; party_kind: string | null; submittal_kinds: SubmittalKind[] }
 export interface RecordRow {
   id: string; number: string; rev_no: number; title: string; state: State; discipline: Discipline | null;
-  submitted_at: string | null; due_at: string | null; answered_at: string | null; overdue: boolean; revisions: number;
+  submitted_at: string | null; due_at: string | null; answered_at: string | null; overdue: boolean; revisions: number; required_by: string | null;
 }
 export interface SubmittalDetails {
   submittal_kind: string | null; item: string | null; manufacturer: string | null; supplier: string | null;
@@ -121,7 +121,7 @@ export interface RecordDetail {
   description: string | null; discipline: Discipline | null; state: State; from_party_kind: string;
   created_by: User; created_at: string; submitted_by: User | null; submitted_at: string | null; due_at: string | null;
   overdue: boolean; answered_by: User | null; answered_on_behalf_of: User | null; answered_at: string | null;
-  response_comment: string | null; details: SubmittalDetails; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
+  response_comment: string | null; required_by: string | null; required_by_note: string | null; can_set_required_by: boolean; details: SubmittalDetails; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
   can_revise: boolean; can_attach: string[]; can_act_on_behalf: boolean; events: RecordEvent[];
   assigned_to: User | null; can_assign: boolean; assign_candidates: User[]; no_discipline_engineer: boolean;
   comments: RecordComment[]; attachments: Attachment[]; revisions: { id: string; rev_no: number; state: State }[];
@@ -135,7 +135,7 @@ export interface ProjectSettings {
 export interface InboxItem {
   id: string; project_id: string; project_code: string; project_name_ar: string; project_name_en: string;
   record_type: RecordType; number: string; rev_no: number; title: string; state: State;
-  reason: 'reply' | 'returned' | 'draft'; due_at: string | null; overdue: boolean; assigned_to_me: boolean; updated_at: string;
+  reason: 'reply' | 'returned' | 'draft'; due_at: string | null; required_by: string | null; overdue: boolean; assigned_to_me: boolean; updated_at: string;
 }
 export interface NotificationItem { id: number; record_id: string | null; event: string; title_ar: string; title_en: string; body: string | null; created_at: string; read: boolean }
 export interface Notifications { unread: number; items: NotificationItem[] }
