@@ -310,6 +310,9 @@ def test_submittal_kinds_per_project(client, site):
         db.execute(text("UPDATE submittal_details SET submittal_kind = 'مخططات تنفيذية' WHERE record_id = :i"), {"i": legacy["id"]})
     got = client.get(f"/api/v1/records/{legacy['id']}", headers=site["hqa"]).json()
     assert got["submittal_kind_name"] == {"ar": "مخططات تنفيذية", "en": "Shop drawing"}
+    # in the register a legacy value groups with the code it names, so the type filter has no duplicates
+    row = next(x for x in client.get(f"/api/v1/projects/{pid}/records", headers=site["hqa"]).json() if x["id"] == legacy["id"])
+    assert row["submittal_kind"] == "shop_drawing"
 
 
 def test_required_by_date(client, site):

@@ -20,7 +20,7 @@ from app.core import storage
 from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
-from app.core.kinds import active_codes, kind_name, submittal_kinds
+from app.core.kinds import active_codes, kind_code, kind_name, submittal_kinds
 from app.core.notify import members_who_can, notify
 from app.models.core import Discipline, Project, ProjectMember, ProjectParty, RolePermission, User
 from app.models.records import (Attachment, Record, RecordComment, RecordEvent, RecordType, StoredFile,
@@ -298,7 +298,7 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
                              discipline=DisciplineOut.model_validate(d) if d else None,
                              submitted_at=r.submitted_at, due_at=r.due_at, answered_at=r.answered_at,
                              overdue=_overdue(r), revisions=counts[r.revision_group_id], required_by=r.required_by,
-                             submittal_kind=kinds.get(r.id), submittal_kind_name=kind_name(a.project, kinds.get(r.id))))
+                             submittal_kind=kind_code(a.project, kinds.get(r.id)), submittal_kind_name=kind_name(a.project, kinds.get(r.id))))
     return out
 
 

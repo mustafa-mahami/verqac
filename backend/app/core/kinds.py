@@ -28,6 +28,16 @@ def active_codes(project: Project) -> set[str]:
     return {k["code"] for k in submittal_kinds(project) if k["active"]}
 
 
+def kind_code(project: Project, value: str | None) -> str | None:
+    """The canonical code for a stored value (legacy records hold the name text instead of the code)."""
+    if not value:
+        return None
+    for k in submittal_kinds(project) + DEFAULT_SUBMITTAL_KINDS:
+        if value in (k["code"], k["name_ar"], k["name_en"]):
+            return k["code"]
+    return value
+
+
 def kind_name(project: Project, value: str | None) -> dict | None:
     """{"ar", "en"} for a stored value: a code from the project's list, or legacy name text."""
     if not value:

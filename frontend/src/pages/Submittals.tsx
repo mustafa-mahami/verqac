@@ -1,6 +1,6 @@
 import {
   Alert, Badge, Button, Card, FileInput, Group, Modal, Select, SimpleGrid, Stack, Switch, Table, Text, Textarea,
-  TextInput,
+  TextInput, UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useQuery } from '@tanstack/react-query';
@@ -10,7 +10,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError, type RecordDetail, type RecordMeta, type RecordRow } from '../api';
 import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
-import RecordStats, { applyFilter, type StatsFilter } from './RecordStats';
+import RecordStats, { applyFilter, CATEGORIES, type StatsFilter } from './RecordStats';
 
 const DETAIL_KEYS = ['item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
 
@@ -93,6 +93,48 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
   );
 }
 
+type SortKey = 'number' | 'title' | 'discipline' | 'state' | 'submitted' | 'due';
+const CAT_ORDER = Object.fromEntries(CATEGORIES.map(([c], i) => [c, i]));
+const collator = new Intl.Collator(['ar', 'en'], { numeric: true, sensitivity: 'base' });
+
+/** Value a column sorts by; empty dates sort last in either direction. */
+function sortValue(r: RecordRow, key: SortKey): string | number | null {
+  switch (key) {
+    case 'number': return `${r.number}#${String(r.rev_no).padStart(3, '0')}`;
+    case 'title': return r.title;
+    case 'discipline': return r.discipline ? pick(r.discipline, 'name') : null;
+    case 'state': return CAT_ORDER[r.state.category] ?? 99;
+    case 'submitted': return r.submitted_at;
+    case 'due': return r.due_at;
+  }
+}
+
+function sortRows(rows: RecordRow[], key: SortKey, dir: 'asc' | 'desc'): RecordRow[] {
+  const sign = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = sortValue(a, key), y = sortValue(b, key);
+    if (x === y) return 0;
+    if (x === null) return 1;
+    if (y === null) return -1;
+    return sign * (typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y)));
+  });
+}
+
+function SortTh({ label, k, sort, dir, onSort }: {
+  label: string; k: SortKey; sort: SortKey; dir: 'asc' | 'desc'; onSort: (k: SortKey) => void;
+}) {
+  const active = sort === k;
+  return (
+    <Table.Th>
+      <UnstyledButton onClick={() => onSort(k)} aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600, fontSize: 'inherit', whiteSpace: 'nowrap' }}>
+        {label}
+        <Text span size="xs" c={active ? 'verqac.7' : 'gray.4'}>{active ? (dir === 'asc' ? '▲' : '▼') : '⇅'}</Text>
+      </UnstyledButton>
+    </Table.Th>
+  );
+}
+
 export default function Submittals({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -115,8 +157,17 @@ export default function Submittals({ projectId }: { projectId: string }) {
     put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('kind', f.kind, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
     setParams(next, { replace: true });
   };
-  const shown = useMemo(() => applyFilter(rows.data ?? [], filter),
-    [rows.data, filter.status, filter.discipline, filter.kind, filter.q, filter.from, filter.to]);
+  const sort = (params.get('sort') ?? 'number') as SortKey;
+  const dir = params.get('dir') === 'desc' ? 'desc' : 'asc';
+  const onSort = (k: SortKey) => {
+    const next = new URLSearchParams(params);
+    const nextDir = sort === k && dir === 'asc' ? 'desc' : 'asc';
+    k === 'number' && nextDir === 'asc' ? next.delete('sort') : next.set('sort', k);
+    nextDir === 'asc' ? next.delete('dir') : next.set('dir', nextDir);
+    setParams(next, { replace: true });
+  };
+  const shown = useMemo(() => sortRows(applyFilter(rows.data ?? [], filter), sort, dir),
+    [rows.data, filter.status, filter.discipline, filter.kind, filter.q, filter.from, filter.to, sort, dir]);
   const narrowed = !!(filter.q || filter.from || filter.to);
 
   return (
@@ -148,12 +199,12 @@ export default function Submittals({ projectId }: { projectId: string }) {
             <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>{t('rec.number')}</Table.Th>
-                  <Table.Th>{t('rec.title')}</Table.Th>
-                  <Table.Th>{t('rec.discipline')}</Table.Th>
-                  <Table.Th>{t('rec.state')}</Table.Th>
-                  <Table.Th>{t('rec.submitted')}</Table.Th>
-                  <Table.Th>{t('rec.due')}</Table.Th>
+                  <SortTh label={t('rec.number')} k="number" sort={sort} dir={dir} onSort={onSort} />
+                  <SortTh label={t('rec.title')} k="title" sort={sort} dir={dir} onSort={onSort} />
+                  <SortTh label={t('rec.discipline')} k="discipline" sort={sort} dir={dir} onSort={onSort} />
+                  <SortTh label={t('rec.state')} k="state" sort={sort} dir={dir} onSort={onSort} />
+                  <SortTh label={t('rec.submitted')} k="submitted" sort={sort} dir={dir} onSort={onSort} />
+                  <SortTh label={t('rec.due')} k="due" sort={sort} dir={dir} onSort={onSort} />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
