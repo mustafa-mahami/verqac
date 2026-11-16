@@ -21,7 +21,7 @@ export default function Login() {
       const r = await api<{ access_token: string }>('/auth/login', { method: 'POST', body: JSON.stringify(values) });
       await signIn(r.access_token);
       const next = params.get('next');
-      navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/projects', { replace: true });
+      navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/inbox', { replace: true });
     } catch (e) {
       setError(e instanceof ApiError ? e.code : 'generic');
     }

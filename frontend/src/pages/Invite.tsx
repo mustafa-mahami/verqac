@@ -45,7 +45,7 @@ export default function Invite() {
     try {
       const r = await api<{ access_token: string }>(`/invitations/${token}/accept`, { method: 'POST', body: JSON.stringify(body) });
       await signIn(r.access_token);
-      navigate(isParty && inv.project ? `/projects/${inv.project.id}` : '/projects', { replace: true });
+      navigate(inv.project ? `/projects/${inv.project.id}` : '/inbox', { replace: true });
     } catch (e) {
       setError(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic')));
     }

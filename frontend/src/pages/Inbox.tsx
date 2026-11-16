@@ -1,0 +1,63 @@
+import { Badge, Card, Stack, Table, Text, Title } from '@mantine/core';
+import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { api, type InboxItem } from '../api';
+import { fmtDate, stateColor } from '../format';
+import { pick } from '../i18n';
+
+const reasonColor = { reply: 'blue', returned: 'orange', draft: 'gray' } as const;
+
+export default function Inbox() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const items = useQuery({ queryKey: ['inbox'], queryFn: () => api<InboxItem[]>('/inbox'), refetchInterval: 60_000 });
+
+  return (
+    <Stack maw={1300} mx="auto">
+      <Title order={3}>{t('inbox.title')}</Title>
+      {items.isSuccess && items.data.length === 0 ? <Text c="dimmed">{t('inbox.empty')}</Text> : (
+        <Card withBorder p={0}>
+          <Table.ScrollContainer minWidth={900}>
+            <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th />
+                  <Table.Th>{t('inbox.project')}</Table.Th>
+                  <Table.Th>{t('rec.number')}</Table.Th>
+                  <Table.Th>{t('rec.title')}</Table.Th>
+                  <Table.Th>{t('rec.state')}</Table.Th>
+                  <Table.Th>{t('rec.due')}</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {items.data?.map((i) => (
+                  <Table.Tr key={i.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/records/${i.id}`)}>
+                    <Table.Td>
+                      <Badge tt="none" variant="light" color={reasonColor[i.reason]}>{t(`inbox.reason.${i.reason}`)}</Badge>
+                      {i.assigned_to_me && <Badge ms={4} tt="none" size="xs" variant="outline">{t('inbox.assignedToMe')}</Badge>}
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" fw={500} dir="ltr" ta="start">{i.project_code}</Text>
+                      <Text size="xs" c="dimmed" lineClamp={1}>{pick({ name_ar: i.project_name_ar, name_en: i.project_name_en }, 'name')}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" dir="ltr" ta="start" style={{ whiteSpace: 'nowrap' }}>{i.number} · R{i.rev_no}</Text>
+                      <Text size="xs" c="dimmed">{pick(i.record_type, 'name')}</Text>
+                    </Table.Td>
+                    <Table.Td><Text size="sm" lineClamp={2}>{i.title}</Text></Table.Td>
+                    <Table.Td><Badge tt="none" variant="light" color={stateColor(i.state.color)}>{pick(i.state, 'name')}</Badge></Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c={i.overdue ? 'red' : undefined} fw={i.overdue ? 600 : undefined}>{fmtDate(i.due_at)}</Text>
+                      {i.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Card>
+      )}
+    </Stack>
+  );
+}

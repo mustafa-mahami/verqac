@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth';
 import { applyLanguage, pick } from './i18n';
+import Bell from './pages/Bell';
+import Inbox from './pages/Inbox';
 import Invite from './pages/Invite';
 import Login from './pages/Login';
 import OrgUsers from './pages/OrgUsers';
@@ -48,10 +50,12 @@ function Shell() {
             <Text fw={700} size="lg" c="verqac.7" component={Link} to="/projects">
               {t('app.name')}
             </Text>
+            <NavLink to="/inbox" label={t('nav.inbox')} />
             <NavLink to="/projects" label={t('nav.projects')} />
             {isAdmin && <NavLink to="/org" label={t('nav.orgUsers')} />}
           </Group>
           <Group gap="xs">
+            <Bell />
             {me && <Text size="sm" c="dimmed">{pick(me.user, 'full_name')}</Text>}
             <LanguageButton />
             <Button variant="light" size="compact-sm" onClick={signOut}>
@@ -62,11 +66,12 @@ function Shell() {
       </AppShell.Header>
       <AppShell.Main>
         <Routes>
+          <Route path="/inbox" element={<Inbox />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
           <Route path="/records/:id" element={<RecordPage />} />
           <Route path="/org" element={<OrgUsers />} />
-          <Route path="*" element={<Navigate to="/projects" replace />} />
+          <Route path="*" element={<Navigate to="/inbox" replace />} />
         </Routes>
       </AppShell.Main>
     </AppShell>

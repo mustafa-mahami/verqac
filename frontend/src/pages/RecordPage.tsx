@@ -77,6 +77,10 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
     queryFn: () => api<Team>(`/projects/${rec.project_id}/team`),
   });
   const colleagues = (team.data?.members ?? []).filter((m) => m.is_active && m.party_id === team.data?.my_party_id);
+  const assign = useMutation({
+    mutationFn: (uid: string | null) => api<RecordDetail>(`/records/${rec.id}/assign`, { method: 'POST', body: JSON.stringify({ user_id: uid }) }),
+    onSuccess: onDone, onError: (e) => setError(errText(e)),
+  });
   const keep = (v: string) => { setText(v); try { localStorage.setItem(key, v); } catch { /* storage unavailable */ } };
   const go = useMutation({
     mutationFn: (tr: Transition) => {
@@ -90,8 +94,18 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
   });
   return (
     <Card withBorder style={{ borderColor: 'var(--mantine-color-verqac-3)' }}>
-      <Title order={5}>{t('resp.title')}</Title>
-      <Text size="xs" c="dimmed" mb="sm">{t('resp.hint')}</Text>
+      <Group justify="space-between" align="flex-start" mb="xs">
+        <div>
+          <Title order={5}>{t('resp.title')}</Title>
+          <Text size="xs" c="dimmed">{t('resp.hint')}</Text>
+        </div>
+        {rec.can_assign && (
+          <Select size="xs" w={240} label={t('assign.label')} placeholder={t('assign.none')} clearable
+            value={rec.assigned_to?.id ?? null} disabled={assign.isPending}
+            data={rec.assign_candidates.map((u) => ({ value: u.id, label: pick(u, 'full_name') }))}
+            onChange={(v) => assign.mutate(v)} />
+        )}
+      </Group>
       {error && <Alert color="red" mb="sm" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
       <Textarea placeholder={t('resp.placeholder')} autosize minRows={6} maxRows={20} value={text}
         onChange={(e) => keep(e.currentTarget.value)} />
@@ -206,6 +220,9 @@ export default function RecordPage() {
             <Title order={3} dir="ltr">{r.number} · R{r.rev_no}</Title>
             <Badge size="lg" tt="none" variant="light" color={stateColor(r.state.color)}>{pick(r.state, 'name')}</Badge>
             {r.overdue && <Badge size="lg" tt="none" color="red">{t('rec.overdue')}</Badge>}
+            {r.assigned_to && r.state.category === 'submitted' && (
+              <Badge size="lg" tt="none" variant="outline">{t('assign.assignedTo', { name: pick(r.assigned_to, 'full_name') })}</Badge>
+            )}
           </Group>
           <Text size="lg" mt={4}>{r.title}</Text>
           <Text size="sm" c="dimmed">{pick(r.record_type, 'name')}{r.discipline ? ` · ${pick(r.discipline, 'name')}` : ''}</Text>
@@ -218,6 +235,7 @@ export default function RecordPage() {
 
       {error && <Alert color="red" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
       {isDraft && <Alert color="gray">{t('rec.draftNote')}</Alert>}
+      {isDraft && r.no_discipline_engineer && <Alert color="yellow">{t('rec.noEngineer')}</Alert>}
 
       {(others.length > 0 || r.can_edit || r.can_revise) && (
         <Group gap="xs">

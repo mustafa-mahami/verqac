@@ -92,7 +92,10 @@
     "cannot_revise": "A new revision is made from the latest revision only.",
     "file_too_large": "The file is over the limit (50 MB).",
     "cannot_attach": "Files cannot be added now.",
-    "invalid_review_days": "The period must be 1 to 365 days."
+    "invalid_review_days": "The period must be 1 to 365 days.",
+    "cannot_change_self": "You cannot change your own status or rights.",
+    "cannot_assign": "Only the consultant's project manager can assign.",
+    "assignee_not_eligible": "This user is not an engineer of this discipline."
   },
   "common": {
     "cancel": "Cancel",
@@ -102,7 +105,8 @@
   },
   "nav": {
     "projects": "Projects",
-    "orgUsers": "Organization users"
+    "orgUsers": "Organization users",
+    "inbox": "Awaiting me"
   },
   "team": {
     "title": "Project team",
@@ -128,7 +132,10 @@
     "noMembers": "No members yet.",
     "noUsersToAdd": "Everyone in your organization is already in the project. Invite new users from \"Organization users\".",
     "you": "You",
-    "partyKind": "Party"
+    "partyKind": "Party",
+    "edit": "Edit role and disciplines",
+    "inviteNew": "Invite new colleague",
+    "inviteNewHint": "Joins your organization and this project with the chosen role and disciplines in one step."
   },
   "invite": {
     "linkTitle": "Invitation link",
@@ -159,7 +166,17 @@
     "admin": "Admin",
     "member": "User",
     "orgRole": "Organization access",
-    "hint": "Once they accept, they belong to your organization; then add them to projects from the project team page."
+    "hint": "Once they accept, they belong to your organization; then add them to projects from the Team tab. Or invite them from a project team to join both at once.",
+    "status": "Status",
+    "active": "Active",
+    "suspended": "Suspended",
+    "projects": "Projects",
+    "suspend": "Suspend from organization",
+    "activate": "Reactivate",
+    "makeAdmin": "Make organization admin",
+    "makeMember": "Make regular user",
+    "suspendConfirm": "Sign-in is closed and they leave every project of the organization. Their records and answers stay. After reactivating, add them to projects again from the team page.",
+    "noProjects": "No projects"
   },
   "project": {
     "tabs": {
@@ -248,7 +265,8 @@
       "Method statement",
       "Sample",
       "Document"
-    ]
+    ],
+    "noEngineer": "No consultant engineer covers this discipline in the project team yet. On submission it reaches only the consultant's project manager."
   },
   "back": {
     "projects": "All projects",
@@ -259,11 +277,37 @@
     "reviewHint": "Days allowed to answer each record type, per the contract or the quality plan. A new period applies to records submitted after saving.",
     "days": "days",
     "saved": "Settings saved.",
-    "readOnly": "Only the project manager can change these."
+    "readOnly": "Only the project manager can change these.",
+    "notifyTitle": "Notifications outside the platform",
+    "notifyHint": "Notifications inside the platform (bell and Awaiting me) always work. Choose whether they also go by e-mail or to the Mahami app.",
+    "email": "E-mail",
+    "mahami": "Mahami app",
+    "notOnServer": "not set up on the server yet"
   },
   "resp": {
     "title": "Consultant's comments",
     "placeholder": "Write the comments, one per line…",
     "hint": "Saved with the decision and shown on the record and the PDF. The draft is kept on this device until you choose a decision."
+  },
+  "inbox": {
+    "title": "Awaiting me",
+    "empty": "Nothing is waiting for you.",
+    "reason": {
+      "reply": "Awaiting your reply",
+      "returned": "Returned to you",
+      "draft": "Your draft"
+    },
+    "project": "Project",
+    "assignedToMe": "Assigned to you"
+  },
+  "bell": {
+    "title": "Notifications",
+    "empty": "No notifications.",
+    "readAll": "Mark all as read"
+  },
+  "assign": {
+    "label": "Assign to engineer",
+    "none": "All engineers of the discipline",
+    "assignedTo": "Assigned to {{name}}"
   }
 }

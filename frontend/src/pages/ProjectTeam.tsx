@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import {
-  api, ApiError, type Discipline, type InviteOut, type OrgMember, type Role, type Team, type TeamParty,
+  api, ApiError, type Discipline, type InviteOut, type Member, type OrgMember, type Role, type Team, type TeamParty,
 } from '../api';
 import { useAuth } from '../auth';
 import i18n, { pick } from '../i18n';
@@ -23,6 +23,8 @@ type Dialog =
   | { kind: 'inviteParty'; party: TeamParty }
   | { kind: 'link'; invite: InviteOut }
   | { kind: 'addMember'; party: TeamParty }
+  | { kind: 'inviteNew'; party: TeamParty }
+  | { kind: 'editMember'; member: Member; party: TeamParty }
   | null;
 
 function PartyForm({ projectId, party, kinds = [], onInvite }: {
@@ -97,6 +99,65 @@ function MemberForm({ projectId, party, team, onDone }: { projectId: string; par
   );
 }
 
+/** Role and discipline pickers for one party (roles of that party, disciplines of its organization). */
+function useRolesAndDisciplines(party: TeamParty) {
+  const orgId = party.org!.id;
+  const roles = useQuery({ queryKey: ['roles'], queryFn: () => api<Role[]>('/roles') });
+  const discs = useQuery({ queryKey: ['disciplines', orgId], queryFn: () => api<Discipline[]>(`/orgs/${orgId}/disciplines`) });
+  return {
+    roleData: (roles.data ?? []).filter((r) => r.party_kind === party.kind).map((r) => ({ value: r.id, label: pick(r, 'name') })),
+    discData: (discs.data ?? []).map((d) => ({ value: d.id, label: pick(d, 'name') })),
+  };
+}
+
+function MemberEditForm({ projectId, member, party, onDone }: { projectId: string; member: Member; party: TeamParty; onDone: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const { roleData, discData } = useRolesAndDisciplines(party);
+  const form = useForm({ initialValues: { role_id: member.role.id, discipline_ids: member.discipline_ids } });
+  const save = useMutation({
+    mutationFn: (v: typeof form.values) => api(`/projects/${projectId}/members/${member.id}`, { method: 'PATCH', body: JSON.stringify(v) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['team', projectId] }); onDone(); },
+    onError: (e) => setError(errText(t, e)),
+  });
+  return (
+    <form onSubmit={form.onSubmit((v) => save.mutate(v))}>
+      <Stack>
+        {error && <Alert color="red">{error}</Alert>}
+        <Text fw={500}>{pick(member.user, 'full_name')}</Text>
+        <Select label={t('team.role')} required data={roleData} allowDeselect={false} {...form.getInputProps('role_id')} />
+        <MultiSelect label={t('team.disciplines')} placeholder={t('team.allDisciplines')} data={discData} {...form.getInputProps('discipline_ids')} />
+        <Button type="submit" loading={save.isPending}>{t('rec.save')}</Button>
+      </Stack>
+    </form>
+  );
+}
+
+function InviteNewForm({ projectId, party, onInvite }: { projectId: string; party: TeamParty; onInvite: (i: InviteOut) => void }) {
+  const { t } = useTranslation();
+  const [error, setError] = useState<string | null>(null);
+  const { roleData, discData } = useRolesAndDisciplines(party);
+  const form = useForm({ initialValues: { email: '', role_id: '', discipline_ids: [] as string[] } });
+  const send = useMutation({
+    mutationFn: (v: typeof form.values) =>
+      api<InviteOut>(`/projects/${projectId}/parties/${party.id}/invite-member`, { method: 'POST', body: JSON.stringify(v) }),
+    onSuccess: onInvite, onError: (e) => setError(errText(t, e)),
+  });
+  return (
+    <form onSubmit={form.onSubmit((v) => send.mutate(v))}>
+      <Stack>
+        <Text size="sm" c="dimmed">{t('team.inviteNewHint')}</Text>
+        {error && <Alert color="red">{error}</Alert>}
+        <TextInput label={t('auth.email')} type="email" dir="ltr" required {...form.getInputProps('email')} />
+        <Select label={t('team.role')} required data={roleData} {...form.getInputProps('role_id')} />
+        <MultiSelect label={t('team.disciplines')} placeholder={t('team.allDisciplines')} data={discData} {...form.getInputProps('discipline_ids')} />
+        <Button type="submit" loading={send.isPending}>{t('team.invite')}</Button>
+      </Stack>
+    </form>
+  );
+}
+
 export default function ProjectTeam() {
   const { t } = useTranslation();
   const { id = '' } = useParams();
@@ -164,9 +225,14 @@ export default function ProjectTeam() {
                 </>
               )}
               {p.can_manage_team && (
-                <Button size="compact-sm" variant="light" onClick={() => setDialog({ kind: 'addMember', party: p })}>
-                  {t('team.addMember')}
-                </Button>
+                <>
+                  <Button size="compact-sm" variant="light" onClick={() => setDialog({ kind: 'addMember', party: p })}>
+                    {t('team.addMember')}
+                  </Button>
+                  <Button size="compact-sm" variant="subtle" onClick={() => setDialog({ kind: 'inviteNew', party: p })}>
+                    {t('team.inviteNew')}
+                  </Button>
+                </>
               )}
             </Group>
           </Card>
@@ -211,6 +277,9 @@ export default function ProjectTeam() {
                         <Menu position="bottom-end">
                           <Menu.Target><ActionIcon variant="subtle" aria-label="menu">⋮</ActionIcon></Menu.Target>
                           <Menu.Dropdown>
+                            {m.is_active && party && (
+                              <Menu.Item onClick={() => setDialog({ kind: 'editMember', member: m, party })}>{t('team.edit')}</Menu.Item>
+                            )}
                             <Menu.Item onClick={() => toggleMember.mutate({ mid: m.id, active: !m.is_active })}>
                               {m.is_active ? t('team.deactivate') : t('team.activate')}
                             </Menu.Item>
@@ -229,12 +298,16 @@ export default function ProjectTeam() {
       <Modal opened={dialog !== null} onClose={close} title={
         dialog?.kind === 'link' ? t('invite.linkTitle')
           : dialog?.kind === 'addMember' ? t('team.addMember')
+          : dialog?.kind === 'inviteNew' ? t('team.inviteNew')
+          : dialog?.kind === 'editMember' ? t('team.edit')
           : dialog?.kind === 'inviteParty' ? `${t('team.invite')}: ${dialog.party.placeholder_name ?? ''}`
           : t('team.addParty')}>
         {dialog?.kind === 'addParty' && <PartyForm projectId={id} kinds={missingKinds} onInvite={afterInvite} />}
         {dialog?.kind === 'inviteParty' && <PartyForm projectId={id} party={dialog.party} onInvite={afterInvite} />}
         {dialog?.kind === 'link' && <InviteLink invite={dialog.invite} onDone={close} />}
         {dialog?.kind === 'addMember' && <MemberForm projectId={id} party={dialog.party} team={data} onDone={close} />}
+        {dialog?.kind === 'inviteNew' && <InviteNewForm projectId={id} party={dialog.party} onInvite={(inv) => setDialog({ kind: 'link', invite: inv })} />}
+        {dialog?.kind === 'editMember' && <MemberEditForm projectId={id} member={dialog.member} party={dialog.party} onDone={close} />}
       </Modal>
     </Stack>
   );

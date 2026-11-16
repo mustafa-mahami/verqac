@@ -71,7 +71,8 @@ export interface Member { id: string; user: User; party_id: string; role: Role; 
 export interface Team {
   project: Project; can_manage_project: boolean; my_party_id: string | null; parties: TeamParty[]; members: Member[];
 }
-export interface OrgMember { user: User; org_role: string }
+export interface MemberProject { project_id: string; code: string; name_ar: string; name_en: string; role: Role; is_active: boolean }
+export interface OrgMember { user: User; org_role: string; is_active: boolean; projects: MemberProject[] }
 export interface InvitationInfo {
   kind: 'org_member' | 'project_party'; email: string; status: 'valid' | 'accepted' | 'expired'; user_exists: boolean;
   inviter_name_ar: string; inviter_name_en: string; org: Org | null; project: Project | null;
@@ -121,8 +122,19 @@ export interface RecordDetail {
   overdue: boolean; answered_by: User | null; answered_on_behalf_of: User | null; answered_at: string | null;
   response_comment: string | null; details: SubmittalDetails; transitions: Transition[]; can_edit: boolean;
   can_revise: boolean; can_attach: string[]; can_act_on_behalf: boolean; events: RecordEvent[];
+  assigned_to: User | null; can_assign: boolean; assign_candidates: User[]; no_discipline_engineer: boolean;
   comments: RecordComment[]; attachments: Attachment[]; revisions: { id: string; rev_no: number; state: State }[];
 }
 
 export interface ProjectStats { records: number; open: number; overdue: number }
-export interface ProjectSettings { review_days: Record<string, number>; can_edit: boolean }
+export interface ProjectSettings {
+  review_days: Record<string, number>; notify: { email: boolean; mahami: boolean };
+  email_available: boolean; mahami_available: boolean; can_edit: boolean;
+}
+export interface InboxItem {
+  id: string; project_id: string; project_code: string; project_name_ar: string; project_name_en: string;
+  record_type: RecordType; number: string; rev_no: number; title: string; state: State;
+  reason: 'reply' | 'returned' | 'draft'; due_at: string | null; overdue: boolean; assigned_to_me: boolean; updated_at: string;
+}
+export interface NotificationItem { id: number; record_id: string | null; event: string; title_ar: string; title_en: string; body: string | null; created_at: string; read: boolean }
+export interface Notifications { unread: number; items: NotificationItem[] }
