@@ -6,10 +6,11 @@ import { useForm } from '@mantine/form';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError, type RecordDetail, type RecordMeta, type RecordRow } from '../api';
 import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
+import RecordStats, { applyFilter, type StatsFilter } from './RecordStats';
 
 const DETAIL_KEYS = ['item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
 
@@ -103,10 +104,20 @@ export default function Submittals({ projectId }: { projectId: string }) {
     queryKey: ['records', projectId, allRevs],
     queryFn: () => api<RecordRow[]>(`/projects/${projectId}/records?type=submittal&all_revisions=${allRevs}`),
   });
+  // the dashboard filter lives in the URL, so "back" from a record returns to the same view
+  const [params, setParams] = useSearchParams();
+  const filter: StatsFilter = { status: params.get('st') ?? 'all', discipline: params.get('disc') ?? 'all' };
+  const setFilter = (f: StatsFilter) => {
+    const next = new URLSearchParams(params);
+    f.status === 'all' ? next.delete('st') : next.set('st', f.status);
+    f.discipline === 'all' ? next.delete('disc') : next.set('disc', f.discipline);
+    setParams(next, { replace: true });
+  };
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (rows.data ?? []).filter((r) => !s || r.number.toLowerCase().includes(s) || r.title.toLowerCase().includes(s));
-  }, [rows.data, q]);
+    return applyFilter(rows.data ?? [], filter)
+      .filter((r) => !s || r.number.toLowerCase().includes(s) || r.title.toLowerCase().includes(s));
+  }, [rows.data, q, filter.status, filter.discipline]);
 
   return (
     <Stack>
@@ -117,7 +128,10 @@ export default function Submittals({ projectId }: { projectId: string }) {
         </Group>
         {meta.data?.can_create && <Button onClick={() => setOpen(true)}>{t('rec.new')}</Button>}
       </Group>
-      {rows.isSuccess && shown.length === 0 ? <Text c="dimmed">{t('rec.empty')}</Text> : (
+      {rows.data && rows.data.length > 0 && (
+        <RecordStats rows={rows.data} filter={filter} onChange={setFilter} showDraft={meta.data?.party_kind === 'contractor'} />
+      )}
+      {rows.isSuccess && shown.length === 0 ? <Text c="dimmed">{rows.data.length ? t('stats.noneHere') : t('rec.empty')}</Text> : (
         <Card withBorder p={0}>
           <Table.ScrollContainer minWidth={760}>
             <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">

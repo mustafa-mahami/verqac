@@ -348,5 +348,19 @@
     "onBehalf": "on behalf of",
     "consultant": "Consultant",
     "contractor": "Contractor"
+  },
+  "stats": {
+    "all": "All",
+    "draft": "Draft",
+    "submitted": "Awaiting reply",
+    "approved": "Approved",
+    "approved_as_noted": "Approved as noted",
+    "revise_and_resubmit": "Revise & resubmit",
+    "rejected": "Rejected",
+    "cancelled": "Cancelled",
+    "overdue": "Reply overdue",
+    "discipline": "Discipline:",
+    "allDisciplines": "All",
+    "noneHere": "No requests in this view."
   }
 }

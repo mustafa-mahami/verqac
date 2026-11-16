@@ -348,5 +348,19 @@
     "onBehalf": "نيابةً عن",
     "consultant": "الاستشاري",
     "contractor": "المقاول"
+  },
+  "stats": {
+    "all": "الكل",
+    "draft": "مسودة",
+    "submitted": "بانتظار الرد",
+    "approved": "معتمد",
+    "approved_as_noted": "معتمد مع ملاحظات",
+    "revise_and_resubmit": "تعديل وإعادة تقديم",
+    "rejected": "مرفوض",
+    "cancelled": "ملغى",
+    "overdue": "متأخر الرد",
+    "discipline": "التخصص:",
+    "allDisciplines": "الكل",
+    "noneHere": "لا توجد طلبات بهذا التصنيف."
   }
 }
