@@ -131,8 +131,9 @@ class SubmittalKind(BaseModel):
 
 
 class ProjectSettingsOut(BaseModel):
-    review_days: dict[str, int]  # record type code -> days the responder has to answer
-    resubmit_days: dict[str, int] = {}  # record type code -> days the author has to resubmit after "revise"/"reject"
+    reply_hours: dict[str, int]  # record type code -> hours the responder has to answer
+    resubmit_hours: dict[str, int]  # record type code -> hours the author has to resubmit after "revise"/"reject"
+    link_submittals: bool = False  # inspections show and link the approved submittals of their stage
     notify: NotifyChannels
     submittal_kinds: list[SubmittalKind]
     has_header: bool = False  # a letterhead banner was uploaded
@@ -142,8 +143,9 @@ class ProjectSettingsOut(BaseModel):
 
 
 class ProjectSettingsIn(BaseModel):
-    review_days: dict[str, int] = {}
-    resubmit_days: dict[str, int] = {}
+    reply_hours: dict[str, int] = {}
+    resubmit_hours: dict[str, int] = {}
+    link_submittals: bool | None = None
     notify: NotifyChannels | None = None
     submittal_kinds: list[SubmittalKind] | None = None
 

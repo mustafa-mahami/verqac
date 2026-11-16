@@ -117,7 +117,9 @@
     "title_required": "Pick or type the subject.",
     "wrong_password": "The current password is not right.",
     "reset_expired": "This link is invalid or expired.",
-    "header_not_image": "The letterhead must be a PNG or JPG image."
+    "header_not_image": "The letterhead must be a PNG or JPG image.",
+    "performed_in_future": "The inspection time cannot be in the future.",
+    "invalid_link": "Only this project's submittals can be linked."
   },
   "common": {
     "cancel": "Cancel",
@@ -208,7 +210,8 @@
     "tabs": {
       "submittals": "Submittals",
       "team": "Team",
-      "settings": "Settings"
+      "settings": "Settings",
+      "inspections": "Inspections"
     }
   },
   "rec": {
@@ -302,12 +305,13 @@
   },
   "back": {
     "projects": "All projects",
-    "submittals": "Submittals list"
+    "submittals": "Submittals list",
+    "inspections": "Inspection register"
   },
   "settings": {
     "reviewTitle": "Reply and resubmission periods",
-    "reviewHint": "Days set by the contract or quality plan: for the consultant to answer, and for the contractor to submit the next revision after “revise and resubmit” or “rejected”. New periods apply to what is submitted or answered after saving.",
-    "days": "days",
+    "reviewHint": "From the contract or quality plan, in days and hours: the consultant's reply period, and the contractor's period to submit the next revision after “revise and resubmit” or “rejected”. For inspections the reply period starts at submission, or at the requested inspection time if later. New periods apply to what is submitted or answered after saving.",
+    "days": "d",
     "saved": "Settings saved.",
     "readOnly": "Only the project manager can change these.",
     "notifyTitle": "Notifications outside the platform",
@@ -323,7 +327,10 @@
     "kindInactive": "Off — not offered for new requests",
     "kindAdd": "Add a type",
     "replyDays": "Consultant reply",
-    "resubmitDays": "Contractor resubmission"
+    "resubmitDays": "Contractor resubmission",
+    "hours": "h",
+    "linkSubmittals": "Link inspections to material submittals",
+    "linkSubmittalsHint": "The inspection form lists the stage's submittals to pick the ones it relies on, and warns when they are not approved."
   },
   "resp": {
     "title": "Consultant's comments",
@@ -492,5 +499,19 @@
     "byShort": "Resubmit by",
     "lateShort": "Resubmission late since",
     "hint": "The consultant asked for a new revision. Create a “New revision” and submit it by this date; submitting it closes this deadline."
+  },
+  "ir": {
+    "new": "New inspection request",
+    "requestedFor": "Inspection wanted at",
+    "requestedForHint": "Leave empty for now",
+    "item": "Work to inspect",
+    "linked": "Linked submittals",
+    "linkedHint": "Material submittals this work relies on",
+    "noApprovedInStage": "No approved submittal for this stage's materials.",
+    "linkNotApproved": "Some of the chosen submittals are not approved yet.",
+    "noLink": "This inspection is not linked to any material submittal.",
+    "performedAt": "Inspected at",
+    "performedHint": "Leave empty for now",
+    "asap": "As soon as possible"
   }
 }

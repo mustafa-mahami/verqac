@@ -124,6 +124,11 @@ class Record(Base):
     # revision; resubmitted_at is set when it does (the record then stops counting as overdue)
     resubmit_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     resubmitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # inspections: when the contractor wants it (empty = now), when it was actually done, and the
+    # approved submittals of the materials it relies on
+    requested_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    performed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    linked_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)))
     # work stage and locations the record covers (FK added by migration 0008); all_locations = the whole project
     stage_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     topic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # FK added by migration 0009

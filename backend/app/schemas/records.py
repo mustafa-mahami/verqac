@@ -47,6 +47,15 @@ class StageRef(BaseModel):
     scope: str
 
 
+class LinkedRef(BaseModel):
+    id: UUID
+    number: str
+    rev_no: int
+    title: str
+    state: "StateOut"
+    stage_id: UUID | None = None
+
+
 class TopicRef(BaseModel):
     id: UUID
     name_ar: str
@@ -85,6 +94,10 @@ class RecordIn(BaseModel):
     topic_id: UUID | None = None
     all_locations: bool = False
     location_ids: list[UUID] = []
+    requested_for: datetime | None = None
+    performed_at: datetime | None = None
+    requested_for: datetime | None = None  # inspections: when it should take place (empty = now)
+    linked_ids: list[UUID] = []  # inspections: approved submittals of the materials
 
 
 class RequiredByIn(BaseModel):
@@ -102,12 +115,15 @@ class RecordPatch(BaseModel):
     topic_id: UUID | None = None
     all_locations: bool | None = None
     location_ids: list[UUID] | None = None
+    requested_for: datetime | None = None
+    linked_ids: list[UUID] | None = None
 
 
 class TransitionIn(BaseModel):
     action: str
     comment: str | None = Field(default=None, max_length=10000)
     on_behalf_of: UUID | None = None
+    performed_at: datetime | None = None  # inspections: when it was actually done (default: now)
 
 
 class CommentIn(BaseModel):
@@ -207,6 +223,10 @@ class RecordDetail(BaseModel):
     submittal_kind_name: KindName | None = None  # details.submittal_kind shown in both languages
     stage: StageRef | None = None
     topic: TopicRef | None = None
+    requested_for: datetime | None = None
+    performed_at: datetime | None = None
+    linked: list["LinkedRef"] = []
+    link_warning: str | None = None  # no_link | not_approved (only when the project links inspections)
     all_locations: bool = False
     locations: list[LocationRef] = []
     transitions: list[TransitionOut]
@@ -231,6 +251,9 @@ class RecordMeta(BaseModel):
     disciplines: list[DisciplineOut]  # the ones the user may create records in
     party_kind: str | None
     submittal_kinds: list[SubmittalKind] = []  # active kinds of this project, in order
+    states: list["StateOut"] = []  # this type's workflow states (labels for the dashboard)
+    link_submittals: bool = False
+    reply_hours: int = 0
 
 
 class AssignIn(BaseModel):

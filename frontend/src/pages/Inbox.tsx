@@ -67,7 +67,7 @@ export default function Inbox() {
                     <Table.Td><Text size="sm" lineClamp={2}>{i.title}</Text></Table.Td>
                     <Table.Td><Badge tt="none" variant="light" color={stateColor(i.state.color)}>{pick(i.state, 'name')}</Badge></Table.Td>
                     <Table.Td>
-                      <Text size="sm" c={i.overdue ? 'red' : undefined} fw={i.overdue ? 600 : undefined}>{fmtDate(i.due_at)}</Text>
+                      <Text size="sm" c={i.overdue ? 'red' : undefined} fw={i.overdue ? 600 : undefined}>{fmtDate(i.due_at, i.record_type.code === 'inspection')}</Text>
                       {i.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
                       {i.required_by && (
                         <Badge size="xs" tt="none" variant="light" color={requiredColor(i.required_by)} style={{ display: 'block' }}>

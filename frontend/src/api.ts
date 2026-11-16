@@ -108,11 +108,15 @@ export async function openProtected(path: string, filename: string, inline = fal
 export interface State { id: string; code: string; name_ar: string; name_en: string; category: string; color: string }
 export interface RecordType { id: string; code: string; prefix: string; name_ar: string; name_en: string; review_days: number }
 export interface SubmittalKind { code: string | null; name_ar: string; name_en: string; active: boolean }
-export interface RecordMeta { record_type: RecordType; can_create: boolean; disciplines: Discipline[]; party_kind: string | null; submittal_kinds: SubmittalKind[] }
+export interface RecordMeta {
+  record_type: RecordType; can_create: boolean; disciplines: Discipline[]; party_kind: string | null; submittal_kinds: SubmittalKind[];
+  states: State[]; link_submittals: boolean; reply_hours: number;
+}
+export interface LinkedRef { id: string; number: string; rev_no: number; title: string; state: State; stage_id: string | null }
 export interface RecordRow {
   id: string; number: string; rev_no: number; title: string; state: State; discipline: Discipline | null;
   submitted_at: string | null; due_at: string | null; answered_at: string | null; overdue: boolean; revisions: number; required_by: string | null;
-  resubmit_due_at: string | null; resubmit_overdue: boolean;
+  resubmit_due_at: string | null; resubmit_overdue: boolean; requested_for: string | null; performed_at: string | null;
   submittal_kind: string | null; submittal_kind_name: { ar: string; en: string } | null;
   stage_id: string | null; topic_id: string | null; all_locations: boolean; location_ids: string[];
 }
@@ -136,6 +140,7 @@ export interface RecordDetail {
   resubmit_due_at: string | null; resubmitted_at: string | null; resubmit_overdue: boolean; required_by_note: string | null; can_set_required_by: boolean; details: SubmittalDetails;
   stage: { id: string; name_ar: string; name_en: string; scope: string } | null; all_locations: boolean;
   topic: { id: string; name_ar: string; name_en: string } | null;
+  requested_for: string | null; performed_at: string | null; linked: LinkedRef[]; link_warning: 'no_link' | 'not_approved' | null;
   locations: { id: string; kind: string; name_ar: string; name_en: string }[]; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
   can_revise: boolean; can_attach: string[]; can_act_on_behalf: boolean; events: RecordEvent[];
   assigned_to: User | null; addressed_to: User[]; can_assign: boolean; assign_candidates: User[]; no_discipline_engineer: boolean;
@@ -144,7 +149,7 @@ export interface RecordDetail {
 
 export interface ProjectStats { records: number; open: number; overdue: number }
 export interface ProjectSettings {
-  review_days: Record<string, number>; resubmit_days: Record<string, number>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
+  reply_hours: Record<string, number>; resubmit_hours: Record<string, number>; link_submittals: boolean; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
   email_available: boolean; mahami_available: boolean; can_edit: boolean; has_header: boolean;
 }
 export interface InboxItem {

@@ -19,7 +19,7 @@ T = {
            "discipline": "التخصص", "submitted_on": "تاريخ التقديم", "subject": "الموضوع", "description": "الوصف",
            "due": "موعد الرد", "answered_on": "تاريخ الرد", "details": "التفاصيل", "attachments": "المرفقات",
            "decision": "قرار الاستشاري", "comments": "ملاحظات الاستشاري", "submitted_by": "قدّمه (المقاول)",
-           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "resubmit": "إعادة التقديم", "resubmit_text": "يُعاد التقديم خلال {days} يوماً، قبل", "submitted_by_row": "مقدّم الطلب", "addressed_to": "موجّه إلى", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
+           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "requested_for": "موعد الفحص المطلوب", "asap": "فوراً", "performed_at": "وقت الفحص الفعلي", "linked": "الاعتمادات المرتبطة", "resubmit": "إعادة التقديم", "resubmit_text": "يُعاد التقديم خلال {days} يوماً، قبل", "submitted_by_row": "مقدّم الطلب", "addressed_to": "موجّه إلى", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
            "kind": {"submission": "مرفق التقديم", "response": "مرفق الرد", "photo": "صورة", "other": "أخرى"},
            "fields": {"submittal_kind": "نوع الاعتماد", "item": "البند / المادة", "manufacturer": "المصنّع",
                       "supplier": "المورّد / الوكيل", "drawing_ref": "رقم المخطط", "spec_ref": "بند المواصفات",
@@ -28,7 +28,7 @@ T = {
            "discipline": "Discipline", "submitted_on": "Submitted on", "subject": "Subject", "description": "Description",
            "due": "Reply due", "answered_on": "Answered on", "details": "Details", "attachments": "Attachments",
            "decision": "Consultant decision", "comments": "Consultant comments", "submitted_by": "Submitted by (Contractor)",
-           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "resubmit": "Resubmission", "resubmit_text": "Resubmit within {days} days, by", "submitted_by_row": "Submitted by", "addressed_to": "Submitted to", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
+           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "requested_for": "Inspection requested for", "asap": "As soon as possible", "performed_at": "Inspected at", "linked": "Linked submittals", "resubmit": "Resubmission", "resubmit_text": "Resubmit within {days} days, by", "submitted_by_row": "Submitted by", "addressed_to": "Submitted to", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
            "kind": {"submission": "Submission", "response": "Response", "photo": "Photo", "other": "Other"},
            "fields": {"submittal_kind": "Submittal type", "item": "Item / material", "manufacturer": "Manufacturer",
                       "supplier": "Supplier / agent", "drawing_ref": "Drawing no.", "spec_ref": "Spec section",
@@ -69,6 +69,20 @@ def header_image(c: Ctx, project) -> str | None:
     return f"data:{f.content_type};base64,{base64.b64encode(data).decode()}"
 
 
+def sep_join(lang: str, items: list[str]) -> str:
+    return ("، " if lang == "ar" else ", ").join(items)
+
+
+def _decisions(c: Ctx, d: RecordDetail, lang: str) -> list[tuple[str, str]]:
+    """The answers this record type's workflow offers, as printed tick boxes."""
+    from app.models.records import RecordType, WorkflowState, WorkflowTransition
+    rt = c.db.get(RecordType, d.record_type.id)
+    rows = c.db.execute(select(WorkflowState).join(WorkflowTransition, WorkflowTransition.to_state_id == WorkflowState.id)
+                        .where(WorkflowTransition.workflow_id == rt.workflow_id, WorkflowTransition.effect == "respond")
+                        .order_by(WorkflowState.sort)).scalars().unique().all()
+    return [(x.category, _n(x, lang)) for x in rows]
+
+
 def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> bytes:
     tz = ZoneInfo("Asia/Hebron")
 
@@ -87,7 +101,14 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         det["submittal_kind"] = getattr(d.submittal_kind_name, lang)
     if det.get("quantity") is not None:
         det["quantity"] = f"{float(det['quantity']):g} {det.get('unit') or ''}".strip()
-    pairs = [(t["fields"][k], det.get(k) or "", k in LTR_FIELDS) for k in t["fields"]]
+    inspection = d.record_type.code == "inspection"
+    keys = ["item", "drawing_ref", "spec_ref", "boq_ref"] if inspection else list(t["fields"])
+    pairs = [(t["fields"][k], det.get(k) or "", k in LTR_FIELDS) for k in keys]
+    if inspection:
+        pairs += [(t["requested_for"], dt(d.requested_for) or t["asap"], True),
+                  (t["performed_at"], dt(d.performed_at), True)]
+        if d.linked:
+            pairs.append((t["linked"], sep_join(lang, [f"{x.number} R{x.rev_no} ({_n(x.state, lang)})" for x in d.linked]), False))
     sep = "، " if lang == "ar" else ", "
     place = t["all_locations"] if d.all_locations else sep.join(getattr(x, f"name_{lang}") for x in d.locations)
     if d.stage or place:
@@ -101,7 +122,7 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         state_category=d.state.category, is_draft=d.state.category == "draft",
         discipline=_n(d.discipline, lang), title=d.title, description=d.description,
         submitted_at=dt(d.submitted_at), due_at=dt(d.due_at), answered_at=dt(d.answered_at),
-        detail_rows=rows, decisions=DECISIONS[lang], response_comment=d.response_comment,
+        detail_rows=rows, decisions=_decisions(c, d, lang), response_comment=d.response_comment,
         attachments=[{"filename": x.filename, "kind": t["kind"].get(x.kind, x.kind)} for x in d.attachments],
         submitted_by=_n(d.submitted_by, lang, "full_name"), answered_by=_n(d.answered_by, lang, "full_name"),
         on_behalf=_n(d.answered_on_behalf_of, lang, "full_name"),

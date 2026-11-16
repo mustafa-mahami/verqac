@@ -1,5 +1,5 @@
 import {
-  ActionIcon, Alert, Anchor, Badge, Button, Card, FileButton, Grid, Group, Modal, Select, SimpleGrid, Stack, Switch,
+  ActionIcon, Alert, Anchor, Badge, Button, Card, FileButton, Grid, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch,
   Text, Textarea, TextInput, Timeline, Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
@@ -8,13 +8,21 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  api, ApiError, openProtected, type Place, type RecordDetail, type RecordMeta, type Team, type Transition,
+  api, ApiError, openProtected, type LinkedRef, type Place, type RecordDetail, type RecordMeta, type Team, type Transition,
 } from '../api';
 import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../format';
 import i18n, { pick } from '../i18n';
 import BackButton from './BackButton';
 import { PlacePicker, useStructure } from './Structure';
 
+const IR_KEYS = ['item', 'drawing_ref', 'spec_ref', 'boq_ref'] as const;
+/** ISO timestamp -> value of an <input type="datetime-local"> in the browser's time zone, and back. */
+const toLocalInput = (iso: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null);
 const DETAIL_KEYS = ['submittal_kind', 'item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
 const LTR = new Set(['drawing_ref', 'spec_ref', 'boq_ref']);
 const btnColor: Record<string, string> = { primary: 'verqac', green: 'green', teal: 'teal', orange: 'orange', red: 'red', subtle: 'gray' };
@@ -72,6 +80,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
   const key = `verqac.resp.${rec.id}`;
   const [text, setText] = useState(() => { try { return localStorage.getItem(key) ?? ''; } catch { return ''; } });
   const [onBehalf, setOnBehalf] = useState<string | null>(null);
+  const [performed, setPerformed] = useState('');
   const [error, setError] = useState<string | null>(null);
   const team = useQuery({
     queryKey: ['team', rec.project_id], enabled: rec.can_act_on_behalf,
@@ -87,7 +96,8 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
     mutationFn: (tr: Transition) => {
       if (tr.requires_comment && !text.trim()) throw new ApiError(422, 'comment_required');
       return api<RecordDetail>(`/records/${rec.id}/transitions`, {
-        method: 'POST', body: JSON.stringify({ action: tr.action, comment: text.trim() || null, on_behalf_of: onBehalf }),
+        method: 'POST', body: JSON.stringify({ action: tr.action, comment: text.trim() || null, on_behalf_of: onBehalf,
+          performed_at: rec.record_type.code === 'inspection' ? fromLocalInput(performed) : null }),
       });
     },
     onSuccess: (r) => { try { localStorage.removeItem(key); } catch { /* ignore */ } onDone(r); },
@@ -110,6 +120,10 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
       {error && <Alert color="red" mb="sm" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
       <Textarea placeholder={t('resp.placeholder')} autosize minRows={6} maxRows={20} value={text}
         onChange={(e) => keep(e.currentTarget.value)} />
+      {rec.record_type.code === 'inspection' && (
+        <TextInput mt="sm" w={260} type="datetime-local" label={t('ir.performedAt')} description={t('ir.performedHint')}
+          value={performed} onChange={(e) => setPerformed(e.currentTarget.value)} />
+      )}
       {rec.can_act_on_behalf && colleagues.length > 1 && (
         <Select mt="sm" label={t('rec.onBehalfOf')} clearable placeholder={t('rec.myself')} value={onBehalf} onChange={setOnBehalf}
           data={colleagues.map((m) => ({ value: m.user.id, label: `${pick(m.user, 'full_name')} · ${pick(m.role, 'name')}` }))} />
@@ -181,7 +195,13 @@ function RequiredBy({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDeta
 function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail) => void }) {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
-  const meta = useQuery({ queryKey: ['recMeta', rec.project_id], queryFn: () => api<RecordMeta>(`/projects/${rec.project_id}/records/meta?type=submittal`) });
+  const type = rec.record_type.code;
+  const isIR = type === 'inspection';
+  const meta = useQuery({ queryKey: ['recMeta', rec.project_id, type], queryFn: () => api<RecordMeta>(`/projects/${rec.project_id}/records/meta?type=${type}`) });
+  const cands = useQuery({ queryKey: ['linkCandidates', rec.project_id, 'all'], enabled: isIR,
+    queryFn: () => api<LinkedRef[]>(`/projects/${rec.project_id}/link-candidates`) });
+  const [requested, setRequested] = useState(toLocalInput(rec.requested_for));
+  const [linked, setLinked] = useState<string[]>(rec.linked.map((x) => x.id));
   const d = rec.details;
   const structure = useStructure(rec.project_id);
   const initialPlace: Place = { stage_id: rec.stage?.id ?? null, topic_id: rec.topic?.id ?? null, all_locations: rec.all_locations, location_ids: rec.locations.map((x) => x.id) };
@@ -203,8 +223,9 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
         method: 'PATCH',
         body: JSON.stringify({
           title: place.topic_id ? null : v.title.trim(), description: blank(v.description), discipline_id: v.discipline_id || null,
-          details: Object.fromEntries(DETAIL_KEYS.map((k) => [k, blank(v[k])])),
+          details: Object.fromEntries((isIR ? IR_KEYS : DETAIL_KEYS).map((k) => [k, blank(v[k])])),
           ...place,
+          ...(isIR ? { requested_for: fromLocalInput(requested), linked_ids: linked } : {}),
         }),
       });
     },
@@ -220,9 +241,19 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
           : <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />}
         <Select label={t('rec.discipline')} allowDeselect={false}
           data={(meta.data?.disciplines ?? []).map((x) => ({ value: x.id, label: pick(x, 'name') }))} {...form.getInputProps('discipline_id')} />
+        {isIR && (
+          <TextInput type="datetime-local" w={260} label={t('ir.requestedFor')} description={t('ir.requestedForHint')}
+            value={requested} onChange={(e) => setRequested(e.currentTarget.value)} />
+        )}
+        {isIR && meta.data?.link_submittals && (
+          <MultiSelect label={t('ir.linked')} description={t('ir.linkedHint')} searchable clearable value={linked} onChange={setLinked}
+            data={(cands.data ?? []).map((x) => ({ value: x.id, label: `${x.number} R${x.rev_no} · ${x.title} — ${pick(x.state, 'name')}` }))} />
+        )}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <Select label={t('rec.f.submittal_kind')} allowDeselect={false} data={kindOptions} {...form.getInputProps('submittal_kind')} />
-          {DETAIL_KEYS.filter((k) => k !== 'submittal_kind').map((k) => <TextInput key={k} label={t(`rec.f.${k}`)} dir={LTR.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />)}
+          {!isIR && <Select label={t('rec.f.submittal_kind')} allowDeselect={false} data={kindOptions} {...form.getInputProps('submittal_kind')} />}
+          {(isIR ? IR_KEYS : DETAIL_KEYS.filter((k) => k !== 'submittal_kind')).map((k) => (
+            <TextInput key={k} label={t(isIR && k === 'item' ? 'ir.item' : `rec.f.${k}`)} dir={LTR.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />
+          ))}
         </SimpleGrid>
         <Textarea label={t('rec.description')} autosize minRows={2} {...form.getInputProps('description')} />
         <Button type="submit" loading={save.isPending}>{t('rec.save')}</Button>
@@ -280,7 +311,9 @@ export default function RecordPage() {
 
   return (
     <Stack maw={1200} mx="auto">
-      <BackButton to={`/projects/${r.project_id}?tab=submittals`} label={t('back.submittals')} />
+      {r.record_type.code === 'inspection'
+        ? <BackButton to={`/projects/${r.project_id}?tab=inspections`} label={t('back.inspections')} />
+        : <BackButton to={`/projects/${r.project_id}?tab=submittals`} label={t('back.submittals')} />}
       <Group justify="space-between" align="flex-start">
         <div>
           <Group gap="xs">
@@ -312,7 +345,7 @@ export default function RecordPage() {
           </Alert>
         );
       })()}
-      <RequiredBy key={`${r.id}-${r.required_by}-${r.required_by_note}`} rec={r} onDone={put} />
+      {r.record_type.code !== 'inspection' && <RequiredBy key={`${r.id}-${r.required_by}-${r.required_by_note}`} rec={r} onDone={put} />}
 
       {(others.length > 0 || r.can_edit || r.can_revise) && (
         <Group gap="xs">
@@ -348,21 +381,40 @@ export default function RecordPage() {
                   <Field label={t('structure.location')}
                     value={r.all_locations ? t('structure.wholeProject') : r.locations.map((x) => pick(x, 'name')).join(i18n.language === 'en' ? ', ' : '، ')} />
                 )}
-                {DETAIL_KEYS.filter((k) => k !== 'unit').map((k) => (
-                  <Field key={k} label={t(`rec.f.${k}`)} ltr={LTR.has(k)}
+                {r.record_type.code === 'inspection' && <>
+                  <Field label={t('ir.requestedFor')} value={r.requested_for ? fmtDate(r.requested_for, true) : t('ir.asap')} />
+                  {r.performed_at && <Field label={t('ir.performedAt')} value={fmtDate(r.performed_at, true)} />}
+                </>}
+                {(r.record_type.code === 'inspection' ? IR_KEYS : DETAIL_KEYS.filter((k) => k !== 'unit')).map((k) => (
+                  <Field key={k} label={t(r.record_type.code === 'inspection' && k === 'item' ? 'ir.item' : `rec.f.${k}`)} ltr={LTR.has(k)}
                     value={k === 'quantity' && det.quantity != null ? `${Number(det.quantity)} ${det.unit ?? ''}`
                       : k === 'submittal_kind' && r.submittal_kind_name ? pick({ n_ar: r.submittal_kind_name.ar, n_en: r.submittal_kind_name.en }, 'n')
                       : (det[k] as string | null)} />
                 ))}
                 <Field label={t('rec.submitted')} value={fmtDate(r.submitted_at, true)} />
-                <Field label={t('rec.due')} value={fmtDate(r.due_at)} />
+                <Field label={t('rec.due')} value={fmtDate(r.due_at, r.record_type.code === 'inspection')} />
                 {r.answered_at && <Field label={t('rec.answered')} value={fmtDate(r.answered_at, true)} />}
                 {r.answered_by && <Field label={t('rec.answeredBy')} value={`${pick(r.answered_by, 'full_name')}${r.answered_on_behalf_of ? ` (${t('rec.onBehalf')} ${pick(r.answered_on_behalf_of, 'full_name')})` : ''}`} />}
-                {r.resubmit_due_at && <Field label={t('resubmit.byShort')} value={fmtDate(r.resubmit_due_at)} />}
+                {r.resubmit_due_at && <Field label={t('resubmit.byShort')} value={fmtDate(r.resubmit_due_at, r.record_type.code === 'inspection')} />}
                 <Field label={t('rec.submittedBy')} value={r.submitted_by ? pick(r.submitted_by, 'full_name') : null} />
                 <Field label={t('rec.addressedTo')} value={r.addressed_to.map((u) => pick(u, 'full_name')).join(i18n.language === 'en' ? ', ' : '، ') || null} />
               </SimpleGrid>
               {r.description && <Text size="sm" mt="sm" style={{ whiteSpace: 'pre-wrap' }}>{r.description}</Text>}
+              {r.linked.length > 0 && (
+                <Stack gap={4} mt="sm">
+                  <Text size="xs" c="dimmed">{t('ir.linked')}</Text>
+                  {r.linked.map((x) => (
+                    <Group key={x.id} gap="xs">
+                      <Anchor component={Link} to={`/records/${x.id}`} size="sm" dir="ltr">{x.number} R{x.rev_no}</Anchor>
+                      <Text size="sm">{x.title}</Text>
+                      <Badge size="xs" tt="none" variant="light" color={stateColor(x.state.color)}>{pick(x.state, 'name')}</Badge>
+                    </Group>
+                  ))}
+                </Stack>
+              )}
+              {r.link_warning && (
+                <Alert mt="sm" color="orange" variant="light" py={6}>{t(r.link_warning === 'no_link' ? 'ir.noLink' : 'ir.linkNotApproved')}</Alert>
+              )}
             </Card>
 
             <Card withBorder>

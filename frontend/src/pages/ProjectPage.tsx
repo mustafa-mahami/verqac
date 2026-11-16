@@ -28,10 +28,12 @@ export default function ProjectPage() {
       <Tabs value={tab} onChange={(v) => setParams({ tab: v ?? 'submittals' }, { replace: true })} keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="submittals">{t('project.tabs.submittals')}</Tabs.Tab>
+          <Tabs.Tab value="inspections">{t('project.tabs.inspections')}</Tabs.Tab>
           <Tabs.Tab value="team">{t('project.tabs.team')}</Tabs.Tab>
           <Tabs.Tab value="settings">{t('project.tabs.settings')}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="submittals" pt="md"><Submittals projectId={id} /></Tabs.Panel>
+        <Tabs.Panel value="inspections" pt="md"><Submittals projectId={id} type="inspection" /></Tabs.Panel>
         <Tabs.Panel value="team" pt="md"><ProjectTeam /></Tabs.Panel>
         <Tabs.Panel value="settings" pt="md"><ProjectSettings projectId={id} /></Tabs.Panel>
       </Tabs>

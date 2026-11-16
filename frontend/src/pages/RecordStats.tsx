@@ -1,6 +1,6 @@
 import { Badge, Card, Group, SegmentedControl, Select, SimpleGrid, Text, UnstyledButton } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
-import type { RecordRow, Structure } from '../api';
+import type { RecordRow, State, Structure } from '../api';
 import { coversLocation, locationOptions } from './Structure';
 import { pick } from '../i18n';
 
@@ -45,9 +45,13 @@ export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = fa
  * Register dashboard: one tile per state category with its count, plus all and overdue.
  * A tile filters the list below; a discipline switch appears when the list spans several disciplines.
  */
-export default function RecordStats({ rows, filter, onChange, showDraft, structure }: {
+export default function RecordStats({ rows, filter, onChange, showDraft, structure, states }: {
   rows: RecordRow[]; filter: StatsFilter; onChange: (f: StatsFilter) => void; showDraft: boolean; structure?: Structure;
+  states?: State[];
 }) {
+  // tile names come from this record type's workflow (an inspection is "accepted", a submittal "approved")
+  const stateName = (cat: string) => { const s = states?.find((x) => x.category === cat); return s ? pick(s, 'name') : null; };
+  const hasCat = (cat: string) => !states || states.some((x) => x.category === cat);
   const { t } = useTranslation();
   const disciplines = new Map<string, RecordRow['discipline']>();
   rows.forEach((r) => r.discipline && disciplines.set(r.discipline.code, r.discipline));
@@ -65,7 +69,7 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
 
   const tiles: { key: string; color: string }[] = [
     { key: 'all', color: 'verqac' },
-    ...CATEGORIES.filter(([c]) => (c !== 'draft' || showDraft) && (c !== 'cancelled' || count(c) > 0))
+    ...CATEGORIES.filter(([c]) => hasCat(c) && (c !== 'draft' || showDraft) && (c !== 'cancelled' || count(c) > 0))
       .map(([key, color]) => ({ key, color })),
     { key: 'overdue', color: 'red' },
     { key: 'resubmit_overdue', color: 'red' },
@@ -135,7 +139,7 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
               <Text fz={26} fw={700} lh={1.1} c={key.endsWith('overdue') && n > 0 ? 'red' : `${color}.7`}>{n}</Text>
               <Group gap={6} wrap="nowrap" mt={2}>
                 {key !== 'all' && !key.endsWith('overdue') && <Badge size="xs" circle color={color} variant="filled"> </Badge>}
-                <Text size="xs" fw={500} c="dimmed" lineClamp={1}>{t(`stats.${key}`)}</Text>
+                <Text size="xs" fw={500} c="dimmed" lineClamp={1}>{(key !== 'submitted' && stateName(key)) || t(`stats.${key}`)}</Text>
               </Group>
             </UnstyledButton>
           );

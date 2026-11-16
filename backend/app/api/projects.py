@@ -11,7 +11,7 @@ from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
 from app.core.kinds import new_code, submittal_kinds
 from app.api.structure import apply_type
-from app.api.records import DEFAULT_RESUBMIT_DAYS
+from app.api.records import periods
 from app.models.structure import ProjectType
 from app.core.mailer import mail_enabled
 from app.core.notify import channels, mahami_enabled
@@ -137,12 +137,12 @@ def get_project(project_id: UUID, c: Ctx = Depends(ctx)):
 @router.get("/{project_id}/settings", response_model=ProjectSettingsOut)
 def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     a = project_access(c, project_id)
-    saved = (a.project.settings or {}).get("review_days", {})
-    days = {rt.code: int(saved.get(rt.code, rt.review_days))
-            for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort))}
-    saved_re = (a.project.settings or {}).get("resubmit_days", {})
-    redays = {code: int(saved_re.get(code, DEFAULT_RESUBMIT_DAYS)) for code in days}
-    return ProjectSettingsOut(review_days=days, resubmit_days=redays, notify=NotifyChannels(**channels(a.project)),
+    reply, resub = {}, {}
+    for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort)):
+        reply[rt.code], resub[rt.code] = periods(a.project, rt)
+    return ProjectSettingsOut(reply_hours=reply, resubmit_hours=resub,
+                              link_submittals=bool((a.project.settings or {}).get("link_submittals", False)),
+                              notify=NotifyChannels(**channels(a.project)),
                               submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project)],
                               has_header=bool((a.project.settings or {}).get("header_file_id")),
                               email_available=mail_enabled(), mahami_available=mahami_enabled(),
@@ -178,17 +178,19 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
     a = project_access(c, project_id)
     require(a.can_manage_project, "manage_project_required")
     codes = set(c.db.scalars(select(RecordType.code).where(RecordType.org_id.is_(None))))
-    for code, days in [*body.review_days.items(), *body.resubmit_days.items()]:
-        if code not in codes or not 1 <= days <= 365:
+    for code, hours in [*body.reply_hours.items(), *body.resubmit_hours.items()]:
+        if code not in codes or not 1 <= hours <= 24 * 365:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_review_days")
     settings = dict(a.project.settings or {})
-    before = dict(settings.get("review_days", {}))
-    settings["review_days"] = {**before, **body.review_days}
-    changes = diff(before, settings["review_days"])
-    if body.resubmit_days:
-        old_re = dict(settings.get("resubmit_days", {}))
-        settings["resubmit_days"] = {**old_re, **body.resubmit_days}
-        changes.update({f"resubmit_{k}": v for k, v in diff(old_re, settings["resubmit_days"]).items()})
+    changes: dict = {}
+    for key, new in (("reply_hours", body.reply_hours), ("resubmit_hours", body.resubmit_hours)):
+        if new:
+            old = dict(settings.get(key, {}))
+            settings[key] = {**old, **new}
+            changes.update({f"{key}_{k}": v for k, v in diff(old, settings[key]).items()})
+    if body.link_submittals is not None and body.link_submittals != bool(settings.get("link_submittals", False)):
+        changes["link_submittals"] = [settings.get("link_submittals", False), body.link_submittals]
+        settings["link_submittals"] = body.link_submittals
     if body.notify is not None:
         old = settings.get("notify", {})
         settings["notify"] = body.notify.model_dump()

@@ -105,7 +105,7 @@ def test_submit_without_attachment_and_due_date(client, site):
     done = act(client, site["hqa"], rec["id"], "submit").json()  # a file is optional
     assert done["state"]["category"] == "submitted"
     days = (datetime.fromisoformat(done["due_at"]) - datetime.fromisoformat(done["submitted_at"])).days
-    assert days == 14
+    assert days == 7  # default reply period for submittals
     # locked after submit
     assert client.patch(f"/api/v1/records/{rec['id']}", headers=site["hqa"], json={"title": "x y"}).status_code == 403
 
@@ -193,16 +193,17 @@ def test_pdf(client, site):
 
 def test_project_settings_review_days(client, site):
     s = client.get(f"/api/v1/projects/{site['pid']}/settings", headers=site["hc"]).json()
-    assert s["review_days"]["submittal"] == 14 and s["can_edit"] is True
+    assert s["reply_hours"]["submittal"] == 7 * 24 and s["reply_hours"]["inspection"] == 2 and s["can_edit"] is True
     # the consultant cannot change the contract periods
     assert client.put(f"/api/v1/projects/{site['pid']}/settings", headers=site["hk"],
-                      json={"review_days": {"submittal": 3}}).status_code == 403
+                      json={"reply_hours": {"submittal": 3}}).status_code == 403
     assert client.put(f"/api/v1/projects/{site['pid']}/settings", headers=site["hc"],
-                      json={"review_days": {"submittal": 0}}).status_code == 422
-    r = client.put(f"/api/v1/projects/{site['pid']}/settings", headers=site["hc"], json={"review_days": {"submittal": 7}})
-    assert r.status_code == 200 and r.json()["review_days"]["submittal"] == 7
+                      json={"reply_hours": {"submittal": 0}}).status_code == 422
+    r = client.put(f"/api/v1/projects/{site['pid']}/settings", headers=site["hc"], json={"reply_hours": {"submittal": 3 * 24 + 5}})
+    assert r.status_code == 200 and r.json()["reply_hours"]["submittal"] == 77
     done = act(client, site["hqa"], new_sub(client, site)["id"], "submit").json()
-    assert (datetime.fromisoformat(done["due_at"]) - datetime.fromisoformat(done["submitted_at"])).days == 7
+    delta = datetime.fromisoformat(done["due_at"]) - datetime.fromisoformat(done["submitted_at"])
+    assert round(delta.total_seconds() / 3600) == 77
 
 
 def test_project_list_stats(client, site):
@@ -366,8 +367,8 @@ def test_header_banner_and_addressed_to(client, site):
 def test_resubmission_period(client, site):
     pid, hc = site["pid"], site["hc"]
     s = client.get(f"/api/v1/projects/{pid}/settings", headers=hc).json()
-    assert s["resubmit_days"]["submittal"] == 7
-    assert client.put(f"/api/v1/projects/{pid}/settings", headers=hc, json={"resubmit_days": {"submittal": 5}}).json()["resubmit_days"]["submittal"] == 5
+    assert s["resubmit_hours"]["submittal"] == 7 * 24
+    assert client.put(f"/api/v1/projects/{pid}/settings", headers=hc, json={"resubmit_hours": {"submittal": 5 * 24}}).json()["resubmit_hours"]["submittal"] == 120
     rec = submit(client, site, new_sub(client, site))
     r = act(client, site["hce"], rec["id"], "revise", comment="عدّل الكميات").json()
     assert r["resubmit_due_at"] and r["resubmit_overdue"] is False and r["resubmitted_at"] is None

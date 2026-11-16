@@ -7,22 +7,40 @@ import { pick } from '../i18n';
 import ProjectHeader from './ProjectHeader';
 import ProjectStructure from './ProjectStructure';
 
+/** A period as days + hours (stored in hours). */
+function Period({ hours, onChange, disabled, label }: { hours: number; onChange: (h: number) => void; disabled: boolean; label: string }) {
+  const { t } = useTranslation();
+  const d = Math.floor(hours / 24), h = hours % 24;
+  const set = (nd: number, nh: number) => onChange(Math.max(1, nd * 24 + nh));
+  return (
+    <Group gap={6} wrap="nowrap" w={190}>
+      <NumberInput w={92} min={0} max={365} disabled={disabled} aria-label={`${label} — ${t('settings.days')}`} value={d}
+        rightSection={<Text size="xs" c="dimmed" pe={6}>{t('settings.days')}</Text>} rightSectionWidth={40}
+        onChange={(v) => set(Number(v) || 0, h)} />
+      <NumberInput w={92} min={0} max={23} disabled={disabled} aria-label={`${label} — ${t('settings.hours')}`} value={h}
+        rightSection={<Text size="xs" c="dimmed" pe={6}>{t('settings.hours')}</Text>} rightSectionWidth={40}
+        onChange={(v) => set(d, Math.min(23, Number(v) || 0))} />
+    </Group>
+  );
+}
+
 export default function ProjectSettings({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: ['settings', projectId], queryFn: () => api<Settings>(`/projects/${projectId}/settings`) });
   const types = useQuery({ queryKey: ['recordTypes'], queryFn: () => api<RecordType[]>('/record-types') });
-  const [days, setDays] = useState<Record<string, number>>({});
-  const [redays, setRedays] = useState<Record<string, number>>({});
+  const [reply, setReply] = useState<Record<string, number>>({});
+  const [resub, setResub] = useState<Record<string, number>>({});
+  const [links, setLinks] = useState(false);
   const [notify, setNotify] = useState({ email: false, mahami: false });
   const [kinds, setKinds] = useState<SubmittalKind[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setDays(settings.data.review_days); setRedays(settings.data.resubmit_days); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
+    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (_at: string) =>
-      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ review_days: days, resubmit_days: redays, notify, submittal_kinds: kinds }) }),
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, notify, submittal_kinds: kinds }) }),
     onSuccess: (s, at) => {
       qc.setQueryData(['settings', projectId], s);
       qc.invalidateQueries({ queryKey: ['recMeta', projectId] });
@@ -50,24 +68,24 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
         <Stack gap="sm">
           <Group justify="space-between" wrap="nowrap">
             <span />
-            <Group gap="md" wrap="nowrap">
-              <Text size="xs" c="dimmed" w={140} ta="center">{t('settings.replyDays')}</Text>
-              <Text size="xs" c="dimmed" w={140} ta="center">{t('settings.resubmitDays')}</Text>
+            <Group gap="lg" wrap="nowrap">
+              <Text size="xs" c="dimmed" w={190} ta="center">{t('settings.replyDays')}</Text>
+              <Text size="xs" c="dimmed" w={190} ta="center">{t('settings.resubmitDays')}</Text>
             </Group>
           </Group>
           {types.data.map((rt) => (
             <Group key={rt.code} justify="space-between" wrap="nowrap">
               <Text size="sm">{pick(rt, 'name')}</Text>
-              <Group gap="md" wrap="nowrap">
-                <NumberInput w={140} min={1} max={365} disabled={!editable} rightSection={<Text size="xs" c="dimmed" pe={8}>{t('settings.days')}</Text>}
-                  rightSectionWidth={44} value={days[rt.code] ?? rt.review_days} aria-label={t('settings.replyDays')}
-                  onChange={(v) => setDays({ ...days, [rt.code]: Number(v) || 1 })} />
-                <NumberInput w={140} min={1} max={365} disabled={!editable} rightSection={<Text size="xs" c="dimmed" pe={8}>{t('settings.days')}</Text>}
-                  rightSectionWidth={44} value={redays[rt.code] ?? 7} aria-label={t('settings.resubmitDays')}
-                  onChange={(v) => setRedays({ ...redays, [rt.code]: Number(v) || 1 })} />
+              <Group gap="lg" wrap="nowrap">
+                <Period hours={reply[rt.code] ?? 0} disabled={!editable} label={t('settings.replyDays')}
+                  onChange={(h) => setReply({ ...reply, [rt.code]: h })} />
+                <Period hours={resub[rt.code] ?? 0} disabled={!editable} label={t('settings.resubmitDays')}
+                  onChange={(h) => setResub({ ...resub, [rt.code]: h })} />
               </Group>
             </Group>
           ))}
+          <Switch mt="xs" label={t('settings.linkSubmittals')} description={t('settings.linkSubmittalsHint')} checked={links}
+            disabled={!editable} onChange={(e) => setLinks(e.currentTarget.checked)} />
         </Stack>
         {note('days')}
         {editable ? <Button mt="md" loading={save.isPending} onClick={() => save.mutate('days')}>{t('rec.save')}</Button>

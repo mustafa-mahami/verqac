@@ -21,6 +21,7 @@ from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
 from app.models.structure import ProjectLocation, ProjectStage, ProjectStageTopic
+from app.core.seed_records import DEFAULT_PERIODS
 from app.core.kinds import active_codes, kind_code, kind_name, submittal_kinds
 from app.core.notify import members_who_can, notify
 from app.models.core import Discipline, Project, ProjectMember, ProjectParty, RolePermission, User
@@ -28,7 +29,7 @@ from app.models.records import (Attachment, Record, RecordComment, RecordEvent, 
                                 SubmittalDetails, WorkflowState, WorkflowTransition)
 from app.schemas.core import DisciplineOut, SubmittalKind, UserOut
 from app.schemas.records import (AssignIn, AttachmentOut, CommentIn, InboxItem, CommentOut, EventOut, RecordDetail, RecordIn,
-                                 LocationRef, RecordMeta, RecordPatch, RecordRow, RequiredByIn, StageRef, TopicRef, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
+                                 LinkedRef, LocationRef, RecordMeta, RecordPatch, RecordRow, RequiredByIn, StageRef, TopicRef, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
                                  TransitionIn, TransitionOut)
 
 router = APIRouter(tags=["records"])
@@ -132,16 +133,22 @@ def _next_number(c: Ctx, a: ProjectAccess, rt: RecordType, discipline: Disciplin
     return re.sub(r"\{SEQ(?::(0+))?\}", seq_token, out)
 
 
-def _review_days(a: ProjectAccess, rt: RecordType) -> int:
-    return int((a.project.settings or {}).get("review_days", {}).get(rt.code, rt.review_days))
-
-
 RESUBMIT_STATES = ("revise_and_resubmit", "rejected")
-DEFAULT_RESUBMIT_DAYS = 7
 
 
-def resubmit_days(project, rt_code: str) -> int:
-    return int((project.settings or {}).get("resubmit_days", {}).get(rt_code, DEFAULT_RESUBMIT_DAYS))
+def periods(project, rt: RecordType) -> tuple[int, int]:
+    """(consultant reply, contractor resubmission) in hours for this project and record type.
+    Projects saved before periods were in hours keep their day values."""
+    s = project.settings or {}
+    d_reply, d_resub = DEFAULT_PERIODS.get(rt.code, (rt.review_days * 24, 7 * 24))
+
+    def pick(hours_key: str, days_key: str, default: int) -> int:
+        if rt.code in s.get(hours_key, {}):
+            return int(s[hours_key][rt.code])
+        if rt.code in s.get(days_key, {}):
+            return int(s[days_key][rt.code]) * 24
+        return default
+    return pick("reply_hours", "review_days", d_reply), pick("resubmit_hours", "resubmit_days", d_resub)
 
 
 def _resubmit_overdue(rec: Record) -> bool:
@@ -231,6 +238,8 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         can_set_required_by=_can_set_required_by(rec, a, p), details=(det := _details(c, rec)),
         submittal_kind_name=kind_name(a.project, det.submittal_kind), transitions=trans,
         stage=(place := _place_out(c, rec))[0], all_locations=rec.all_locations, locations=place[1], topic=place[2],
+        requested_for=rec.requested_for, performed_at=rec.performed_at,
+        linked=(links := _linked_out(c, a, rec, rt))[0], link_warning=links[1],
         can_edit=is_draft and p.can("edit", rec), can_revise=can_revise, can_attach=attach,
         can_act_on_behalf=bool(a.role and a.role.act_on_behalf and p.can("respond", rec)),
         assigned_to=_user(c, rec.assigned_to), can_assign=can_assign, assign_candidates=candidates,
@@ -297,7 +306,28 @@ def records_meta(project_id: uuid.UUID, type: str = Query("submittal"), c: Ctx =
     return RecordMeta(record_type=RecordTypeOut.model_validate(rt), can_create=a.party is not None and p.can("create"),
                       disciplines=[DisciplineOut.model_validate(d) for d in discs],
                       party_kind=a.party.kind if a.party else None,
-                      submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project) if k["active"]])
+                      submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project) if k["active"]],
+                      states=[StateOut.model_validate(x) for x in c.db.scalars(
+                          select(WorkflowState).where(WorkflowState.workflow_id == rt.workflow_id).order_by(WorkflowState.sort))],
+                      link_submittals=_links_on(a.project), reply_hours=periods(a.project, rt)[0])
+
+
+@router.get("/projects/{project_id}/link-candidates", response_model=list[LinkedRef])
+def link_candidates(project_id: uuid.UUID, stage_id: uuid.UUID | None = None, c: Ctx = Depends(ctx)):
+    """Submittals an inspection can rely on: the latest revision of each number, approved ones first,
+    those of the given stage before the others."""
+    a = project_access(c, project_id)
+    sub = _rtype(c, "submittal")
+    rows = c.db.scalars(select(Record).where(Record.project_id == project_id, Record.record_type_id == sub.id,
+                                             Record.state_category != "cancelled")
+                        .order_by(Record.number, Record.rev_no)).all()
+    latest: dict = {}
+    for r in rows:
+        latest[r.revision_group_id] = r
+    out = [LinkedRef(id=r.id, number=r.number, rev_no=r.rev_no, title=r.title, stage_id=r.stage_id,
+                     state=StateOut.model_validate(_state(c, r.state_id))) for r in latest.values()]
+    out.sort(key=lambda x: (stage_id is not None and x.stage_id != stage_id, x.state.category not in APPROVED, x.number))
+    return out
 
 
 @router.get("/projects/{project_id}/records", response_model=list[RecordRow])
@@ -333,6 +363,7 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
                              resubmit_overdue=_resubmit_overdue(r),
                              submittal_kind=kind_code(a.project, kinds.get(r.id)), submittal_kind_name=kind_name(a.project, kinds.get(r.id)),
                              stage_id=r.stage_id, topic_id=r.topic_id, all_locations=r.all_locations,
+                             requested_for=r.requested_for, performed_at=r.performed_at,
                              location_ids=r.location_ids or []))
     return out
 
@@ -408,6 +439,40 @@ def _place_out(c: Ctx, rec: Record) -> tuple:
             locs, TopicRef(id=topic.id, name_ar=topic.name_ar, name_en=topic.name_en) if topic else None)
 
 
+def _links_on(project) -> bool:
+    return bool((project.settings or {}).get("link_submittals", False))
+
+
+APPROVED = ("approved", "approved_as_noted")
+
+
+def _check_links(c: Ctx, a: ProjectAccess, ids) -> list | None:
+    """Linked records must be submittals of this project."""
+    ids = list(dict.fromkeys(ids or []))
+    if not ids:
+        return None
+    sub = c.db.scalar(select(RecordType.id).where(RecordType.org_id.is_(None), RecordType.code == "submittal"))
+    found = set(c.db.scalars(select(Record.id).where(Record.id.in_(ids), Record.project_id == a.project.id,
+                                                     Record.record_type_id == sub)))
+    if found != set(ids):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_link")
+    return ids
+
+
+def _linked_out(c: Ctx, a: ProjectAccess, rec: Record, rt: RecordType) -> tuple[list, str | None]:
+    refs = []
+    for r in c.db.scalars(select(Record).where(Record.id.in_(rec.linked_ids or []))).all():
+        refs.append(LinkedRef(id=r.id, number=r.number, rev_no=r.rev_no, title=r.title, stage_id=r.stage_id,
+                              state=StateOut.model_validate(_state(c, r.state_id))))
+    warning = None
+    if rt.code == "inspection" and _links_on(a.project):
+        if not refs:
+            warning = "no_link"
+        elif any(x.state.category not in APPROVED for x in refs):
+            warning = "not_approved"
+    return refs, warning
+
+
 def _check_kind(a, code: str | None) -> None:
     if code is not None and code not in active_codes(a.project):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_kind")
@@ -434,7 +499,8 @@ def create_record(project_id: uuid.UUID, body: RecordIn, c: Ctx = Depends(ctx)):
                  description=body.description, state_id=initial.id, state_category=initial.category,
                  from_party_id=a.party.id, to_party_id=responder, created_by=c.user.id,
                  required_by=body.required_by, required_by_note=(body.required_by_note or "").strip() or None,
-                 stage_id=stage_id, all_locations=all_locs, location_ids=loc_ids, topic_id=topic_id)
+                 stage_id=stage_id, all_locations=all_locs, location_ids=loc_ids, topic_id=topic_id,
+                 requested_for=body.requested_for, linked_ids=_check_links(c, a, body.linked_ids))
     c.db.add(rec)
     try:
         c.db.flush()
@@ -480,6 +546,14 @@ def update_record(record_id: uuid.UUID, body: RecordPatch, c: Ctx = Depends(ctx)
         if place != (rec.stage_id, rec.all_locations, rec.location_ids, rec.topic_id):
             changes["place"] = [str(rec.stage_id), str(place[0])]
             rec.stage_id, rec.all_locations, rec.location_ids, rec.topic_id = place
+    if "requested_for" in body.model_fields_set and body.requested_for != rec.requested_for:
+        changes["requested_for"] = [str(rec.requested_for), str(body.requested_for)]
+        rec.requested_for = body.requested_for
+    if body.linked_ids is not None:
+        links = _check_links(c, a, body.linked_ids)
+        if links != rec.linked_ids:
+            changes["linked_ids"] = [len(rec.linked_ids or []), len(links or [])]
+            rec.linked_ids = links
     if body.details is not None:
         d = c.db.get(SubmittalDetails, rec.id) or SubmittalDetails(record_id=rec.id)
         if body.details.submittal_kind != d.submittal_kind:  # keeping an old or deactivated kind is fine
@@ -509,6 +583,10 @@ def _stamp(c: Ctx, rec: Record, state: WorkflowState) -> str:
         payload["stage"] = str(rec.stage_id)
     if rec.topic_id:
         payload["topic"] = str(rec.topic_id)
+    if rec.performed_at:
+        payload["performed_at"] = rec.performed_at.astimezone(UTC).isoformat()
+    if rec.linked_ids:
+        payload["linked"] = sorted(str(i) for i in rec.linked_ids)
     if rec.all_locations or rec.location_ids:
         payload["locations"] = "all" if rec.all_locations else sorted(str(i) for i in rec.location_ids)
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -541,7 +619,9 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
     now = datetime.now(UTC)
     if t.effect == "submit":
         rec.submitted_by, rec.submitted_at = c.user.id, now
-        rec.due_at = now + timedelta(days=_review_days(a, rt))
+        # the reply clock starts at the later of now and the time the inspection was asked for
+        start = max(now, rec.requested_for) if rec.requested_for else now
+        rec.due_at = start + timedelta(hours=periods(a.project, rt)[0])
         if rec.rev_no > 0:  # this revision answers the previous one's request to resubmit
             prev = c.db.scalar(select(Record).where(Record.revision_group_id == rec.revision_group_id,
                                                     Record.rev_no == rec.rev_no - 1))
@@ -550,8 +630,12 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
     elif t.effect == "respond":
         rec.answered_by, rec.answered_at, rec.answered_on_behalf_of = c.user.id, now, on_behalf
         rec.response_comment = comment
+        if rt.code == "inspection":
+            if body.performed_at and body.performed_at > now + timedelta(minutes=5):
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "performed_in_future")
+            rec.performed_at = body.performed_at or now
         if to.category in RESUBMIT_STATES:
-            rec.resubmit_due_at = now + timedelta(days=resubmit_days(a.project, rt.code))
+            rec.resubmit_due_at = now + timedelta(hours=periods(a.project, rt)[1])
     rec.state_id, rec.state_category, rec.updated_at = to.id, to.category, now
     c.db.flush()
     stamp = _stamp(c, rec, to) if t.effect == "respond" else None
@@ -701,7 +785,7 @@ def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
                  from_party_id=a.party.id, to_party_id=rec.to_party_id, created_by=c.user.id, custom=rec.custom,
                  required_by=rec.required_by, required_by_note=rec.required_by_note,
                  stage_id=rec.stage_id, all_locations=rec.all_locations, location_ids=rec.location_ids,
-                 topic_id=rec.topic_id)
+                 topic_id=rec.topic_id, linked_ids=rec.linked_ids)
     c.db.add(new)
     try:
         c.db.flush()
