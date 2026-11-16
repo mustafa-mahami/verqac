@@ -3,6 +3,7 @@ so a slow or failing mail server never blocks or rolls back the request."""
 import logging
 import smtplib
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid, parseaddr
 
 from app.core.config import get_settings
 
@@ -19,6 +20,9 @@ def send_mail(to: str, subject: str, text: str, html: str | None = None) -> None
         return
     msg = EmailMessage()
     msg["From"], msg["To"], msg["Subject"] = s.smtp_from, to, subject
+    # Date and Message-ID: spam filters score mail that lacks them
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=parseaddr(s.smtp_from)[1].rpartition("@")[2] or None)
     msg.set_content(text)
     if html:
         msg.add_alternative(html, subtype="html")
