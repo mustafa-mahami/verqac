@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.schemas.core import DisciplineOut, Out, UserOut
+from app.schemas.core import DisciplineOut, Out, SubmittalKind, UserOut
 
 
 class StateOut(Out):
@@ -33,6 +33,11 @@ class RecordTypeOut(Out):
     name_ar: str
     name_en: str
     review_days: int
+
+
+class KindName(BaseModel):
+    ar: str
+    en: str
 
 
 class SubmittalDetailsIO(BaseModel):
@@ -148,6 +153,7 @@ class RecordDetail(BaseModel):
     answered_at: datetime | None
     response_comment: str | None
     details: SubmittalDetailsIO
+    submittal_kind_name: KindName | None = None  # details.submittal_kind shown in both languages
     transitions: list[TransitionOut]
     can_edit: bool
     can_revise: bool
@@ -168,6 +174,7 @@ class RecordMeta(BaseModel):
     can_create: bool
     disciplines: list[DisciplineOut]  # the ones the user may create records in
     party_kind: str | None
+    submittal_kinds: list[SubmittalKind] = []  # active kinds of this project, in order
 
 
 class AssignIn(BaseModel):

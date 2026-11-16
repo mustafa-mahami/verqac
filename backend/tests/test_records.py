@@ -268,3 +268,43 @@ def test_public_verify_stamp(client, site):
     assert client.get(f"/api/v1/verify/{stamp}").json()["intact"] is False
     assert client.get("/api/v1/verify/" + "0" * 64).status_code == 404
     assert client.get("/api/v1/verify/not-a-stamp").status_code == 404
+
+
+def test_submittal_kinds_per_project(client, site):
+    pid, hc = site["pid"], site["hc"]
+    url = f"/api/v1/projects/{pid}/settings"
+    kinds = client.get(url, headers=hc).json()["submittal_kinds"]
+    assert [k["code"] for k in kinds][:2] == ["material", "shop_drawing"]
+    meta = client.get(f"/api/v1/projects/{pid}/records/meta", headers=site["hqa"]).json()
+    assert len(meta["submittal_kinds"]) == 5
+    # records store the code and show the name in both languages
+    rec = new_sub(client, site, details={"submittal_kind": "material"})
+    assert rec["details"]["submittal_kind"] == "material" and rec["submittal_kind_name"] == {"ar": "مواد", "en": "Material"}
+    r = client.post(f"/api/v1/projects/{pid}/records", headers=site["hqa"],
+                    json={"title": "xyz", "discipline_id": site["cdisc"]["C"], "details": {"submittal_kind": "nope"}})
+    assert r.status_code == 422 and r.json()["detail"] == "invalid_kind"
+    # rename one, add one, deactivate one
+    kinds[0]["name_ar"] = "مواد وتجهيزات"
+    kinds[3]["active"] = False
+    kinds.append({"name_ar": "عينة لون", "name_en": "Color sample"})
+    r = client.put(url, headers=hc, json={"submittal_kinds": kinds})
+    assert r.status_code == 200, r.text
+    saved = r.json()["submittal_kinds"]
+    assert saved[-1]["code"].startswith("k_") and saved[3]["active"] is False
+    assert client.get(f"/api/v1/records/{rec['id']}", headers=site["hqa"]).json()["submittal_kind_name"]["ar"] == "مواد وتجهيزات"
+    meta = client.get(f"/api/v1/projects/{pid}/records/meta", headers=site["hqa"]).json()
+    assert "sample" not in [k["code"] for k in meta["submittal_kinds"]] and len(meta["submittal_kinds"]) == 5
+    # a kind in use cannot be deleted (deactivate it instead); an unused one can
+    assert client.put(url, headers=hc, json={"submittal_kinds": saved[1:]}).json()["detail"] == "kind_in_use"
+    assert client.put(url, headers=hc, json={"submittal_kinds": saved[:-1]}).status_code == 200
+    assert client.put(url, headers=site["hk"], json={"submittal_kinds": saved}).status_code == 403
+    assert client.put(url, headers=hc, json={"submittal_kinds": [{**k, "active": False} for k in saved]}).status_code == 422
+    # records from before the list existed hold the name text, and still show it
+    legacy = new_sub(client, site)
+    from sqlalchemy import text
+
+    from app.core.db import session_scope
+    with session_scope(bypass=True) as db:
+        db.execute(text("UPDATE submittal_details SET submittal_kind = 'مخططات تنفيذية' WHERE record_id = :i"), {"i": legacy["id"]})
+    got = client.get(f"/api/v1/records/{legacy['id']}", headers=site["hqa"]).json()
+    assert got["submittal_kind_name"] == {"ar": "مخططات تنفيذية", "en": "Shop drawing"}

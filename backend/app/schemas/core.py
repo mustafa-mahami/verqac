@@ -122,9 +122,17 @@ class NotifyChannels(BaseModel):
     mahami: bool = False
 
 
+class SubmittalKind(BaseModel):
+    code: str | None = Field(default=None, max_length=40)  # empty for a new kind: the server assigns one
+    name_ar: str = Field(max_length=100)  # emptiness is checked by the endpoint, with its own error code
+    name_en: str = Field(max_length=100)
+    active: bool = True
+
+
 class ProjectSettingsOut(BaseModel):
     review_days: dict[str, int]  # record type code -> days the responder has to answer
     notify: NotifyChannels
+    submittal_kinds: list[SubmittalKind]
     email_available: bool  # SMTP configured on the server
     mahami_available: bool  # Mahami URL and key configured on the server
     can_edit: bool
@@ -133,6 +141,7 @@ class ProjectSettingsOut(BaseModel):
 class ProjectSettingsIn(BaseModel):
     review_days: dict[str, int] = {}
     notify: NotifyChannels | None = None
+    submittal_kinds: list[SubmittalKind] | None = None
 
 
 class DisciplineOut(Out):

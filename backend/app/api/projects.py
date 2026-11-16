@@ -8,11 +8,12 @@ from sqlalchemy.exc import IntegrityError
 from app.core.access import project_access, require
 from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
+from app.core.kinds import new_code, submittal_kinds
 from app.core.mailer import mail_enabled
 from app.core.notify import channels, mahami_enabled
 from app.models.core import Organization, OrgMember, Project, ProjectMember, ProjectParty, Role
-from app.models.records import Record, RecordType
-from app.schemas.core import (OrgOut, PartyOut, ProjectIn, ProjectListItem, ProjectOut, ProjectSettingsIn,
+from app.models.records import Record, RecordType, SubmittalDetails
+from app.schemas.core import (OrgOut, PartyOut, ProjectIn, ProjectListItem, ProjectOut, ProjectSettingsIn, SubmittalKind,
                               ProjectSettingsOut, ProjectStats, RoleOut, NotifyChannels)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -128,8 +129,32 @@ def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     days = {rt.code: int(saved.get(rt.code, rt.review_days))
             for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort))}
     return ProjectSettingsOut(review_days=days, notify=NotifyChannels(**channels(a.project)),
+                              submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project)],
                               email_available=mail_enabled(), mahami_available=mahami_enabled(),
                               can_edit=a.can_manage_project)
+
+
+def _check_kinds(c: Ctx, project_id: UUID, old: list[dict], new: list[SubmittalKind]) -> list[dict]:
+    """Clean the list, give new kinds a code, and refuse to delete a kind that records use (deactivate it instead)."""
+    out, seen = [], set()
+    for k in new:
+        ar, en = k.name_ar.strip(), k.name_en.strip()
+        if not ar or not en:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "kind_name_required")
+        if ar in seen:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "kind_duplicate")
+        seen.add(ar)
+        out.append({"code": k.code or new_code(), "name_ar": ar, "name_en": en, "active": k.active})
+    if len({k["code"] for k in out}) != len(out):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "kind_duplicate")
+    if not any(k["active"] for k in out):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "kind_one_active")
+    removed = {k["code"] for k in old} - {k["code"] for k in out}
+    if removed and c.db.scalar(select(func.count()).select_from(SubmittalDetails)
+                               .join(Record, Record.id == SubmittalDetails.record_id)
+                               .where(Record.project_id == project_id, SubmittalDetails.submittal_kind.in_(removed))):
+        raise HTTPException(status.HTTP_409_CONFLICT, "kind_in_use")
+    return out
 
 
 @router.put("/{project_id}/settings", response_model=ProjectSettingsOut)
@@ -149,6 +174,11 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
         old = settings.get("notify", {})
         settings["notify"] = body.notify.model_dump()
         changes.update({f"notify_{k}": v for k, v in diff(old, settings["notify"]).items()})
+    if body.submittal_kinds is not None:
+        old = submittal_kinds(a.project)
+        settings["submittal_kinds"] = _check_kinds(c, project_id, old, body.submittal_kinds)
+        if settings["submittal_kinds"] != old:
+            changes["submittal_kinds"] = [[k["name_ar"] for k in old], [k["name_ar"] for k in settings["submittal_kinds"]]]
     a.project.settings = settings  # new dict object so the JSONB change is saved
     audit(c.db, entity="project", action="settings", entity_id=project_id, actor=c.user.id,
           org_id=a.project.owner_org_id, project_id=project_id, changes=changes,

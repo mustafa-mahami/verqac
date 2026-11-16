@@ -67,6 +67,8 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
     stamp = next((e.stamp for e in reversed(d.events) if e.stamp), None)
     verify_url = f"{get_settings().app_url.rstrip('/')}/v/{stamp}" if stamp else None
     det = d.details.model_dump()
+    if d.submittal_kind_name:
+        det["submittal_kind"] = getattr(d.submittal_kind_name, lang)
     if det.get("quantity") is not None:
         det["quantity"] = f"{float(det['quantity']):g} {det.get('unit') or ''}".strip()
     pairs = [(t["fields"][k], det.get(k) or "", k in LTR_FIELDS) for k in t["fields"]]

@@ -1,8 +1,8 @@
-import { Alert, Button, Card, Group, NumberInput, Stack, Switch, Text, Title } from '@mantine/core';
+import { ActionIcon, Alert, Button, Card, Group, NumberInput, Stack, Switch, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, ApiError, type ProjectSettings as Settings, type RecordType } from '../api';
+import { api, ApiError, type ProjectSettings as Settings, type RecordType, type SubmittalKind } from '../api';
 import { pick } from '../i18n';
 
 export default function ProjectSettings({ projectId }: { projectId: string }) {
@@ -12,15 +12,28 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const types = useQuery({ queryKey: ['recordTypes'], queryFn: () => api<RecordType[]>('/record-types') });
   const [days, setDays] = useState<Record<string, number>>({});
   const [notify, setNotify] = useState({ email: false, mahami: false });
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [kinds, setKinds] = useState<SubmittalKind[]>([]);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setDays(settings.data.review_days); setNotify(settings.data.notify); }
+    if (settings.data) { setDays(settings.data.review_days); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
-    mutationFn: () => api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ review_days: days, notify }) }),
-    onSuccess: (s) => { qc.setQueryData(['settings', projectId], s); setMsg({ ok: true, text: t('settings.saved') }); },
-    onError: (e) => setMsg({ ok: false, text: t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic')) }),
+    mutationFn: (_at: string) =>
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ review_days: days, notify, submittal_kinds: kinds }) }),
+    onSuccess: (s, at) => {
+      qc.setQueryData(['settings', projectId], s);
+      qc.invalidateQueries({ queryKey: ['recMeta', projectId] });
+      setMsg({ ok: true, text: t('settings.saved'), at });
+    },
+    onError: (e, at) => setMsg({ ok: false, text: t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic')), at }),
   });
+  const note = (at: string) => msg && msg.at === at && <Alert mt="md" color={msg.ok ? 'green' : 'red'}>{msg.text}</Alert>;
+  const setKind = (i: number, patch: Partial<SubmittalKind>) => setKinds(kinds.map((k, j) => (j === i ? { ...k, ...patch } : k)));
+  const move = (i: number, d: number) => {
+    const next = [...kinds];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    setKinds(next);
+  };
   if (!settings.data || !types.data) return null;
   const editable = settings.data.can_edit;
 
@@ -39,8 +52,8 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
             </Group>
           ))}
         </Stack>
-        {msg && <Alert mt="md" color={msg.ok ? 'green' : 'red'}>{msg.text}</Alert>}
-        {editable ? <Button mt="md" loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button>
+        {note('days')}
+        {editable ? <Button mt="md" loading={save.isPending} onClick={() => save.mutate('days')}>{t('rec.save')}</Button>
           : <Text size="xs" c="dimmed" mt="md">{t('settings.readOnly')}</Text>}
       </Card>
       <Card withBorder>
@@ -56,7 +69,40 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
             );
           })}
         </Stack>
-        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button>}
+        {note('notify')}
+        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('notify')}>{t('rec.save')}</Button>}
+      </Card>
+      <Card withBorder>
+        <Title order={5}>{t('settings.kindsTitle')}</Title>
+        <Text size="sm" c="dimmed" mb="md">{t('settings.kindsHint')}</Text>
+        <Stack gap="xs">
+          {kinds.map((k, i) => (
+            <Group key={k.code ?? `new-${i}`} gap="xs" wrap="nowrap" align="center" opacity={k.active ? 1 : 0.55}>
+              <TextInput flex={1} size="sm" placeholder={t('settings.kindAr')} aria-label={t('settings.kindAr')} disabled={!editable}
+                value={k.name_ar} onChange={(e) => setKind(i, { name_ar: e.currentTarget.value })} />
+              <TextInput flex={1} size="sm" dir="ltr" placeholder={t('settings.kindEn')} aria-label={t('settings.kindEn')} disabled={!editable}
+                value={k.name_en} onChange={(e) => setKind(i, { name_en: e.currentTarget.value })} />
+              <Tooltip label={t(k.active ? 'settings.kindActive' : 'settings.kindInactive')}>
+                <Switch size="sm" checked={k.active} disabled={!editable} aria-label={t('settings.kindActive')}
+                  onChange={(e) => setKind(i, { active: e.currentTarget.checked })} />
+              </Tooltip>
+              {editable && (
+                <>
+                  <ActionIcon variant="subtle" color="gray" disabled={i === 0} aria-label="up" onClick={() => move(i, -1)}>↑</ActionIcon>
+                  <ActionIcon variant="subtle" color="gray" disabled={i === kinds.length - 1} aria-label="down" onClick={() => move(i, 1)}>↓</ActionIcon>
+                  <ActionIcon variant="subtle" color="red" aria-label="remove" onClick={() => setKinds(kinds.filter((_, j) => j !== i))}>×</ActionIcon>
+                </>
+              )}
+            </Group>
+          ))}
+        </Stack>
+        {editable && (
+          <Button mt="sm" size="xs" variant="subtle" onClick={() => setKinds([...kinds, { code: null, name_ar: '', name_en: '', active: true }])}>
+            + {t('settings.kindAdd')}
+          </Button>
+        )}
+        {note('kinds')}
+        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('kinds')}>{t('rec.save')}</Button>}
       </Card>
     </Stack>
   );

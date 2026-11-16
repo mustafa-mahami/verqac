@@ -95,7 +95,12 @@
     "invalid_review_days": "The period must be 1 to 365 days.",
     "cannot_change_self": "You cannot change your own status or rights.",
     "cannot_assign": "Only the consultant's project manager can assign.",
-    "assignee_not_eligible": "This user is not an engineer of this discipline."
+    "assignee_not_eligible": "This user is not an engineer of this discipline.",
+    "kind_in_use": "A type used by existing requests cannot be deleted. Switch it off instead.",
+    "kind_duplicate": "Two types have the same name.",
+    "kind_name_required": "Enter the type name in Arabic and English.",
+    "kind_one_active": "At least one type must stay active.",
+    "invalid_kind": "This submittal type is not in the project's list."
   },
   "common": {
     "cancel": "Cancel",
@@ -259,13 +264,6 @@
       "quantity": "Quantity",
       "unit": "Unit"
     },
-    "kinds": [
-      "Material",
-      "Shop drawing",
-      "Method statement",
-      "Sample",
-      "Document"
-    ],
     "noEngineer": "No consultant engineer covers this discipline in the project team yet. On submission it reaches only the consultant's project manager."
   },
   "back": {
@@ -282,7 +280,14 @@
     "notifyHint": "Notifications inside the platform (bell and Awaiting me) always work. Choose whether they also go by e-mail or to the Mahami app.",
     "email": "E-mail",
     "mahami": "Mahami app",
-    "notOnServer": "not set up on the server yet"
+    "notOnServer": "not set up on the server yet",
+    "kindsTitle": "Submittal types",
+    "kindsHint": "The list the contractor picks the submittal type from in this project. A renamed type changes everywhere. A type used by records cannot be deleted; switch it off instead, so it leaves the list for new requests and stays on old records.",
+    "kindAr": "Arabic name",
+    "kindEn": "English name",
+    "kindActive": "Active",
+    "kindInactive": "Off — not offered for new requests",
+    "kindAdd": "Add a type"
   },
   "resp": {
     "title": "Consultant's comments",

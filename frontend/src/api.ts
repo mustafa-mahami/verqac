@@ -99,7 +99,8 @@ export async function openProtected(path: string, filename: string, inline = fal
 
 export interface State { id: string; code: string; name_ar: string; name_en: string; category: string; color: string }
 export interface RecordType { id: string; code: string; prefix: string; name_ar: string; name_en: string; review_days: number }
-export interface RecordMeta { record_type: RecordType; can_create: boolean; disciplines: Discipline[]; party_kind: string | null }
+export interface SubmittalKind { code: string | null; name_ar: string; name_en: string; active: boolean }
+export interface RecordMeta { record_type: RecordType; can_create: boolean; disciplines: Discipline[]; party_kind: string | null; submittal_kinds: SubmittalKind[] }
 export interface RecordRow {
   id: string; number: string; rev_no: number; title: string; state: State; discipline: Discipline | null;
   submitted_at: string | null; due_at: string | null; answered_at: string | null; overdue: boolean; revisions: number;
@@ -120,7 +121,7 @@ export interface RecordDetail {
   description: string | null; discipline: Discipline | null; state: State; from_party_kind: string;
   created_by: User; created_at: string; submitted_by: User | null; submitted_at: string | null; due_at: string | null;
   overdue: boolean; answered_by: User | null; answered_on_behalf_of: User | null; answered_at: string | null;
-  response_comment: string | null; details: SubmittalDetails; transitions: Transition[]; can_edit: boolean;
+  response_comment: string | null; details: SubmittalDetails; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
   can_revise: boolean; can_attach: string[]; can_act_on_behalf: boolean; events: RecordEvent[];
   assigned_to: User | null; can_assign: boolean; assign_candidates: User[]; no_discipline_engineer: boolean;
   comments: RecordComment[]; attachments: Attachment[]; revisions: { id: string; rev_no: number; state: State }[];
@@ -128,7 +129,7 @@ export interface RecordDetail {
 
 export interface ProjectStats { records: number; open: number; overdue: number }
 export interface ProjectSettings {
-  review_days: Record<string, number>; notify: { email: boolean; mahami: boolean };
+  review_days: Record<string, number>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
   email_available: boolean; mahami_available: boolean; can_edit: boolean;
 }
 export interface InboxItem {

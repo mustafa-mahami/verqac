@@ -128,6 +128,10 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
   const [error, setError] = useState<string | null>(null);
   const meta = useQuery({ queryKey: ['recMeta', rec.project_id], queryFn: () => api<RecordMeta>(`/projects/${rec.project_id}/records/meta?type=submittal`) });
   const d = rec.details;
+  const kindOptions = (meta.data?.submittal_kinds ?? []).map((k) => ({ value: k.code ?? '', label: pick(k, 'name') }));
+  // a record may hold a kind that was since deactivated (or legacy text): keep it selectable
+  if (d.submittal_kind && !kindOptions.some((o) => o.value === d.submittal_kind))
+    kindOptions.unshift({ value: d.submittal_kind, label: rec.submittal_kind_name ? pick({ n_ar: rec.submittal_kind_name.ar, n_en: rec.submittal_kind_name.en }, 'n') : d.submittal_kind });
   const form = useForm({
     initialValues: {
       title: rec.title, description: rec.description ?? '', discipline_id: rec.discipline?.id ?? '',
@@ -155,7 +159,8 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
         <Select label={t('rec.discipline')} allowDeselect={false}
           data={(meta.data?.disciplines ?? []).map((x) => ({ value: x.id, label: pick(x, 'name') }))} {...form.getInputProps('discipline_id')} />
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          {DETAIL_KEYS.map((k) => <TextInput key={k} label={t(`rec.f.${k}`)} dir={LTR.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />)}
+          <Select label={t('rec.f.submittal_kind')} allowDeselect={false} data={kindOptions} {...form.getInputProps('submittal_kind')} />
+          {DETAIL_KEYS.filter((k) => k !== 'submittal_kind').map((k) => <TextInput key={k} label={t(`rec.f.${k}`)} dir={LTR.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />)}
         </SimpleGrid>
         <Textarea label={t('rec.description')} autosize minRows={2} {...form.getInputProps('description')} />
         <Button type="submit" loading={save.isPending}>{t('rec.save')}</Button>
@@ -268,7 +273,9 @@ export default function RecordPage() {
               <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
                 {DETAIL_KEYS.filter((k) => k !== 'unit').map((k) => (
                   <Field key={k} label={t(`rec.f.${k}`)} ltr={LTR.has(k)}
-                    value={k === 'quantity' && det.quantity != null ? `${Number(det.quantity)} ${det.unit ?? ''}` : (det[k] as string | null)} />
+                    value={k === 'quantity' && det.quantity != null ? `${Number(det.quantity)} ${det.unit ?? ''}`
+                      : k === 'submittal_kind' && r.submittal_kind_name ? pick({ n_ar: r.submittal_kind_name.ar, n_en: r.submittal_kind_name.en }, 'n')
+                      : (det[k] as string | null)} />
                 ))}
                 <Field label={t('rec.submitted')} value={fmtDate(r.submitted_at, true)} />
                 <Field label={t('rec.due')} value={fmtDate(r.due_at)} />

@@ -18,10 +18,10 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const kinds = t('rec.kinds', { returnObjects: true }) as string[];
+  const kinds = meta.submittal_kinds.map((k) => ({ value: k.code ?? '', label: pick(k, 'name') }));
   const form = useForm({
     initialValues: {
-      title: '', discipline_id: meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0],
+      title: '', discipline_id: meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0]?.value ?? '',
       item: '', manufacturer: '', supplier: '', drawing_ref: '', spec_ref: '', boq_ref: '', quantity: '', unit: '',
       files: [] as File[],
     },
@@ -38,7 +38,7 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
           record_type: 'submittal', title: v.title.trim(), description: blank(v.description),
           discipline_id: v.discipline_id || null, number: blank(v.number),
           details: {
-            submittal_kind: v.submittal_kind, item: blank(v.item), manufacturer: blank(v.manufacturer),
+            submittal_kind: v.submittal_kind || null, item: blank(v.item), manufacturer: blank(v.manufacturer),
             supplier: blank(v.supplier), drawing_ref: blank(v.drawing_ref), spec_ref: blank(v.spec_ref),
             boq_ref: blank(v.boq_ref), quantity: blank(v.quantity), unit: blank(v.unit),
           },
@@ -66,7 +66,7 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
           <Select label={t('rec.discipline')} allowDeselect={false}
             data={meta.disciplines.map((d) => ({ value: d.id, label: pick(d, 'name') }))} {...form.getInputProps('discipline_id')} />
-          <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} {...form.getInputProps('submittal_kind')} />
+          <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} searchable {...form.getInputProps('submittal_kind')} />
           <TextInput label={t('rec.number')} placeholder={t('rec.numberHint')} dir="ltr" {...form.getInputProps('number')} />
         </SimpleGrid>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>

@@ -20,11 +20,12 @@ from app.core import storage
 from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
+from app.core.kinds import active_codes, kind_name, submittal_kinds
 from app.core.notify import members_who_can, notify
 from app.models.core import Discipline, Project, ProjectMember, ProjectParty, RolePermission, User
 from app.models.records import (Attachment, Record, RecordComment, RecordEvent, RecordType, StoredFile,
                                 SubmittalDetails, WorkflowState, WorkflowTransition)
-from app.schemas.core import DisciplineOut, UserOut
+from app.schemas.core import DisciplineOut, SubmittalKind, UserOut
 from app.schemas.records import (AssignIn, AttachmentOut, CommentIn, InboxItem, CommentOut, EventOut, RecordDetail, RecordIn,
                                  RecordMeta, RecordPatch, RecordRow, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
                                  TransitionIn, TransitionOut)
@@ -211,7 +212,8 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         submitted_by=_user(c, rec.submitted_by), submitted_at=rec.submitted_at, due_at=rec.due_at,
         overdue=_overdue(rec), answered_by=_user(c, rec.answered_by),
         answered_on_behalf_of=_user(c, rec.answered_on_behalf_of), answered_at=rec.answered_at,
-        response_comment=rec.response_comment, details=_details(c, rec), transitions=trans,
+        response_comment=rec.response_comment, details=(det := _details(c, rec)),
+        submittal_kind_name=kind_name(a.project, det.submittal_kind), transitions=trans,
         can_edit=is_draft and p.can("edit", rec), can_revise=can_revise, can_attach=attach,
         can_act_on_behalf=bool(a.role and a.role.act_on_behalf and p.can("respond", rec)),
         assigned_to=_user(c, rec.assigned_to), can_assign=can_assign, assign_candidates=candidates,
@@ -262,7 +264,8 @@ def records_meta(project_id: uuid.UUID, type: str = Query("submittal"), c: Ctx =
             discs = [d for d in discs if d.code in p.my_codes]
     return RecordMeta(record_type=RecordTypeOut.model_validate(rt), can_create=a.party is not None and p.can("create"),
                       disciplines=[DisciplineOut.model_validate(d) for d in discs],
-                      party_kind=a.party.kind if a.party else None)
+                      party_kind=a.party.kind if a.party else None,
+                      submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project) if k["active"]])
 
 
 @router.get("/projects/{project_id}/records", response_model=list[RecordRow])
@@ -295,6 +298,11 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
     return out
 
 
+def _check_kind(a, code: str | None) -> None:
+    if code is not None and code not in active_codes(a.project):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_kind")
+
+
 @router.post("/projects/{project_id}/records", response_model=RecordDetail, status_code=201)
 def create_record(project_id: uuid.UUID, body: RecordIn, c: Ctx = Depends(ctx)):
     a = project_access(c, project_id)
@@ -317,6 +325,7 @@ def create_record(project_id: uuid.UUID, body: RecordIn, c: Ctx = Depends(ctx)):
         c.db.flush()
     except IntegrityError:
         raise HTTPException(status.HTTP_409_CONFLICT, "number_taken") from None
+    _check_kind(a, body.details.submittal_kind)
     c.db.add(SubmittalDetails(record_id=rec.id, **body.details.model_dump()))
     c.db.add(RecordEvent(record_id=rec.id, action="create", to_state_id=initial.id, actor_id=c.user.id))
     _audit(c, rec, "create", {"number": number, "type": rt.code}, a)
@@ -347,6 +356,8 @@ def update_record(record_id: uuid.UUID, body: RecordPatch, c: Ctx = Depends(ctx)
         rec.discipline_id = body.discipline_id
     if body.details is not None:
         d = c.db.get(SubmittalDetails, rec.id) or SubmittalDetails(record_id=rec.id)
+        if body.details.submittal_kind != d.submittal_kind:  # keeping an old or deactivated kind is fine
+            _check_kind(a, body.details.submittal_kind)
         for f, v in body.details.model_dump().items():
             if getattr(d, f) != v:
                 changes[f] = [str(getattr(d, f)), str(v)]
