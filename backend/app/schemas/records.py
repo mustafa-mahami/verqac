@@ -99,6 +99,8 @@ class RecordRow(BaseModel):
     overdue: bool
     revisions: int  # how many revisions this number has
     required_by: date | None = None
+    submittal_kind: str | None = None
+    submittal_kind_name: KindName | None = None
 
 
 class EventOut(BaseModel):

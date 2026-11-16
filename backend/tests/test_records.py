@@ -280,6 +280,8 @@ def test_submittal_kinds_per_project(client, site):
     # records store the code and show the name in both languages
     rec = new_sub(client, site, details={"submittal_kind": "material"})
     assert rec["details"]["submittal_kind"] == "material" and rec["submittal_kind_name"] == {"ar": "مواد", "en": "Material"}
+    row = next(x for x in client.get(f"/api/v1/projects/{pid}/records", headers=site["hqa"]).json() if x["id"] == rec["id"])
+    assert row["submittal_kind"] == "material" and row["submittal_kind_name"]["ar"] == "مواد"
     r = client.post(f"/api/v1/projects/{pid}/records", headers=site["hqa"],
                     json={"title": "xyz", "discipline_id": site["cdisc"]["C"], "details": {"submittal_kind": "nope"}})
     assert r.status_code == 422 and r.json()["detail"] == "invalid_kind"

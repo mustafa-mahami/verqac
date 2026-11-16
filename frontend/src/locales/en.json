@@ -364,6 +364,7 @@
     "noneHere": "No requests in this view.",
     "submittedFrom": "Submitted from",
     "to": "to",
-    "clear": "Clear filters"
+    "clear": "Clear filters",
+    "kind": "Submittal type:"
   }
 }

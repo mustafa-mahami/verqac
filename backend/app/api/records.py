@@ -287,6 +287,8 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
     out = []
     discs = {d.id: d for d in c.db.scalars(select(Discipline).where(
         Discipline.id.in_({r.discipline_id for r in keep if r.discipline_id})))}
+    kinds = dict(c.db.execute(select(SubmittalDetails.record_id, SubmittalDetails.submittal_kind)
+                              .where(SubmittalDetails.record_id.in_([r.id for r in keep]))).all())
     for r in keep:
         if not p.can("view", r) and r.from_party_id != my_party:
             continue
@@ -295,7 +297,8 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
                              state=StateOut.model_validate(_state(c, r.state_id)),
                              discipline=DisciplineOut.model_validate(d) if d else None,
                              submitted_at=r.submitted_at, due_at=r.due_at, answered_at=r.answered_at,
-                             overdue=_overdue(r), revisions=counts[r.revision_group_id], required_by=r.required_by))
+                             overdue=_overdue(r), revisions=counts[r.revision_group_id], required_by=r.required_by,
+                             submittal_kind=kinds.get(r.id), submittal_kind_name=kind_name(a.project, kinds.get(r.id))))
     return out
 
 

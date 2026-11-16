@@ -104,6 +104,7 @@ export interface RecordMeta { record_type: RecordType; can_create: boolean; disc
 export interface RecordRow {
   id: string; number: string; rev_no: number; title: string; state: State; discipline: Discipline | null;
   submitted_at: string | null; due_at: string | null; answered_at: string | null; overdue: boolean; revisions: number; required_by: string | null;
+  submittal_kind: string | null; submittal_kind_name: { ar: string; en: string } | null;
 }
 export interface SubmittalDetails {
   submittal_kind: string | null; item: string | null; manufacturer: string | null; supplier: string | null;

@@ -106,17 +106,17 @@ export default function Submittals({ projectId }: { projectId: string }) {
   // the dashboard filter lives in the URL, so "back" from a record returns to the same view
   const [params, setParams] = useSearchParams();
   const filter: StatsFilter = {
-    status: params.get('st') ?? 'all', discipline: params.get('disc') ?? 'all',
+    status: params.get('st') ?? 'all', discipline: params.get('disc') ?? 'all', kind: params.get('kind') ?? 'all',
     q: params.get('q') ?? '', from: params.get('from') ?? '', to: params.get('to') ?? '',
   };
   const setFilter = (f: StatsFilter) => {
     const next = new URLSearchParams(params);
     const put = (k: string, v: string | undefined, empty = '') => (v && v !== empty ? next.set(k, v) : next.delete(k));
-    put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
+    put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('kind', f.kind, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
     setParams(next, { replace: true });
   };
   const shown = useMemo(() => applyFilter(rows.data ?? [], filter),
-    [rows.data, filter.status, filter.discipline, filter.q, filter.from, filter.to]);
+    [rows.data, filter.status, filter.discipline, filter.kind, filter.q, filter.from, filter.to]);
   const narrowed = !!(filter.q || filter.from || filter.to);
 
   return (

@@ -10,7 +10,7 @@ export const CATEGORIES = [
 ] as const;
 
 export interface StatsFilter {
-  status: string; discipline: string;
+  status: string; discipline: string; kind?: string; // kind: submittal type code or "all"
   q?: string; from?: string; to?: string; // text in number/title; submission date range (YYYY-MM-DD, inclusive)
 }
 
@@ -22,6 +22,7 @@ export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = fa
   const q = (f.q ?? '').trim().toLowerCase();
   return rows.filter((r) => {
     if (f.discipline !== 'all' && r.discipline?.code !== f.discipline) return false;
+    if (f.kind && f.kind !== 'all' && r.submittal_kind !== f.kind) return false;
     if (q && !r.number.toLowerCase().includes(q) && !r.title.toLowerCase().includes(q)) return false;
     if (f.from || f.to) {
       if (!r.submitted_at) return false; // drafts were not submitted in any period
@@ -43,6 +44,9 @@ export default function RecordStats({ rows, filter, onChange, showDraft }: {
   const { t } = useTranslation();
   const disciplines = new Map<string, RecordRow['discipline']>();
   rows.forEach((r) => r.discipline && disciplines.set(r.discipline.code, r.discipline));
+  const kinds = new Map<string, string>();
+  rows.forEach((r) => r.submittal_kind && kinds.set(r.submittal_kind,
+    r.submittal_kind_name ? pick({ n_ar: r.submittal_kind_name.ar, n_en: r.submittal_kind_name.en }, 'n') : r.submittal_kind));
   const inScope = applyFilter(rows, filter, true);
   const count = (status: string) => applyFilter(inScope, { ...filter, status }).length;
 
@@ -55,13 +59,26 @@ export default function RecordStats({ rows, filter, onChange, showDraft }: {
 
   return (
     <Card withBorder p="sm">
-      {disciplines.size > 1 && (
-        <Group mb="sm" gap="xs">
-          <Text size="sm" c="dimmed">{t('stats.discipline')}</Text>
-          <SegmentedControl size="xs" value={filter.discipline}
-            onChange={(v) => onChange({ ...filter, discipline: v })}
-            data={[{ value: 'all', label: t('stats.allDisciplines') },
-              ...[...disciplines.values()].map((d) => ({ value: d!.code, label: pick(d!, 'name') }))]} />
+      {(disciplines.size > 1 || kinds.size > 1) && (
+        <Group mb="sm" gap="lg">
+          {disciplines.size > 1 && (
+            <Group gap="xs">
+              <Text size="sm" c="dimmed">{t('stats.discipline')}</Text>
+              <SegmentedControl size="xs" value={filter.discipline}
+                onChange={(v) => onChange({ ...filter, discipline: v })}
+                data={[{ value: 'all', label: t('stats.allDisciplines') },
+                  ...[...disciplines.values()].map((d) => ({ value: d!.code, label: pick(d!, 'name') }))]} />
+            </Group>
+          )}
+          {kinds.size > 1 && (
+            <Group gap="xs">
+              <Text size="sm" c="dimmed">{t('stats.kind')}</Text>
+              <SegmentedControl size="xs" value={filter.kind || 'all'}
+                onChange={(v) => onChange({ ...filter, kind: v })}
+                data={[{ value: 'all', label: t('stats.allDisciplines') },
+                  ...[...kinds.entries()].map(([value, label]) => ({ value, label }))]} />
+            </Group>
+          )}
         </Group>
       )}
       <SimpleGrid cols={{ base: 2, xs: 3, sm: 5, lg: tiles.length }} spacing="xs">
