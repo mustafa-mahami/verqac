@@ -646,8 +646,12 @@ def inbox(c: Ctx = Depends(ctx)):
         recs = list(recs)
         kinds = dict(c.db.execute(select(SubmittalDetails.record_id, SubmittalDetails.submittal_kind)
                                   .where(SubmittalDetails.record_id.in_([r.id for r in recs]))).all()) if recs else {}
-        for r in recs:
-            latest[r.revision_group_id] = max(latest.get(r.revision_group_id, -1), r.rev_no)
+        # the latest revision of each number among ALL its revisions (an answered R2 hides a returned R1);
+        # a cancelled revision does not count, so the earlier one is due again
+        for g, rev in c.db.execute(select(Record.revision_group_id, func.max(Record.rev_no))
+                                   .where(Record.project_id == pid, Record.state_category != "cancelled")
+                                   .group_by(Record.revision_group_id)):
+            latest[g] = rev
         for r in recs:
             p = perms[r.record_type_id]
             reason = None
@@ -656,7 +660,7 @@ def inbox(c: Ctx = Depends(ctx)):
                     reason = "reply"
             elif r.state_category == "draft" and r.created_by == c.user.id:
                 reason = "draft"
-            elif (r.state_category in ("revise_and_resubmit", "rejected") and r.rev_no == latest[r.revision_group_id]
+            elif (r.state_category in ("revise_and_resubmit", "rejected") and r.rev_no == latest.get(r.revision_group_id, r.rev_no)
                   and r.from_party_id == a.party.id and p.can("create", discipline_id=r.discipline_id)
                   and (r.created_by == c.user.id or r.submitted_by == c.user.id or (a.role and a.role.manage_project))):
                 reason = "returned"

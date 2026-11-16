@@ -390,3 +390,13 @@ def test_resubmission_period(client, site):
     r0 = client.get(f"/api/v1/records/{rec['id']}", headers=site["hqa"]).json()
     assert r0["resubmitted_at"] and r0["resubmit_overdue"] is False
     assert client.get(f"/api/v1/records/{rec['id']}/pdf?lang=ar", headers=hc).status_code == 200
+
+
+def test_inbox_hides_returned_revision_once_a_newer_one_is_answered(client, site):
+    rec = submit(client, site, new_sub(client, site))
+    act(client, site["hce"], rec["id"], "revise", comment="عدّل")
+    r1 = client.post(f"/api/v1/records/{rec['id']}/revise", headers=site["hqa"]).json()
+    act(client, site["hqa"], r1["id"], "submit")
+    act(client, site["hce"], r1["id"], "approve_as_noted", comment="ملاحظة")
+    ids = {i["id"] for i in client.get("/api/v1/inbox", headers=site["hqa"]).json()}
+    assert rec["id"] not in ids and r1["id"] not in ids
