@@ -115,6 +115,8 @@ class Record(Base):
     submitted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # optional: the consultant PM hands the record to one engineer of the discipline
+    assigned_to: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     answered_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     answered_on_behalf_of: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -206,6 +208,22 @@ class Attachment(Base):
     kind: Mapped[str] = mapped_column(String(20), nullable=False, server_default="submission")
     party_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project_parties.id"), nullable=False)
     created_at: Mapped[datetime] = created()
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    __table_args__ = {"implicit_returning": False}  # written for other users, who the writer cannot read
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"))
+    record_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("records.id", ondelete="CASCADE"))
+    event: Mapped[str] = mapped_column(String(40), nullable=False)
+    title_ar: Mapped[str] = mapped_column(String(300), nullable=False)
+    title_en: Mapped[str] = mapped_column(String(300), nullable=False)
+    body: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = created()
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 RECORD_TABLES = [

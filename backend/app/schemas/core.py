@@ -117,13 +117,22 @@ class ProjectListItem(BaseModel):
     stats: ProjectStats = ProjectStats()
 
 
+class NotifyChannels(BaseModel):
+    email: bool = False
+    mahami: bool = False
+
+
 class ProjectSettingsOut(BaseModel):
     review_days: dict[str, int]  # record type code -> days the responder has to answer
+    notify: NotifyChannels
+    email_available: bool  # SMTP configured on the server
+    mahami_available: bool  # Mahami URL and key configured on the server
     can_edit: bool
 
 
 class ProjectSettingsIn(BaseModel):
-    review_days: dict[str, int]
+    review_days: dict[str, int] = {}
+    notify: NotifyChannels | None = None
 
 
 class DisciplineOut(Out):
@@ -194,9 +203,32 @@ class MemberPatch(BaseModel):
     is_active: bool | None = None
 
 
+class MemberProject(BaseModel):
+    project_id: UUID
+    code: str
+    name_ar: str
+    name_en: str
+    role: RoleOut
+    is_active: bool
+
+
 class OrgMemberOut(BaseModel):
     user: UserOut
     org_role: str
+    is_active: bool = True
+    projects: list[MemberProject] = []
+
+
+class OrgMemberPatch(BaseModel):
+    is_active: bool | None = None
+    org_role: Literal["admin", "member"] | None = None
+
+
+class TeamInviteIn(BaseModel):
+    """Invite a new colleague into the organization and straight into this project's team."""
+    email: EmailStr
+    role_id: UUID
+    discipline_ids: list[UUID] = []
 
 
 class OrgInviteIn(BaseModel):

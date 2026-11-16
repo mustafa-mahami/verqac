@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal, set_context
 from app.core.security import decode_access_token
-from app.models.core import User
+from app.models.core import OrgMember, User
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -75,6 +75,11 @@ def user_db(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> It
 def ctx(dbu: tuple[Session, UUID] = Depends(user_db, scope="function"), meta: RequestMeta = Depends(request_meta)) -> Ctx:
     db, uid = dbu
     user = db.scalar(select(User).where(User.id == uid))
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not has_active_membership(db, uid):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
     return Ctx(db=db, user=user, meta=meta)
+
+
+def has_active_membership(db: Session, user_id: UUID) -> bool:
+    """A person suspended by every organization they belong to cannot use the platform."""
+    return bool(db.scalar(select(OrgMember.id).where(OrgMember.user_id == user_id, OrgMember.is_active).limit(1)))

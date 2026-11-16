@@ -8,10 +8,12 @@ from sqlalchemy.exc import IntegrityError
 from app.core.access import project_access, require
 from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
+from app.core.mailer import mail_enabled
+from app.core.notify import channels, mahami_enabled
 from app.models.core import Organization, OrgMember, Project, ProjectMember, ProjectParty, Role
 from app.models.records import Record, RecordType
 from app.schemas.core import (OrgOut, PartyOut, ProjectIn, ProjectListItem, ProjectOut, ProjectSettingsIn,
-                              ProjectSettingsOut, ProjectStats, RoleOut)
+                              ProjectSettingsOut, ProjectStats, RoleOut, NotifyChannels)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -125,7 +127,9 @@ def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     saved = (a.project.settings or {}).get("review_days", {})
     days = {rt.code: int(saved.get(rt.code, rt.review_days))
             for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort))}
-    return ProjectSettingsOut(review_days=days, can_edit=a.can_manage_project)
+    return ProjectSettingsOut(review_days=days, notify=NotifyChannels(**channels(a.project)),
+                              email_available=mail_enabled(), mahami_available=mahami_enabled(),
+                              can_edit=a.can_manage_project)
 
 
 @router.put("/{project_id}/settings", response_model=ProjectSettingsOut)
@@ -140,9 +144,14 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
     settings = dict(a.project.settings or {})
     before = dict(settings.get("review_days", {}))
     settings["review_days"] = {**before, **body.review_days}
+    changes = diff(before, settings["review_days"])
+    if body.notify is not None:
+        old = settings.get("notify", {})
+        settings["notify"] = body.notify.model_dump()
+        changes.update({f"notify_{k}": v for k, v in diff(old, settings["notify"]).items()})
     a.project.settings = settings  # new dict object so the JSONB change is saved
     audit(c.db, entity="project", action="settings", entity_id=project_id, actor=c.user.id,
-          org_id=a.project.owner_org_id, project_id=project_id, changes=diff(before, settings["review_days"]),
+          org_id=a.project.owner_org_id, project_id=project_id, changes=changes,
           ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
     return get_settings(project_id, c)

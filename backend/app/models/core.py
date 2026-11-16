@@ -82,6 +82,7 @@ class OrgMember(Base):
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     org_role: Mapped[str] = mapped_column(String(10), nullable=False, server_default="member")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = created()
 
 
@@ -211,6 +212,8 @@ class Invitation(Base):
     party_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("project_parties.id", ondelete="CASCADE"))
     role_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("roles.id"))
     org_role: Mapped[str | None] = mapped_column(String(10))  # org_member invitations: admin | member
+    # org_member invitation sent from a project team: joins that project with role + disciplines on acceptance
+    discipline_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)))
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

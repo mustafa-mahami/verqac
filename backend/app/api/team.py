@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit, diff
@@ -12,7 +12,7 @@ from app.core.invites import create_invite
 from app.models.core import (Discipline, Invitation, Organization, OrgMember, ProjectMember, ProjectParty, Role,
                              User)
 from app.schemas.core import (InviteOut, MemberIn, MemberOut, MemberPatch, OrgOut, PartyIn, PartyInviteIn,
-                              PendingInvite, ProjectOut, RoleOut, TeamOut, TeamParty, UserOut)
+                              PendingInvite, ProjectOut, RoleOut, TeamInviteIn, TeamOut, TeamParty, UserOut)
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["team"])
 
@@ -192,3 +192,23 @@ def update_member(project_id: UUID, member_id: UUID, body: MemberPatch, c: Ctx =
     return MemberOut(id=member.id, user=UserOut.model_validate(user), party_id=party.id,
                      role=RoleOut.model_validate(role), discipline_ids=member.discipline_ids,
                      is_active=member.is_active)
+
+
+@router.post("/parties/{party_id}/invite-member", response_model=InviteOut, status_code=201)
+def invite_member(project_id: UUID, party_id: UUID, body: TeamInviteIn, bg: BackgroundTasks, c: Ctx = Depends(ctx)):
+    """One step: the new colleague joins the party's organization and this project with role and disciplines."""
+    a = project_access(c, project_id)
+    party = _party(c, a, party_id)
+    require(a.can_manage_party_team(party), "manage_team_required")
+    _check_role_and_disciplines(c, party, body.role_id, body.discipline_ids)
+    if c.db.scalar(select(User.id).join(OrgMember, OrgMember.user_id == User.id)
+                   .where(OrgMember.org_id == party.org_id, func.lower(User.email) == body.email.lower())):
+        raise HTTPException(status.HTTP_409_CONFLICT, "already_org_member")
+    org = c.db.get(Organization, party.org_id)
+    out = create_invite(c.db, bg, kind="org_member", email=body.email, inviter=c.user, org_id=party.org_id,
+                        project_id=project_id, party_id=party.id, role_id=body.role_id, org_role="member",
+                        discipline_ids=body.discipline_ids,
+                        subject_ar=f"«{org.name_ar}» ومشروع «{a.project.name_ar}»",
+                        subject_en=f"\"{org.name_en}\" and the project \"{a.project.name_en}\"")
+    _audit(c, a, "project_member", "invite", party.id, {"email": out.email, "role_id": str(body.role_id)})
+    return out

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.audit import audit
 from app.core.config import get_settings
 from app.core.db import session_scope
-from app.core.deps import Ctx, RequestMeta, ctx, request_meta, system_db
+from app.core.deps import Ctx, RequestMeta, ctx, has_active_membership, request_meta, system_db
 from app.core.security import create_access_token, hash_password, hash_token, new_opaque_token, verify_password
 from app.core.seed import DEFAULT_DISCIPLINES
 from app.models.core import Discipline, Organization, OrgMember, RefreshToken, User
@@ -68,7 +68,7 @@ def login(body: LoginIn, response: Response, db: Session = Depends(system_db, sc
             audit(side, entity="user", action="login_failed", changes={"email": body.email.lower()},
                   ip=meta.ip, user_agent=meta.user_agent)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, INVALID)
-    if not user.is_active:
+    if not user.is_active or not has_active_membership(db, user.id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "account_inactive")
     user.last_login_at = datetime.now(UTC)
     audit(db, entity="user", action="login", entity_id=user.id, actor=user.id, ip=meta.ip, user_agent=meta.user_agent)
@@ -103,7 +103,7 @@ def refresh(request: Request, response: Response, db: Session = Depends(system_d
                           ip=meta.ip, user_agent=meta.user_agent)
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
     user = db.get(User, row.user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not has_active_membership(db, user.id):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not_authenticated")
     if row.revoked_at is None:
         row.revoked_at = row.rotated_at = now
@@ -124,7 +124,7 @@ def logout(request: Request, response: Response, db: Session = Depends(system_db
 def me(c: Ctx = Depends(ctx)):
     rows = c.db.execute(
         select(Organization, OrgMember.org_role).join(OrgMember, OrgMember.org_id == Organization.id)
-        .where(OrgMember.user_id == c.user.id).order_by(Organization.name_en)
+        .where(OrgMember.user_id == c.user.id, OrgMember.is_active).order_by(Organization.name_en)
     ).all()
     return MeOut(user=UserOut.model_validate(c.user),
                  orgs=[MembershipOut(org=OrgOut.model_validate(o), org_role=r) for o, r in rows])

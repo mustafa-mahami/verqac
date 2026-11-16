@@ -25,12 +25,13 @@ def create_invite(
     party_id: UUID | None = None,
     role_id: UUID | None = None,
     org_role: str | None = None,
+    discipline_ids: list[UUID] | None = None,
 ) -> InviteOut:
     s = get_settings()
     token, token_hash = new_opaque_token()
     expires = datetime.now(UTC) + timedelta(days=s.invitation_days)
     db.add(Invitation(kind=kind, email=email.lower(), org_id=org_id, project_id=project_id, party_id=party_id,
-                      role_id=role_id, org_role=org_role, token_hash=token_hash, expires_at=expires, created_by=inviter.id))
+                      role_id=role_id, org_role=org_role, discipline_ids=discipline_ids, token_hash=token_hash, expires_at=expires, created_by=inviter.id))
     link = f"{s.app_url.rstrip('/')}/invite/{token}"
     sent = mail_enabled()
     if sent:

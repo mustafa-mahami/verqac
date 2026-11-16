@@ -11,7 +11,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -20,11 +20,12 @@ from app.core import storage
 from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
-from app.models.core import Discipline, ProjectMember, ProjectParty, RolePermission, User
+from app.core.notify import members_who_can, notify
+from app.models.core import Discipline, Project, ProjectMember, ProjectParty, RolePermission, User
 from app.models.records import (Attachment, Record, RecordComment, RecordEvent, RecordType, StoredFile,
                                 SubmittalDetails, WorkflowState, WorkflowTransition)
 from app.schemas.core import DisciplineOut, UserOut
-from app.schemas.records import (AttachmentOut, CommentIn, CommentOut, EventOut, RecordDetail, RecordIn,
+from app.schemas.records import (AssignIn, AttachmentOut, CommentIn, InboxItem, CommentOut, EventOut, RecordDetail, RecordIn,
                                  RecordMeta, RecordPatch, RecordRow, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
                                  TransitionIn, TransitionOut)
 
@@ -192,6 +193,13 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         attach.append("submission")
     if rec.state_category == "submitted" and p.can("respond", rec):
         attach.append("response")
+    can_assign = bool(rec.state_category == "submitted" and a.role and a.role.act_on_behalf and p.can("respond", rec))
+    candidates = []
+    if can_assign:
+        candidates = [_user(c, m.user_id) for m, r in _responders(c, rec, rt) if not r.act_on_behalf]
+    no_engineer = False
+    if is_draft:
+        no_engineer = not any(not r.act_on_behalf for _, r in _responders(c, rec, rt))
     can_revise = (rt.has_revisions and not is_draft and rec.rev_no == _latest_rev(c, rec)
                   and rec.state_category in ("revise_and_resubmit", "rejected", "approved_as_noted", "cancelled")
                   and p.can("create", discipline_id=rec.discipline_id))
@@ -206,8 +214,23 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         response_comment=rec.response_comment, details=_details(c, rec), transitions=trans,
         can_edit=is_draft and p.can("edit", rec), can_revise=can_revise, can_attach=attach,
         can_act_on_behalf=bool(a.role and a.role.act_on_behalf and p.can("respond", rec)),
+        assigned_to=_user(c, rec.assigned_to), can_assign=can_assign, assign_candidates=candidates,
+        no_discipline_engineer=no_engineer,
         events=events, comments=comments, attachments=atts, revisions=revs,
     )
+
+
+def _responder_party(c: Ctx, rec: Record, rt: RecordType) -> uuid.UUID | None:
+    if rec.to_party_id is None:  # the responder joined the project after the record was written
+        rec.to_party_id = c.db.scalar(select(ProjectParty.id).where(ProjectParty.project_id == rec.project_id,
+                                                                    ProjectParty.kind == rt.responder_party,
+                                                                    ProjectParty.status == "active"))
+    return rec.to_party_id
+
+
+def _responders(c: Ctx, rec: Record, rt: RecordType) -> list:
+    party = _responder_party(c, rec, rt)
+    return members_who_can(c, rec.project_id, party, rt, "respond", rec.discipline_id) if party else []
 
 
 def _check_discipline(c: Ctx, a: ProjectAccess, discipline_id: uuid.UUID | None) -> Discipline | None:
@@ -348,7 +371,7 @@ def _stamp(c: Ctx, rec: Record, state: WorkflowState) -> str:
 
 
 @router.post("/records/{record_id}/transitions", response_model=RecordDetail)
-def transition(record_id: uuid.UUID, body: TransitionIn, c: Ctx = Depends(ctx)):
+def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c: Ctx = Depends(ctx)):
     rec, a, rt, p = _load(c, record_id, lock=True)
     t = c.db.scalar(select(WorkflowTransition).where(WorkflowTransition.from_state_id == rec.state_id,
                                                      WorkflowTransition.action == body.action))
@@ -385,7 +408,93 @@ def transition(record_id: uuid.UUID, body: TransitionIn, c: Ctx = Depends(ctx)):
                          actor_id=c.user.id, on_behalf_of=on_behalf, comment=comment, stamp=stamp))
     _audit(c, rec, "transition", {"action": t.action, "to": to.code, "on_behalf_of": str(on_behalf) if on_behalf else None}, a)
     c.db.flush()
+    _notify_transition(c, bg, a.project, rec, rt, t, to, comment)
     return _detail(c, rec, a, rt, p)
+
+
+def _notify_transition(c: Ctx, bg: BackgroundTasks, project: Project, rec: Record, rt: RecordType,
+                       t: WorkflowTransition, to: WorkflowState, comment: str | None) -> None:
+    head = f"{rec.number} R{rec.rev_no}"
+    if t.effect == "submit" or (t.effect == "cancel" and t.from_state_id != _initial_id(c, rt)):
+        responders = _responders(c, rec, rt)
+        users = {m.user_id for m, r in responders if rec.assigned_to is None or r.act_on_behalf
+                 or m.user_id == rec.assigned_to}
+        ar = f"{rt.name_ar} {head}: " + ("بانتظار ردك" if t.effect == "submit" else "سُحب وأُلغي")
+        en = f"{rt.name_en} {head}: " + ("awaiting your reply" if t.effect == "submit" else "withdrawn")
+        notify(c, bg, project=project, rec=rec, event=t.action, user_ids=users, title_ar=ar, title_en=en,
+               body=rec.title)
+    elif t.effect == "respond":
+        users = {rec.created_by, rec.submitted_by}
+        users |= {m.user_id for m, r in members_who_can(c, rec.project_id, rec.from_party_id, rt, "create",
+                                                         rec.discipline_id) if r.manage_project}
+        notify(c, bg, project=project, rec=rec, event=t.action, user_ids=users,
+               title_ar=f"{rt.name_ar} {head}: {to.name_ar}", title_en=f"{rt.name_en} {head}: {to.name_en}",
+               body=comment or rec.title)
+
+
+def _initial_id(c: Ctx, rt: RecordType):
+    return c.db.scalar(select(WorkflowState.id).where(WorkflowState.workflow_id == rt.workflow_id, WorkflowState.is_initial))
+
+
+@router.post("/records/{record_id}/assign", response_model=RecordDetail)
+def assign(record_id: uuid.UUID, body: AssignIn, bg: BackgroundTasks, c: Ctx = Depends(ctx)):
+    """The consultant PM hands a submitted record to one engineer of the discipline (or clears it)."""
+    rec, a, rt, p = _load(c, record_id, lock=True)
+    detail = _detail(c, rec, a, rt, p)
+    require(detail.can_assign, "cannot_assign")
+    if body.user_id is not None and body.user_id not in {u.id for u in detail.assign_candidates}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "assignee_not_eligible")
+    rec.assigned_to = body.user_id
+    _audit(c, rec, "assign", {"assigned_to": str(body.user_id) if body.user_id else None}, a)
+    c.db.flush()
+    if body.user_id:
+        notify(c, bg, project=a.project, rec=rec, event="assign", user_ids={body.user_id},
+               title_ar=f"{rt.name_ar} {rec.number} R{rec.rev_no}: حُوِّل إليك للرد",
+               title_en=f"{rt.name_en} {rec.number} R{rec.rev_no}: assigned to you", body=rec.title)
+    return _detail(c, rec, a, rt, p)
+
+
+@router.get("/inbox", response_model=list[InboxItem])
+def inbox(c: Ctx = Depends(ctx)):
+    """Everything that waits for the signed-in user, across projects, overdue first."""
+    project_ids = c.db.scalars(select(ProjectMember.project_id).where(ProjectMember.user_id == c.user.id,
+                                                                      ProjectMember.is_active)).all()
+    types = {rt.id: rt for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)))}
+    out: list[InboxItem] = []
+    for pid in project_ids:
+        a = project_access(c, pid)
+        if a.party is None:
+            continue
+        perms = {tid: Perms(c, a, rt) for tid, rt in types.items()}
+        recs = c.db.scalars(select(Record).where(Record.project_id == pid,
+                                                 Record.state_category.in_(("draft", "submitted", "revise_and_resubmit", "rejected"))))
+        latest: dict[uuid.UUID, int] = {}
+        recs = list(recs)
+        for r in recs:
+            latest[r.revision_group_id] = max(latest.get(r.revision_group_id, -1), r.rev_no)
+        for r in recs:
+            p = perms[r.record_type_id]
+            reason = None
+            if r.state_category == "submitted" and p.can("respond", r):
+                if r.assigned_to is None or r.assigned_to == c.user.id or (a.role and a.role.act_on_behalf):
+                    reason = "reply"
+            elif r.state_category == "draft" and r.created_by == c.user.id:
+                reason = "draft"
+            elif (r.state_category in ("revise_and_resubmit", "rejected") and r.rev_no == latest[r.revision_group_id]
+                  and r.from_party_id == a.party.id and p.can("create", discipline_id=r.discipline_id)
+                  and (r.created_by == c.user.id or r.submitted_by == c.user.id or (a.role and a.role.manage_project))):
+                reason = "returned"
+            if reason:
+                rt = types[r.record_type_id]
+                out.append(InboxItem(id=r.id, project_id=pid, project_code=a.project.code,
+                                     project_name_ar=a.project.name_ar, project_name_en=a.project.name_en,
+                                     record_type=RecordTypeOut.model_validate(rt), number=r.number, rev_no=r.rev_no,
+                                     title=r.title, state=StateOut.model_validate(_state(c, r.state_id)),
+                                     reason=reason, due_at=r.due_at, overdue=_overdue(r),
+                                     assigned_to_me=r.assigned_to == c.user.id, updated_at=r.updated_at))
+    order = {"reply": 0, "returned": 1, "draft": 2}
+    out.sort(key=lambda x: (not x.overdue, order[x.reason], x.due_at or x.updated_at))
+    return out
 
 
 @router.post("/records/{record_id}/revise", response_model=RecordDetail, status_code=201)

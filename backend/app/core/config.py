@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     smtp_from: str = "Verqac <no-reply@verqac.com>"
     smtp_starttls: bool = True
 
+    # Mahami push: the same endpoint the Odoo dr module uses (POST {url}/integrations/odoo/notify)
+    mahami_url: str = ""
+    mahami_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

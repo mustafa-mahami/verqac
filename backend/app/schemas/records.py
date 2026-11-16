@@ -153,6 +153,10 @@ class RecordDetail(BaseModel):
     can_revise: bool
     can_attach: list[str]  # attachment kinds the user may add now
     can_act_on_behalf: bool
+    assigned_to: UserOut | None = None
+    can_assign: bool = False
+    assign_candidates: list[UserOut] = []
+    no_discipline_engineer: bool = False  # draft: no consultant engineer covers this discipline yet
     events: list[EventOut]
     comments: list[CommentOut]
     attachments: list[AttachmentOut]
@@ -164,3 +168,25 @@ class RecordMeta(BaseModel):
     can_create: bool
     disciplines: list[DisciplineOut]  # the ones the user may create records in
     party_kind: str | None
+
+
+class AssignIn(BaseModel):
+    user_id: UUID | None
+
+
+class InboxItem(BaseModel):
+    id: UUID
+    project_id: UUID
+    project_code: str
+    project_name_ar: str
+    project_name_en: str
+    record_type: RecordTypeOut
+    number: str
+    rev_no: int
+    title: str
+    state: StateOut
+    reason: Literal["reply", "returned", "draft"]
+    due_at: datetime | None
+    overdue: bool
+    assigned_to_me: bool
+    updated_at: datetime
