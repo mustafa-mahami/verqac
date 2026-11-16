@@ -424,6 +424,8 @@
     "location": "Location",
     "filterStage": "Stage:",
     "filterLocation": "Location:",
-    "all": "All"
+    "all": "All",
+    "noneYet": "This project has no stages or locations yet. The contractor's project manager sets them in the Settings tab.",
+    "noneYetEditor": "This project has no stages or locations yet. In the Settings tab pick the project type and press “Apply template”; the stage and floor fields then appear here."
   }
 }

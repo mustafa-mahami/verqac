@@ -1,5 +1,5 @@
 import {
-  ActionIcon, Badge, Button, Checkbox, Group, MultiSelect, NumberInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip,
+  ActionIcon, Alert, Badge, Button, Checkbox, Group, MultiSelect, NumberInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -141,7 +141,8 @@ export function PlacePicker({ structure, value, onChange, keep }: {
 }) {
   const { t } = useTranslation();
   const stages = structure.stages.filter((s) => s.is_active || s.id === keep?.stage_id);
-  if (structure.stages.length === 0 && structure.locations.length === 0) return null;
+  if (structure.stages.length === 0 && structure.locations.length === 0)
+    return <Alert color="gray" variant="light" py="xs"><Text size="sm">{t(structure.can_edit ? 'structure.noneYetEditor' : 'structure.noneYet')}</Text></Alert>;
   const stage: StageT | undefined = structure.stages.find((s) => s.id === value.stage_id);
   const whole = stage?.scope === 'whole';
   return (
