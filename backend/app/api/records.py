@@ -728,8 +728,9 @@ def set_required_by(record_id: uuid.UUID, body: RequiredByIn, bg: BackgroundTask
     rec.required_by, rec.required_by_note, rec.updated_at = body.required_by, note, datetime.now(UTC)
     c.db.flush()
     if rec.state_category == "submitted" and body.required_by:
-        users = {m.user_id for m, r in _responders(c, rec, rt) if rec.assigned_to is None or r.act_on_behalf
-                 or m.user_id == rec.assigned_to}
+        to_manager = rec.assigned_to is None and routing(a.project, rt) == "manager"
+        users = {m.user_id for m, r in _responders(c, rec, rt)
+                 if r.act_on_behalf or (not to_manager and (rec.assigned_to is None or m.user_id == rec.assigned_to))}
         d = body.required_by.isoformat()
         notify(c, bg, project=a.project, rec=rec, event="required_by", user_ids=users,
                title_ar=f"{rt.name_ar} {rec.number} R{rec.rev_no}: مطلوب الاعتماد قبل {d}",
