@@ -361,6 +361,9 @@
     "overdue": "متأخر الرد",
     "discipline": "التخصص:",
     "allDisciplines": "الكل",
-    "noneHere": "لا توجد طلبات بهذا التصنيف."
+    "noneHere": "لا توجد طلبات بهذا التصنيف.",
+    "submittedFrom": "قُدّم من",
+    "to": "إلى",
+    "clear": "مسح الفلاتر"
   }
 }

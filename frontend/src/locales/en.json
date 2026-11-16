@@ -361,6 +361,9 @@
     "overdue": "Reply overdue",
     "discipline": "Discipline:",
     "allDisciplines": "All",
-    "noneHere": "No requests in this view."
+    "noneHere": "No requests in this view.",
+    "submittedFrom": "Submitted from",
+    "to": "to",
+    "clear": "Clear filters"
   }
 }

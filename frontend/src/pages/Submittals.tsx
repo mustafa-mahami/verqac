@@ -97,7 +97,6 @@ export default function Submittals({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [allRevs, setAllRevs] = useState(false);
-  const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const meta = useQuery({ queryKey: ['recMeta', projectId], queryFn: () => api<RecordMeta>(`/projects/${projectId}/records/meta?type=submittal`) });
   const rows = useQuery({
@@ -106,24 +105,36 @@ export default function Submittals({ projectId }: { projectId: string }) {
   });
   // the dashboard filter lives in the URL, so "back" from a record returns to the same view
   const [params, setParams] = useSearchParams();
-  const filter: StatsFilter = { status: params.get('st') ?? 'all', discipline: params.get('disc') ?? 'all' };
+  const filter: StatsFilter = {
+    status: params.get('st') ?? 'all', discipline: params.get('disc') ?? 'all',
+    q: params.get('q') ?? '', from: params.get('from') ?? '', to: params.get('to') ?? '',
+  };
   const setFilter = (f: StatsFilter) => {
     const next = new URLSearchParams(params);
-    f.status === 'all' ? next.delete('st') : next.set('st', f.status);
-    f.discipline === 'all' ? next.delete('disc') : next.set('disc', f.discipline);
+    const put = (k: string, v: string | undefined, empty = '') => (v && v !== empty ? next.set(k, v) : next.delete(k));
+    put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
     setParams(next, { replace: true });
   };
-  const shown = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return applyFilter(rows.data ?? [], filter)
-      .filter((r) => !s || r.number.toLowerCase().includes(s) || r.title.toLowerCase().includes(s));
-  }, [rows.data, q, filter.status, filter.discipline]);
+  const shown = useMemo(() => applyFilter(rows.data ?? [], filter),
+    [rows.data, filter.status, filter.discipline, filter.q, filter.from, filter.to]);
+  const narrowed = !!(filter.q || filter.from || filter.to);
 
   return (
     <Stack>
       <Group justify="space-between">
         <Group>
-          <TextInput placeholder={t('rec.search')} value={q} onChange={(e) => setQ(e.currentTarget.value)} w={260} />
+          <TextInput placeholder={t('rec.search')} value={filter.q} onChange={(e) => setFilter({ ...filter, q: e.currentTarget.value })} w={260} />
+          <Group gap={6} wrap="nowrap">
+            <Text size="sm" c="dimmed">{t('stats.submittedFrom')}</Text>
+            <TextInput type="date" w={150} aria-label={t('stats.submittedFrom')} value={filter.from}
+              max={filter.to || undefined} onChange={(e) => setFilter({ ...filter, from: e.currentTarget.value })} />
+            <Text size="sm" c="dimmed">{t('stats.to')}</Text>
+            <TextInput type="date" w={150} aria-label={t('stats.to')} value={filter.to}
+              min={filter.from || undefined} onChange={(e) => setFilter({ ...filter, to: e.currentTarget.value })} />
+          </Group>
+          {narrowed && (
+            <Button variant="subtle" size="xs" onClick={() => setFilter({ ...filter, q: '', from: '', to: '' })}>{t('stats.clear')}</Button>
+          )}
           <Switch label={t('rec.allRevisions')} checked={allRevs} onChange={(e) => setAllRevs(e.currentTarget.checked)} />
         </Group>
         {meta.data?.can_create && <Button onClick={() => setOpen(true)}>{t('rec.new')}</Button>}

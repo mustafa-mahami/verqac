@@ -9,12 +9,25 @@ export const CATEGORIES = [
   ['revise_and_resubmit', 'orange'], ['rejected', 'red'], ['cancelled', 'dark'],
 ] as const;
 
-export interface StatsFilter { status: string; discipline: string }
+export interface StatsFilter {
+  status: string; discipline: string;
+  q?: string; from?: string; to?: string; // text in number/title; submission date range (YYYY-MM-DD, inclusive)
+}
+
+/** Local calendar day of a timestamp, as YYYY-MM-DD. */
+const dayOf = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 /** Which rows a filter keeps: status is "all", "overdue" or a state category; discipline is a code or "all". */
 export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = false): RecordRow[] {
+  const q = (f.q ?? '').trim().toLowerCase();
   return rows.filter((r) => {
     if (f.discipline !== 'all' && r.discipline?.code !== f.discipline) return false;
+    if (q && !r.number.toLowerCase().includes(q) && !r.title.toLowerCase().includes(q)) return false;
+    if (f.from || f.to) {
+      if (!r.submitted_at) return false; // drafts were not submitted in any period
+      const day = dayOf(r.submitted_at);
+      if ((f.from && day < f.from) || (f.to && day > f.to)) return false;
+    }
     if (ignoreStatus || f.status === 'all') return true;
     return f.status === 'overdue' ? r.overdue : r.state.category === f.status;
   });
