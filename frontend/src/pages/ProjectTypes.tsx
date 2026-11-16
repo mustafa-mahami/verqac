@@ -6,7 +6,7 @@ import { api, ApiError, type ProjectTypeT, type TemplateStage } from '../api';
 import { pick } from '../i18n';
 import { move, StagesEditor, weightTotal } from './Structure';
 
-const blankStage: TemplateStage = { name_ar: '', name_en: '', scope: 'per_location', weight: 0 };
+const blankStage: TemplateStage = { name_ar: '', name_en: '', scope: 'per_location', weight: 0, topics: [] };
 
 /** Organization settings: kinds of project and the stage / location templates new projects start from. */
 export default function ProjectTypes({ orgId }: { orgId: string }) {

@@ -92,3 +92,40 @@ def test_new_project_with_type(client, site):
                                                             "project_type_id": roads["id"]}).json()["project"]["id"]
     st = client.get(f"/api/v1/projects/{p}/structure", headers=hc).json()
     assert len(st["stages"]) == 7 and st["labels"]["unit_en"] == "Section" and len(st["locations"][0]["units"]) == 2
+
+
+def test_stage_topics(client, site):
+    pid, hc = site["pid"], site["hc"]
+    st = client.get(f"/api/v1/projects/{pid}/structure", headers=hc).json()
+    btype = next(t for t in st["types"] if t["name_en"] == "Buildings")
+    st = client.post(f"/api/v1/projects/{pid}/apply-type", headers=hc, json={"project_type_id": btype["id"]}).json()
+    structure = next(s for s in st["stages"] if s["name_en"] == "Structure")
+    blocks = next(s for s in st["stages"] if s["name_en"] == "Block walls")
+    assert [t["name_ar"] for t in structure["topics"]][:3] == ["حفريات", "قواعد", "جسور أرضية"]
+    cols = next(t for t in structure["topics"] if t["name_en"] == "Columns")
+    # pick a topic: no title typed, the stage follows the topic
+    r = client.post(f"/api/v1/projects/{pid}/records", headers=site["hqa"], json={
+        "discipline_id": site["cdisc"]["C"], "topic_id": cols["id"], "all_locations": True,
+        "details": {"item": "خرسانة B300 للأعمدة"}})
+    assert r.status_code == 201, r.text
+    rec = r.json()
+    assert rec["title"] == "أعمدة" and rec["topic"]["name_en"] == "Columns" and rec["stage"]["id"] == structure["id"]
+    # a topic of another stage is refused
+    bad = client.post(f"/api/v1/projects/{pid}/records", headers=site["hqa"], json={
+        "discipline_id": site["cdisc"]["C"], "stage_id": blocks["id"], "topic_id": cols["id"]})
+    assert bad.json()["detail"] == "invalid_topic"
+    # without topic and without title
+    assert client.post(f"/api/v1/projects/{pid}/records", headers=site["hqa"], json={
+        "discipline_id": site["cdisc"]["C"]}).json()["detail"] == "title_required"
+    # edit topics: rename one, add one; a used topic cannot be deleted
+    structure["topics"][0]["name_ar"] = "حفريات وردم"
+    structure["topics"].append({"name_ar": "أدراج خرسانية", "name_en": "Concrete stairs"})
+    st = client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=st["stages"]).json()
+    structure = next(s for s in st["stages"] if s["name_en"] == "Structure")
+    assert structure["topics"][0]["name_ar"] == "حفريات وردم" and structure["topics"][-1]["name_en"] == "Concrete stairs"
+    assert next(t for t in structure["topics"] if t["id"] == cols["id"])["used"] is True
+    structure["topics"] = [t for t in structure["topics"] if t["id"] != cols["id"]]
+    assert client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=st["stages"]).json()["detail"] == "topic_in_use"
+    # register rows carry the topic
+    row = next(x for x in client.get(f"/api/v1/projects/{pid}/records", headers=hc).json() if x["id"] == rec["id"])
+    assert row["topic_id"] == cols["id"]

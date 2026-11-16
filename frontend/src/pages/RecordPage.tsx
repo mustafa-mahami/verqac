@@ -184,7 +184,7 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
   const meta = useQuery({ queryKey: ['recMeta', rec.project_id], queryFn: () => api<RecordMeta>(`/projects/${rec.project_id}/records/meta?type=submittal`) });
   const d = rec.details;
   const structure = useStructure(rec.project_id);
-  const initialPlace: Place = { stage_id: rec.stage?.id ?? null, all_locations: rec.all_locations, location_ids: rec.locations.map((x) => x.id) };
+  const initialPlace: Place = { stage_id: rec.stage?.id ?? null, topic_id: rec.topic?.id ?? null, all_locations: rec.all_locations, location_ids: rec.locations.map((x) => x.id) };
   const [place, setPlace] = useState<Place>(initialPlace);
   const kindOptions = (meta.data?.submittal_kinds ?? []).map((k) => ({ value: k.code ?? '', label: pick(k, 'name') }));
   // a record may hold a kind that was since deactivated (or legacy text): keep it selectable
@@ -202,7 +202,7 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
       return api<RecordDetail>(`/records/${rec.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
-          title: v.title.trim(), description: blank(v.description), discipline_id: v.discipline_id || null,
+          title: place.topic_id ? null : v.title.trim(), description: blank(v.description), discipline_id: v.discipline_id || null,
           details: Object.fromEntries(DETAIL_KEYS.map((k) => [k, blank(v[k])])),
           ...place,
         }),
@@ -214,10 +214,12 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
     <form onSubmit={form.onSubmit((v) => save.mutate(v))}>
       <Stack>
         {error && <Alert color="red">{error}</Alert>}
-        <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />
+        {structure.data
+          ? <PlacePicker structure={structure.data} value={place} onChange={setPlace} keep={initialPlace}
+              title={form.values.title} onTitle={(x) => form.setFieldValue('title', x)} />
+          : <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />}
         <Select label={t('rec.discipline')} allowDeselect={false}
           data={(meta.data?.disciplines ?? []).map((x) => ({ value: x.id, label: pick(x, 'name') }))} {...form.getInputProps('discipline_id')} />
-        {structure.data && <PlacePicker structure={structure.data} value={place} onChange={setPlace} keep={initialPlace} />}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <Select label={t('rec.f.submittal_kind')} allowDeselect={false} data={kindOptions} {...form.getInputProps('submittal_kind')} />
           {DETAIL_KEYS.filter((k) => k !== 'submittal_kind').map((k) => <TextInput key={k} label={t(`rec.f.${k}`)} dir={LTR.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />)}
@@ -289,7 +291,7 @@ export default function RecordPage() {
               <Badge size="lg" tt="none" variant="outline">{t('assign.assignedTo', { name: pick(r.assigned_to, 'full_name') })}</Badge>
             )}
           </Group>
-          <Text size="lg" mt={4}>{r.title}</Text>
+          <Text size="lg" mt={4}>{r.topic ? pick(r.topic, 'name') : r.title}</Text>
           <Text size="sm" c="dimmed">{pick(r.record_type, 'name')}{r.discipline ? ` · ${pick(r.discipline, 'name')}` : ''}</Text>
         </div>
         <Group gap="xs">

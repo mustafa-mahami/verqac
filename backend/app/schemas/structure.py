@@ -7,16 +7,17 @@ from pydantic import BaseModel, Field
 Scope = Literal["per_location", "whole"]
 
 
+class TemplateUnit(BaseModel):
+    name_ar: str = Field(max_length=150)
+    name_en: str = Field(max_length=150)
+
+
 class TemplateStage(BaseModel):
     name_ar: str = Field(max_length=150)
     name_en: str = Field(max_length=150)
     scope: Scope = "per_location"
     weight: Decimal = Field(default=Decimal(0), ge=0, le=100)
-
-
-class TemplateUnit(BaseModel):
-    name_ar: str = Field(max_length=100)
-    name_en: str = Field(max_length=100)
+    topics: list[TemplateUnit] = []
 
 
 class ProjectTypeIO(BaseModel):
@@ -39,6 +40,14 @@ class Labels(BaseModel):
     unit_en: str = "Floor"
 
 
+class TopicIO(BaseModel):
+    id: UUID | None = None
+    name_ar: str = Field(max_length=150)
+    name_en: str = Field(max_length=150)
+    is_active: bool = True
+    used: bool = False
+
+
 class StageIO(BaseModel):
     id: UUID | None = None
     name_ar: str = Field(max_length=150)
@@ -47,6 +56,7 @@ class StageIO(BaseModel):
     weight: Decimal = Field(default=Decimal(0), ge=0, le=100)
     is_active: bool = True
     used: bool = False  # output only: records point at it, so it can be switched off but not deleted
+    topics: list[TopicIO] = []
 
 
 class UnitIO(BaseModel):

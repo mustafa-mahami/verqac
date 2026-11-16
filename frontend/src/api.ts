@@ -105,7 +105,7 @@ export interface RecordRow {
   id: string; number: string; rev_no: number; title: string; state: State; discipline: Discipline | null;
   submitted_at: string | null; due_at: string | null; answered_at: string | null; overdue: boolean; revisions: number; required_by: string | null;
   submittal_kind: string | null; submittal_kind_name: { ar: string; en: string } | null;
-  stage_id: string | null; all_locations: boolean; location_ids: string[];
+  stage_id: string | null; topic_id: string | null; all_locations: boolean; location_ids: string[];
 }
 export interface SubmittalDetails {
   submittal_kind: string | null; item: string | null; manufacturer: string | null; supplier: string | null;
@@ -125,6 +125,7 @@ export interface RecordDetail {
   overdue: boolean; answered_by: User | null; answered_on_behalf_of: User | null; answered_at: string | null;
   response_comment: string | null; required_by: string | null; required_by_note: string | null; can_set_required_by: boolean; details: SubmittalDetails;
   stage: { id: string; name_ar: string; name_en: string; scope: string } | null; all_locations: boolean;
+  topic: { id: string; name_ar: string; name_en: string } | null;
   locations: { id: string; kind: string; name_ar: string; name_en: string }[]; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
   can_revise: boolean; can_attach: string[]; can_act_on_behalf: boolean; events: RecordEvent[];
   assigned_to: User | null; can_assign: boolean; assign_candidates: User[]; no_discipline_engineer: boolean;
@@ -146,7 +147,8 @@ export interface Notifications { unread: number; items: NotificationItem[] }
 
 // ---- project structure (mirror app/schemas/structure.py)
 export type StageScope = 'per_location' | 'whole';
-export interface TemplateStage { name_ar: string; name_en: string; scope: StageScope; weight: number | string }
+export interface TopicT { id?: string | null; name_ar: string; name_en: string; is_active?: boolean; used?: boolean }
+export interface TemplateStage { name_ar: string; name_en: string; scope: StageScope; weight: number | string; topics: TopicT[] }
 export interface ProjectTypeT {
   id: string | null; name_ar: string; name_en: string; group_label_ar: string; group_label_en: string;
   unit_label_ar: string; unit_label_en: string; stages: TemplateStage[]; units: { name_ar: string; name_en: string }[]; is_active: boolean;
@@ -159,4 +161,4 @@ export interface Structure {
   project_type: TypeRef | null; labels: { group_ar: string; group_en: string; unit_ar: string; unit_en: string };
   stages: StageT[]; locations: GroupT[]; can_edit: boolean; types: TypeRef[];
 }
-export interface Place { stage_id: string | null; all_locations: boolean; location_ids: string[] }
+export interface Place { stage_id: string | null; topic_id: string | null; all_locations: boolean; location_ids: string[] }

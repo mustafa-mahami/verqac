@@ -111,7 +111,10 @@
     "labels_required": "Enter the group and unit names in Arabic and English.",
     "name_required": "Enter the Arabic and English name on every line.",
     "invalid_stage": "That stage is not in this project.",
-    "invalid_location": "That location is not in this project."
+    "invalid_location": "That location is not in this project.",
+    "invalid_topic": "That subject does not belong to the chosen stage.",
+    "topic_in_use": "A subject used by requests cannot be deleted. Switch it off instead.",
+    "title_required": "Pick or type the subject."
   },
   "common": {
     "cancel": "Cancel",
@@ -426,6 +429,11 @@
     "filterLocation": "Location:",
     "all": "All",
     "noneYet": "This project has no stages or locations yet. The contractor's project manager sets them in the Settings tab.",
-    "noneYetEditor": "This project has no stages or locations yet. In the Settings tab pick the project type and press “Apply template”; the stage and floor fields then appear here."
+    "noneYetEditor": "This project has no stages or locations yet. In the Settings tab pick the project type and press “Apply template”; the stage and floor fields then appear here.",
+    "topics": "Subjects",
+    "topicsCount": "{{count}} subjects",
+    "addTopic": "Add a subject",
+    "pickTopic": "Pick the subject",
+    "filterTopic": "Subject:"
   }
 }

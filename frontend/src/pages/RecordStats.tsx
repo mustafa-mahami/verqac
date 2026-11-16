@@ -12,7 +12,7 @@ export const CATEGORIES = [
 
 export interface StatsFilter {
   status: string; discipline: string; kind?: string; // kind: submittal type code or "all"
-  stage?: string; loc?: string; // a stage id / a location id (building or floor), or "all"
+  stage?: string; topic?: string; loc?: string; // a stage id / a location id (building or floor), or "all"
   q?: string; from?: string; to?: string; // text in number/title; submission date range (YYYY-MM-DD, inclusive)
 }
 
@@ -26,6 +26,7 @@ export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = fa
     if (f.discipline !== 'all' && r.discipline?.code !== f.discipline) return false;
     if (f.kind && f.kind !== 'all' && r.submittal_kind !== f.kind) return false;
     if (f.stage && f.stage !== 'all' && r.stage_id !== f.stage) return false;
+    if (f.topic && f.topic !== 'all' && r.topic_id !== f.topic) return false;
     if (f.loc && f.loc !== 'all' && structure && !coversLocation(structure, r, f.loc)) return false;
     if (q && !r.number.toLowerCase().includes(q) && !r.title.toLowerCase().includes(q)) return false;
     if (f.from || f.to) {
@@ -55,6 +56,9 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
   const count = (status: string) => applyFilter(inScope, { ...filter, status }, false, structure).length;
   const usedStages = new Set(rows.map((r) => r.stage_id).filter(Boolean));
   const stageOptions = (structure?.stages ?? []).filter((x) => usedStages.has(x.id)).map((x) => ({ value: x.id!, label: pick(x, 'name') }));
+  const usedTopics = new Set(rows.map((r) => r.topic_id).filter(Boolean));
+  const topicOptions = (structure?.stages.find((x) => x.id === filter.stage)?.topics ?? [])
+    .filter((x) => usedTopics.has(x.id ?? '')).map((x) => ({ value: x.id!, label: pick(x, 'name') }));
   const hasPlaces = rows.some((r) => r.all_locations || r.location_ids.length > 0);
 
   const tiles: { key: string; color: string }[] = [
@@ -91,7 +95,15 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
               <Text size="sm" c="dimmed">{t('structure.filterStage')}</Text>
               <Select size="xs" w={200} searchable value={filter.stage || 'all'} allowDeselect={false}
                 data={[{ value: 'all', label: t('structure.all') }, ...stageOptions]}
-                onChange={(v) => onChange({ ...filter, stage: v ?? 'all' })} />
+                onChange={(v) => onChange({ ...filter, stage: v ?? 'all', topic: 'all' })} />
+            </Group>
+          )}
+          {topicOptions.length > 0 && (
+            <Group gap="xs">
+              <Text size="sm" c="dimmed">{t('structure.filterTopic')}</Text>
+              <Select size="xs" w={180} searchable value={filter.topic || 'all'} allowDeselect={false}
+                data={[{ value: 'all', label: t('structure.all') }, ...topicOptions]}
+                onChange={(v) => onChange({ ...filter, topic: v ?? 'all' })} />
             </Group>
           )}
           {hasPlaces && structure && (

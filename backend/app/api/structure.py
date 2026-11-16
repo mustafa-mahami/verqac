@@ -11,9 +11,9 @@ from app.core.db import session_scope
 from app.core.deps import Ctx, ctx
 from app.models.core import OrgMember, Project
 from app.models.records import Record
-from app.models.structure import ProjectLocation, ProjectStage, ProjectType
+from app.models.structure import ProjectLocation, ProjectStage, ProjectStageTopic, ProjectType
 from app.schemas.structure import (
-    ApplyTypeIn, GroupIO, Labels, ProjectTypeIO, StageIO, StructureOut, TypeRef, UnitIO,
+    ApplyTypeIn, GroupIO, Labels, ProjectTypeIO, StageIO, StructureOut, TopicIO, TypeRef, UnitIO,
 )
 
 router = APIRouter(tags=["structure"])
@@ -64,6 +64,8 @@ def save_types(org_id: uuid.UUID, body: list[ProjectTypeIO], c: Ctx = Depends(ct
         seen.add(ar)
         for s in x.stages:
             _names(s)
+            for tp in s.topics:
+                _names(tp)
         for u in x.units:
             _names(u)
         _check_weights(x.stages)
@@ -79,7 +81,9 @@ def save_types(org_id: uuid.UUID, body: list[ProjectTypeIO], c: Ctx = Depends(ct
         t.name_ar, t.name_en = ar, en
         t.group_label_ar, t.group_label_en, t.unit_label_ar, t.unit_label_en = labels
         t.stages = [{**s.model_dump(mode="json"), "name_ar": s.name_ar.strip(), "name_en": s.name_en.strip(),
-                     "weight": float(s.weight)} for s in x.stages]
+                     "weight": float(s.weight),
+                     "topics": [{"name_ar": tp.name_ar.strip(), "name_en": tp.name_en.strip()} for tp in s.topics]}
+                    for s in x.stages]
         t.units = [{"name_ar": u.name_ar.strip(), "name_en": u.name_en.strip()} for u in x.units]
         t.is_active, t.sort = x.is_active, (i + 1) * 10
     if old:
@@ -99,22 +103,30 @@ def labels_of(project: Project) -> Labels:
     return Labels(**(project.settings or {}).get("structure_labels", {}))
 
 
-def _used_ids(project_id: uuid.UUID) -> tuple[set, set]:
-    """Stages and locations that records point at (every party's records, so the check is not filtered)."""
+def _used_ids(project_id: uuid.UUID) -> tuple[set, set, set]:
+    """Stages, locations and topics that records point at (every party's records, so the check is not filtered)."""
     with session_scope(bypass=True) as s:
         stages = set(s.scalars(select(Record.stage_id).where(Record.project_id == project_id,
                                                              Record.stage_id.is_not(None))))
+        topics = set(s.scalars(select(Record.topic_id).where(Record.project_id == project_id,
+                                                             Record.topic_id.is_not(None))))
         locs: set = set()
         for ids in s.scalars(select(Record.location_ids).where(Record.project_id == project_id,
                                                                Record.location_ids.is_not(None))):
             locs.update(ids)
-    return stages, locs
+    return stages, locs, topics
 
 
 def structure_of(c: Ctx, project: Project, can_edit: bool) -> StructureOut:
-    used_stages, used_locs = _used_ids(project.id)
+    used_stages, used_locs, used_topics = _used_ids(project.id)
+    topics: dict = {}
+    for tp in c.db.scalars(select(ProjectStageTopic).where(ProjectStageTopic.project_id == project.id)
+                           .order_by(ProjectStageTopic.sort)):
+        topics.setdefault(tp.stage_id, []).append(
+            TopicIO(id=tp.id, name_ar=tp.name_ar, name_en=tp.name_en, is_active=tp.is_active, used=tp.id in used_topics))
     stages = [StageIO(id=s.id, name_ar=s.name_ar, name_en=s.name_en, scope=s.scope, weight=s.weight,
-                      is_active=s.is_active, used=s.id in used_stages)
+                      is_active=s.is_active, used=s.id in used_stages or any(t.used for t in topics.get(s.id, [])),
+                      topics=topics.get(s.id, []))
               for s in c.db.scalars(select(ProjectStage).where(ProjectStage.project_id == project.id)
                                     .order_by(ProjectStage.sort))]
     rows = c.db.scalars(select(ProjectLocation).where(ProjectLocation.project_id == project.id)
@@ -147,9 +159,14 @@ def apply_type(c: Ctx, project: Project, t: ProjectType) -> None:
                                              "unit_ar": t.unit_label_ar, "unit_en": t.unit_label_en}}
     if not c.db.scalar(select(ProjectStage.id).where(ProjectStage.project_id == project.id).limit(1)):
         for i, s in enumerate(t.stages):
-            c.db.add(ProjectStage(project_id=project.id, name_ar=s["name_ar"], name_en=s["name_en"],
-                                  scope=s.get("scope", "per_location"), weight=Decimal(str(s.get("weight", 0))),
-                                  sort=(i + 1) * 10))
+            st = ProjectStage(id=uuid.uuid4(), project_id=project.id, name_ar=s["name_ar"], name_en=s["name_en"],
+                              scope=s.get("scope", "per_location"), weight=Decimal(str(s.get("weight", 0))),
+                              sort=(i + 1) * 10)
+            c.db.add(st)
+            c.db.flush()
+            for j, tp in enumerate(s.get("topics", [])):
+                c.db.add(ProjectStageTopic(project_id=project.id, stage_id=st.id, name_ar=tp["name_ar"],
+                                           name_en=tp["name_en"], sort=(j + 1) * 10))
     if not c.db.scalar(select(ProjectLocation.id).where(ProjectLocation.project_id == project.id).limit(1)):
         g = ProjectLocation(id=uuid.uuid4(), project_id=project.id, kind="group", sort=10,
                             name_ar=f"{t.group_label_ar} 1", name_en=f"{t.group_label_en} 1")
@@ -188,20 +205,43 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
     require(a.can_manage_project, "manage_project_required")
     for x in body:
         _names(x)
+        for tp in x.topics:
+            _names(tp)
     _check_weights(body)
     old = {s.id: s for s in c.db.scalars(select(ProjectStage).where(ProjectStage.project_id == project_id))}
+    old_topics = {t.id: t for t in c.db.scalars(select(ProjectStageTopic)
+                                                .where(ProjectStageTopic.project_id == project_id))}
     removed = set(old) - {x.id for x in body if x.id}
-    if removed & _used_ids(project_id)[0]:
+    removed_topics = set(old_topics) - {tp.id for x in body for tp in x.topics if tp.id}
+    used_stages, _, used_topics = _used_ids(project_id)
+    if removed & used_stages:
         raise HTTPException(status.HTTP_409_CONFLICT, "stage_in_use")
+    if removed_topics & used_topics:
+        raise HTTPException(status.HTTP_409_CONFLICT, "topic_in_use")
     for i, x in enumerate(body):
         s = old.get(x.id) if x.id else None
         if x.id and s is None:
             _bad("not_found")
         if s is None:
-            s = ProjectStage(project_id=project_id)
+            s = ProjectStage(id=uuid.uuid4(), project_id=project_id)
             c.db.add(s)
         s.name_ar, s.name_en = _names(x)
         s.scope, s.weight, s.is_active, s.sort = x.scope, x.weight, x.is_active, (i + 1) * 10
+        c.db.flush()
+        for j, tp in enumerate(x.topics):
+            r = old_topics.get(tp.id) if tp.id else None
+            if tp.id and r is None:
+                _bad("not_found")
+            if r is None:
+                r = ProjectStageTopic(project_id=project_id, stage_id=s.id)
+                c.db.add(r)
+            elif r.stage_id != s.id and r.id in used_topics:
+                raise HTTPException(status.HTTP_409_CONFLICT, "topic_in_use")
+            r.stage_id = s.id
+            r.name_ar, r.name_en = _names(tp)
+            r.is_active, r.sort = tp.is_active, (j + 1) * 10
+    if removed_topics:
+        c.db.execute(delete(ProjectStageTopic).where(ProjectStageTopic.id.in_(removed_topics)))
     if removed:
         c.db.execute(delete(ProjectStage).where(ProjectStage.id.in_(removed)))
     audit(c.db, entity="project", action="stages", entity_id=project_id, actor=c.user.id,

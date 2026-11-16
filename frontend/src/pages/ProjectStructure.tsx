@@ -6,7 +6,7 @@ import { api, ApiError, type GroupT, type StageT, type Structure, type UnitT } f
 import { pick } from '../i18n';
 import { groupLabel, move, StagesEditor, unitLabel, useStructure } from './Structure';
 
-const blankStage: StageT = { id: null, name_ar: '', name_en: '', scope: 'per_location', weight: 0, is_active: true, used: false };
+const blankStage: StageT = { id: null, name_ar: '', name_en: '', scope: 'per_location', weight: 0, is_active: true, used: false, topics: [] };
 const blankUnit = (): UnitT => ({ id: null, name_ar: '', name_en: '', is_active: true, used: false });
 
 function UnitRow({ u, onChange, onMove, onRemove, first, last, editable }: {

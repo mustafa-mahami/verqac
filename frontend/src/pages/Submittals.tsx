@@ -10,7 +10,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError, type Place, type RecordDetail, type RecordMeta, type RecordRow } from '../api';
 import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
-import { PlacePicker, placeText, useStructure } from './Structure';
+import { PlacePicker, placeText, rowTitle, useStructure } from './Structure';
 import RecordStats, { applyFilter, CATEGORIES, type StatsFilter } from './RecordStats';
 
 const DETAIL_KEYS = ['item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
@@ -21,7 +21,7 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const structure = useStructure(projectId);
-  const [place, setPlace] = useState<Place>({ stage_id: null, all_locations: false, location_ids: [] });
+  const [place, setPlace] = useState<Place>({ stage_id: null, topic_id: null, all_locations: false, location_ids: [] });
   const kinds = meta.submittal_kinds.map((k) => ({ value: k.code ?? '', label: pick(k, 'name') }));
   const form = useForm({
     initialValues: {
@@ -39,7 +39,7 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
       const rec = await api<RecordDetail>(`/projects/${projectId}/records`, {
         method: 'POST',
         body: JSON.stringify({
-          record_type: 'submittal', title: v.title.trim(), description: blank(v.description),
+          record_type: 'submittal', title: place.topic_id ? null : v.title.trim(), description: blank(v.description),
           discipline_id: v.discipline_id || null, number: blank(v.number),
           ...place,
           required_by: v.required_by || null, required_by_note: v.required_by ? blank(v.required_by_note) : null,
@@ -68,14 +68,16 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
     <form onSubmit={submit}>
       <Stack>
         {error && <Alert color="red">{error}</Alert>}
-        <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />
+        {structure.data
+          ? <PlacePicker structure={structure.data} value={place} onChange={setPlace}
+              title={form.values.title} onTitle={(x) => form.setFieldValue('title', x)} />
+          : <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />}
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
           <Select label={t('rec.discipline')} allowDeselect={false}
             data={meta.disciplines.map((d) => ({ value: d.id, label: pick(d, 'name') }))} {...form.getInputProps('discipline_id')} />
           <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} searchable {...form.getInputProps('submittal_kind')} />
           <TextInput label={t('rec.number')} placeholder={t('rec.numberHint')} dir="ltr" {...form.getInputProps('number')} />
         </SimpleGrid>
-        {structure.data && <PlacePicker structure={structure.data} value={place} onChange={setPlace} />}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           {DETAIL_KEYS.map((k) => (
             <TextInput key={k} label={t(`rec.f.${k}`)} dir={['drawing_ref', 'spec_ref', 'boq_ref', 'quantity'].includes(k) ? 'ltr' : undefined}
@@ -155,13 +157,13 @@ export default function Submittals({ projectId }: { projectId: string }) {
   const structure = useStructure(projectId);
   const filter: StatsFilter = {
     status: params.get('st') ?? 'all', discipline: params.get('disc') ?? 'all', kind: params.get('kind') ?? 'all',
-    stage: params.get('stage') ?? 'all', loc: params.get('loc') ?? 'all',
+    stage: params.get('stage') ?? 'all', topic: params.get('topic') ?? 'all', loc: params.get('loc') ?? 'all',
     q: params.get('q') ?? '', from: params.get('from') ?? '', to: params.get('to') ?? '',
   };
   const setFilter = (f: StatsFilter) => {
     const next = new URLSearchParams(params);
     const put = (k: string, v: string | undefined, empty = '') => (v && v !== empty ? next.set(k, v) : next.delete(k));
-    put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('kind', f.kind, 'all'); put('stage', f.stage, 'all'); put('loc', f.loc, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
+    put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('kind', f.kind, 'all'); put('stage', f.stage, 'all'); put('topic', f.topic, 'all'); put('loc', f.loc, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
     setParams(next, { replace: true });
   };
   const sort = (params.get('sort') ?? 'number') as SortKey;
@@ -174,7 +176,7 @@ export default function Submittals({ projectId }: { projectId: string }) {
     setParams(next, { replace: true });
   };
   const shown = useMemo(() => sortRows(applyFilter(rows.data ?? [], filter, false, structure.data), sort, dir),
-    [rows.data, structure.data, filter.status, filter.discipline, filter.kind, filter.stage, filter.loc, filter.q, filter.from, filter.to, sort, dir]);
+    [rows.data, structure.data, filter.status, filter.discipline, filter.kind, filter.stage, filter.topic, filter.loc, filter.q, filter.from, filter.to, sort, dir]);
   const narrowed = !!(filter.q || filter.from || filter.to);
 
   return (
@@ -220,7 +222,7 @@ export default function Submittals({ projectId }: { projectId: string }) {
                   <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/records/${r.id}`)}>
                     <Table.Td><Text size="sm" fw={500} dir="ltr" ta="start" style={{ whiteSpace: 'nowrap' }}>{r.number} · R{r.rev_no}</Text></Table.Td>
                     <Table.Td>
-                      <Text size="sm" lineClamp={2}>{r.title}</Text>
+                      <Text size="sm" lineClamp={2}>{rowTitle(structure.data, r)}</Text>
                       {(r.stage_id || r.all_locations || r.location_ids.length > 0) && (
                         <Text size="xs" c="dimmed" lineClamp={1}>{placeText(structure.data, r)}</Text>
                       )}

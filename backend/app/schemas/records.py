@@ -47,6 +47,12 @@ class StageRef(BaseModel):
     scope: str
 
 
+class TopicRef(BaseModel):
+    id: UUID
+    name_ar: str
+    name_en: str
+
+
 class LocationRef(BaseModel):
     id: UUID
     kind: str  # group (a whole building / zone) or unit (floor / section)
@@ -68,7 +74,7 @@ class SubmittalDetailsIO(BaseModel):
 
 class RecordIn(BaseModel):
     record_type: str = "submittal"
-    title: str = Field(min_length=2, max_length=300)
+    title: str | None = Field(default=None, max_length=300)  # may be left empty when a topic is chosen
     description: str | None = None
     discipline_id: UUID | None = None
     number: str | None = Field(default=None, max_length=60)  # manual number (e.g. migrated); else generated
@@ -76,6 +82,7 @@ class RecordIn(BaseModel):
     required_by: date | None = None
     required_by_note: str | None = Field(default=None, max_length=300)
     stage_id: UUID | None = None
+    topic_id: UUID | None = None
     all_locations: bool = False
     location_ids: list[UUID] = []
 
@@ -86,12 +93,13 @@ class RequiredByIn(BaseModel):
 
 
 class RecordPatch(BaseModel):
-    title: str | None = Field(default=None, min_length=2, max_length=300)
+    title: str | None = Field(default=None, max_length=300)
     description: str | None = None
     discipline_id: UUID | None = None
     details: SubmittalDetailsIO | None = None
     # sent together: the stage and where it applies
     stage_id: UUID | None = None
+    topic_id: UUID | None = None
     all_locations: bool | None = None
     location_ids: list[UUID] | None = None
 
@@ -123,6 +131,7 @@ class RecordRow(BaseModel):
     submittal_kind: str | None = None
     submittal_kind_name: KindName | None = None
     stage_id: UUID | None = None
+    topic_id: UUID | None = None
     all_locations: bool = False
     location_ids: list[UUID] = []
 
@@ -192,6 +201,7 @@ class RecordDetail(BaseModel):
     details: SubmittalDetailsIO
     submittal_kind_name: KindName | None = None  # details.submittal_kind shown in both languages
     stage: StageRef | None = None
+    topic: TopicRef | None = None
     all_locations: bool = False
     locations: list[LocationRef] = []
     transitions: list[TransitionOut]

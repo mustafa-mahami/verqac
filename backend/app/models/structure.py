@@ -33,7 +33,7 @@ class ProjectType(Base):
     group_label_en: Mapped[str] = mapped_column(String(40), nullable=False)
     unit_label_ar: Mapped[str] = mapped_column(String(40), nullable=False)
     unit_label_en: Mapped[str] = mapped_column(String(40), nullable=False)
-    stages: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")  # [{name_ar,name_en,scope,weight}]
+    stages: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")  # [{name_ar,name_en,scope,weight,topics}]
     units: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")   # [{name_ar,name_en}] per group
     sort: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
@@ -49,6 +49,20 @@ class ProjectStage(Base):
     name_en: Mapped[str] = mapped_column(String(150), nullable=False)
     scope: Mapped[str] = mapped_column(String(20), nullable=False, server_default="per_location")
     weight: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, server_default="0")
+    sort: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+
+
+class ProjectStageTopic(Base):
+    """A subject under a stage (Structure: footings, columns, slabs...). Requests pick one instead of typing it."""
+
+    __tablename__ = "project_stage_topics"
+
+    id: Mapped[uuid.UUID] = pk()
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    stage_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project_stages.id", ondelete="CASCADE"), nullable=False, index=True)
+    name_ar: Mapped[str] = mapped_column(String(150), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(150), nullable=False)
     sort: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
 
@@ -71,3 +85,4 @@ class ProjectLocation(Base):
 
 
 STRUCTURE_TABLES = ["project_types", "project_stages", "project_locations"]
+TOPIC_TABLES = ["project_stage_topics"]

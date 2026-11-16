@@ -20,7 +20,7 @@ from app.core import storage
 from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
-from app.models.structure import ProjectLocation, ProjectStage
+from app.models.structure import ProjectLocation, ProjectStage, ProjectStageTopic
 from app.core.kinds import active_codes, kind_code, kind_name, submittal_kinds
 from app.core.notify import members_who_can, notify
 from app.models.core import Discipline, Project, ProjectMember, ProjectParty, RolePermission, User
@@ -28,7 +28,7 @@ from app.models.records import (Attachment, Record, RecordComment, RecordEvent, 
                                 SubmittalDetails, WorkflowState, WorkflowTransition)
 from app.schemas.core import DisciplineOut, SubmittalKind, UserOut
 from app.schemas.records import (AssignIn, AttachmentOut, CommentIn, InboxItem, CommentOut, EventOut, RecordDetail, RecordIn,
-                                 LocationRef, RecordMeta, RecordPatch, RecordRow, RequiredByIn, StageRef, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
+                                 LocationRef, RecordMeta, RecordPatch, RecordRow, RequiredByIn, StageRef, TopicRef, RecordTypeOut, RevisionRef, StateOut, SubmittalDetailsIO,
                                  TransitionIn, TransitionOut)
 
 router = APIRouter(tags=["records"])
@@ -216,7 +216,7 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         response_comment=rec.response_comment, required_by=rec.required_by, required_by_note=rec.required_by_note,
         can_set_required_by=_can_set_required_by(rec, a, p), details=(det := _details(c, rec)),
         submittal_kind_name=kind_name(a.project, det.submittal_kind), transitions=trans,
-        stage=(place := _place_out(c, rec))[0], all_locations=rec.all_locations, locations=place[1],
+        stage=(place := _place_out(c, rec))[0], all_locations=rec.all_locations, locations=place[1], topic=place[2],
         can_edit=is_draft and p.can("edit", rec), can_revise=can_revise, can_attach=attach,
         can_act_on_behalf=bool(a.role and a.role.act_on_behalf and p.can("respond", rec)),
         assigned_to=_user(c, rec.assigned_to), can_assign=can_assign, assign_candidates=candidates,
@@ -301,7 +301,8 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
                              submitted_at=r.submitted_at, due_at=r.due_at, answered_at=r.answered_at,
                              overdue=_overdue(r), revisions=counts[r.revision_group_id], required_by=r.required_by,
                              submittal_kind=kind_code(a.project, kinds.get(r.id)), submittal_kind_name=kind_name(a.project, kinds.get(r.id)),
-                             stage_id=r.stage_id, all_locations=r.all_locations, location_ids=r.location_ids or []))
+                             stage_id=r.stage_id, topic_id=r.topic_id, all_locations=r.all_locations,
+                             location_ids=r.location_ids or []))
     return out
 
 
@@ -312,9 +313,17 @@ def _can_set_required_by(rec: Record, a: ProjectAccess, p: "Perms") -> bool:
 
 
 def _check_place(c: Ctx, a: ProjectAccess, stage_id, all_locations: bool, location_ids,
-                 current: Record | None = None) -> tuple:
-    """Validate a stage and locations for this project; returns (stage_id, all_locations, location_ids).
+                 current: Record | None = None, topic_id=None) -> tuple:
+    """Validate a stage, its topic and locations for this project;
+    returns (stage_id, all_locations, location_ids, topic_id).
     A stage done for the whole project ("whole" scope) always covers all locations."""
+    topic = None
+    if topic_id is not None:
+        topic = c.db.get(ProjectStageTopic, topic_id)
+        if topic is None or topic.project_id != a.project.id or (stage_id and topic.stage_id != stage_id) or (
+                not topic.is_active and (current is None or current.topic_id != topic_id)):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_topic")
+        stage_id = topic.stage_id
     stage = None
     if stage_id is not None:
         stage = c.db.get(ProjectStage, stage_id)
@@ -324,8 +333,9 @@ def _check_place(c: Ctx, a: ProjectAccess, stage_id, all_locations: bool, locati
     ids = list(dict.fromkeys(location_ids or []))
     if stage is not None and stage.scope == "whole":
         all_locations = True
+    tid = topic.id if topic else None
     if all_locations:
-        return stage_id, True, None
+        return stage_id, True, None, tid
     if ids:
         known = {r.id: r for r in c.db.scalars(select(ProjectLocation).where(ProjectLocation.id.in_(ids)))}
         before = set(current.location_ids or []) if current is not None else set()
@@ -333,11 +343,22 @@ def _check_place(c: Ctx, a: ProjectAccess, stage_id, all_locations: bool, locati
             r = known.get(i)
             if r is None or r.project_id != a.project.id or (not r.is_active and i not in before):
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_location")
-    return stage_id, False, ids or None
+    return stage_id, False, ids or None, tid
+
+
+def _title(title: str | None, topic_id, c: Ctx) -> str:
+    """The typed subject, or the chosen topic's name when nothing was typed."""
+    t = (title or "").strip()
+    if len(t) >= 2:
+        return t
+    if topic_id:
+        return c.db.get(ProjectStageTopic, topic_id).name_ar
+    raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "title_required")
 
 
 def _place_out(c: Ctx, rec: Record) -> tuple:
     stage = c.db.get(ProjectStage, rec.stage_id) if rec.stage_id else None
+    topic = c.db.get(ProjectStageTopic, rec.topic_id) if rec.topic_id else None
     locs = []
     if rec.location_ids:
         rows = {r.id: r for r in c.db.scalars(select(ProjectLocation).where(
@@ -353,7 +374,7 @@ def _place_out(c: Ctx, rec: Record) -> tuple:
                 ar, en = f"{g.name_ar} – {ar}", f"{g.name_en} – {en}"
             locs.append(LocationRef(id=r.id, kind=r.kind, name_ar=ar, name_en=en))
     return (StageRef(id=stage.id, name_ar=stage.name_ar, name_en=stage.name_en, scope=stage.scope) if stage else None,
-            locs)
+            locs, TopicRef(id=topic.id, name_ar=topic.name_ar, name_en=topic.name_en) if topic else None)
 
 
 def _check_kind(a, code: str | None) -> None:
@@ -371,16 +392,18 @@ def create_record(project_id: uuid.UUID, body: RecordIn, c: Ctx = Depends(ctx)):
     initial = c.db.scalar(select(WorkflowState).where(WorkflowState.workflow_id == rt.workflow_id,
                                                       WorkflowState.is_initial))
     number = body.number.strip() if body.number else _next_number(c, a, rt, disc)
-    stage_id, all_locs, loc_ids = _check_place(c, a, body.stage_id, body.all_locations, body.location_ids)
+    stage_id, all_locs, loc_ids, topic_id = _check_place(c, a, body.stage_id, body.all_locations, body.location_ids,
+                                                         topic_id=body.topic_id)
+    title = _title(body.title, topic_id, c)
     responder = c.db.scalar(select(ProjectParty.id).where(ProjectParty.project_id == project_id,
                                                           ProjectParty.kind == rt.responder_party,
                                                           ProjectParty.status != "removed"))
     rec = Record(project_id=project_id, record_type_id=rt.id, number=number, rev_no=0,
-                 revision_group_id=uuid.uuid4(), discipline_id=body.discipline_id, title=body.title,
+                 revision_group_id=uuid.uuid4(), discipline_id=body.discipline_id, title=title,
                  description=body.description, state_id=initial.id, state_category=initial.category,
                  from_party_id=a.party.id, to_party_id=responder, created_by=c.user.id,
                  required_by=body.required_by, required_by_note=(body.required_by_note or "").strip() or None,
-                 stage_id=stage_id, all_locations=all_locs, location_ids=loc_ids)
+                 stage_id=stage_id, all_locations=all_locs, location_ids=loc_ids, topic_id=topic_id)
     c.db.add(rec)
     try:
         c.db.flush()
@@ -406,6 +429,11 @@ def update_record(record_id: uuid.UUID, body: RecordPatch, c: Ctx = Depends(ctx)
     require(rec.state_category == "draft", "locked_after_submit")
     require(p.can("edit", rec), "cannot_edit")
     changes: dict[str, Any] = {}
+    if "title" in body.model_fields_set or "topic_id" in body.model_fields_set:
+        tid = body.topic_id if "topic_id" in body.model_fields_set else rec.topic_id
+        if tid is not None and c.db.get(ProjectStageTopic, tid) is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_topic")
+        body.title = _title(body.title, tid, c)
     for f in ("title", "description"):
         v = getattr(body, f)
         if v is not None and v != getattr(rec, f):
@@ -415,11 +443,12 @@ def update_record(record_id: uuid.UUID, body: RecordPatch, c: Ctx = Depends(ctx)
         _check_discipline(c, a, body.discipline_id)
         changes["discipline_id"] = [str(rec.discipline_id), str(body.discipline_id)]
         rec.discipline_id = body.discipline_id
-    if {"stage_id", "all_locations", "location_ids"} & body.model_fields_set:
-        place = _check_place(c, a, body.stage_id, bool(body.all_locations), body.location_ids, current=rec)
-        if place != (rec.stage_id, rec.all_locations, rec.location_ids):
+    if {"stage_id", "topic_id", "all_locations", "location_ids"} & body.model_fields_set:
+        place = _check_place(c, a, body.stage_id, bool(body.all_locations), body.location_ids, current=rec,
+                             topic_id=body.topic_id)
+        if place != (rec.stage_id, rec.all_locations, rec.location_ids, rec.topic_id):
             changes["place"] = [str(rec.stage_id), str(place[0])]
-            rec.stage_id, rec.all_locations, rec.location_ids = place
+            rec.stage_id, rec.all_locations, rec.location_ids, rec.topic_id = place
     if body.details is not None:
         d = c.db.get(SubmittalDetails, rec.id) or SubmittalDetails(record_id=rec.id)
         if body.details.submittal_kind != d.submittal_kind:  # keeping an old or deactivated kind is fine
@@ -447,6 +476,8 @@ def _stamp(c: Ctx, rec: Record, state: WorkflowState) -> str:
     # stage and locations join the fingerprint only when set, so earlier stamps still verify
     if rec.stage_id:
         payload["stage"] = str(rec.stage_id)
+    if rec.topic_id:
+        payload["topic"] = str(rec.topic_id)
     if rec.all_locations or rec.location_ids:
         payload["locations"] = "all" if rec.all_locations else sorted(str(i) for i in rec.location_ids)
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
@@ -620,7 +651,8 @@ def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
                  description=rec.description, state_id=initial.id, state_category=initial.category,
                  from_party_id=a.party.id, to_party_id=rec.to_party_id, created_by=c.user.id, custom=rec.custom,
                  required_by=rec.required_by, required_by_note=rec.required_by_note,
-                 stage_id=rec.stage_id, all_locations=rec.all_locations, location_ids=rec.location_ids)
+                 stage_id=rec.stage_id, all_locations=rec.all_locations, location_ids=rec.location_ids,
+                 topic_id=rec.topic_id)
     c.db.add(new)
     try:
         c.db.flush()

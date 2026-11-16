@@ -122,6 +122,7 @@ class Record(Base):
     required_by_note: Mapped[str | None] = mapped_column(String(300))
     # work stage and locations the record covers (FK added by migration 0008); all_locations = the whole project
     stage_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    topic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # FK added by migration 0009
     all_locations: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     location_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)))
     answered_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
