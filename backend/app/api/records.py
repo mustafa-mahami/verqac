@@ -262,18 +262,47 @@ def _responders(c: Ctx, rec: Record, rt: RecordType) -> list:
     return members_who_can(c, rec.project_id, party, rt, "respond", rec.discipline_id) if party else []
 
 
+ROUTING_MODES = ("discipline", "manager", "choose")
+
+
+def routing(project, rt: RecordType) -> str:
+    """Who a request goes to, per project and record type:
+    discipline - the consultant engineers of its discipline (the PM still sees and can answer everything);
+    manager    - the consultant PM, who passes it on;
+    choose     - the contractor picks the addressee when writing the request."""
+    mode = (project.settings or {}).get("routing", {}).get(rt.code, "discipline")
+    return mode if mode in ROUTING_MODES else "discipline"
+
+
 def _addressed_to(c: Ctx, rec: Record, rt: RecordType) -> list[UserOut]:
-    """The person the request is addressed to: the assigned engineer, else the responder party's manager(s)."""
+    """The person(s) the request is addressed to, as printed on it."""
     if rec.assigned_to:
         return [_user(c, rec.assigned_to)]
-    seen, out = set(), []
-    for m, r in _responders(c, rec, rt):
-        if r.act_on_behalf and m.user_id not in seen:
-            seen.add(m.user_id)
-            u = _user(c, m.user_id)
-            if u:
-                out.append(u)
-    return out
+    resp = _responders(c, rec, rt)
+    managers = [m.user_id for m, r in resp if r.act_on_behalf]
+    engineers = [m.user_id for m, r in resp if not r.act_on_behalf]
+    project = c.db.get(Project, rec.project_id)
+    ids = managers if routing(project, rt) == "manager" or not engineers else engineers
+    return [u for u in (_user(c, i) for i in dict.fromkeys(ids)) if u]
+
+
+def _addressees(c: Ctx, project_id: uuid.UUID, rt: RecordType, discipline_id) -> list:
+    party = c.db.scalar(select(ProjectParty.id).where(ProjectParty.project_id == project_id,
+                                                      ProjectParty.kind == rt.responder_party,
+                                                      ProjectParty.status == "active"))
+    if party is None:
+        return []
+    rows = members_who_can(c, project_id, party, rt, "respond", discipline_id)
+    rows.sort(key=lambda mr: (mr[1].act_on_behalf, ))  # engineers first, then the PM
+    return [u for u in (_user(c, m.user_id) for m, _ in rows) if u]
+
+
+def _check_addressee(c: Ctx, a: ProjectAccess, rt: RecordType, discipline_id, user_id):
+    if user_id is None:
+        return None
+    if user_id not in {u.id for u in _addressees(c, a.project.id, rt, discipline_id)}:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_addressee")
+    return user_id
 
 
 def _check_discipline(c: Ctx, a: ProjectAccess, discipline_id: uuid.UUID | None) -> Discipline | None:
@@ -309,7 +338,16 @@ def records_meta(project_id: uuid.UUID, type: str = Query("submittal"), c: Ctx =
                       submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project) if k["active"]],
                       states=[StateOut.model_validate(x) for x in c.db.scalars(
                           select(WorkflowState).where(WorkflowState.workflow_id == rt.workflow_id).order_by(WorkflowState.sort))],
-                      link_submittals=_links_on(a.project), reply_hours=periods(a.project, rt)[0])
+                      link_submittals=_links_on(a.project), reply_hours=periods(a.project, rt)[0],
+                      routing=routing(a.project, rt))
+
+
+@router.get("/projects/{project_id}/addressees", response_model=list[UserOut])
+def addressees(project_id: uuid.UUID, type: str = Query("submittal"), discipline_id: uuid.UUID | None = None,
+               c: Ctx = Depends(ctx)):
+    """Who a request of this type and discipline can be addressed to (for the "choose" routing)."""
+    a = project_access(c, project_id)
+    return _addressees(c, project_id, _rtype(c, type), discipline_id)
 
 
 @router.get("/projects/{project_id}/link-candidates", response_model=list[LinkedRef])
@@ -500,7 +538,8 @@ def create_record(project_id: uuid.UUID, body: RecordIn, c: Ctx = Depends(ctx)):
                  from_party_id=a.party.id, to_party_id=responder, created_by=c.user.id,
                  required_by=body.required_by, required_by_note=(body.required_by_note or "").strip() or None,
                  stage_id=stage_id, all_locations=all_locs, location_ids=loc_ids, topic_id=topic_id,
-                 requested_for=body.requested_for, linked_ids=_check_links(c, a, body.linked_ids))
+                 requested_for=body.requested_for, linked_ids=_check_links(c, a, body.linked_ids),
+                 assigned_to=_check_addressee(c, a, rt, body.discipline_id, body.addressed_to))
     c.db.add(rec)
     try:
         c.db.flush()
@@ -546,6 +585,9 @@ def update_record(record_id: uuid.UUID, body: RecordPatch, c: Ctx = Depends(ctx)
         if place != (rec.stage_id, rec.all_locations, rec.location_ids, rec.topic_id):
             changes["place"] = [str(rec.stage_id), str(place[0])]
             rec.stage_id, rec.all_locations, rec.location_ids, rec.topic_id = place
+    if "addressed_to" in body.model_fields_set and body.addressed_to != rec.assigned_to:
+        rec.assigned_to = _check_addressee(c, a, rt, rec.discipline_id, body.addressed_to)
+        changes["addressed_to"] = str(body.addressed_to)
     if "requested_for" in body.model_fields_set and body.requested_for != rec.requested_for:
         changes["requested_for"] = [str(rec.requested_for), str(body.requested_for)]
         rec.requested_for = body.requested_for
@@ -652,8 +694,9 @@ def _notify_transition(c: Ctx, bg: BackgroundTasks, project: Project, rec: Recor
     head = f"{rec.number} R{rec.rev_no}"
     if t.effect == "submit" or (t.effect == "cancel" and t.from_state_id != _initial_id(c, rt)):
         responders = _responders(c, rec, rt)
-        users = {m.user_id for m, r in responders if rec.assigned_to is None or r.act_on_behalf
-                 or m.user_id == rec.assigned_to}
+        to_manager = rec.assigned_to is None and routing(project, rt) == "manager"
+        users = {m.user_id for m, r in responders
+                 if r.act_on_behalf or (not to_manager and (rec.assigned_to is None or m.user_id == rec.assigned_to))}
         ar = f"{rt.name_ar} {head}: " + ("بانتظار ردك" if t.effect == "submit" else "سُحب وأُلغي")
         en = f"{rt.name_en} {head}: " + ("awaiting your reply" if t.effect == "submit" else "withdrawn")
         notify(c, bg, project=project, rec=rec, event=t.action, user_ids=users, title_ar=ar, title_en=en,
@@ -740,7 +783,8 @@ def inbox(c: Ctx = Depends(ctx)):
             p = perms[r.record_type_id]
             reason = None
             if r.state_category == "submitted" and p.can("respond", r):
-                if r.assigned_to is None or r.assigned_to == c.user.id or (a.role and a.role.act_on_behalf):
+                manager_first = r.assigned_to is None and routing(a.project, types[r.record_type_id]) == "manager"
+                if (a.role and a.role.act_on_behalf) or r.assigned_to == c.user.id or (r.assigned_to is None and not manager_first):
                     reason = "reply"
             elif r.state_category == "draft" and r.created_by == c.user.id:
                 reason = "draft"

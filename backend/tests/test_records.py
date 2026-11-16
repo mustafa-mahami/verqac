@@ -357,7 +357,7 @@ def test_header_banner_and_addressed_to(client, site):
     assert client.get(f"/api/v1/projects/{pid}/header", headers=site["hk"]).content == png
     rec = submit(client, site, new_sub(client, site))
     names = [u["full_name_en"] for u in client.get(f"/api/v1/records/{rec['id']}", headers=hc).json()["addressed_to"]]
-    assert names == ["Consultant PM"]
+    assert names == ["civil"]  # default routing: the discipline engineer
     assert client.get(f"/api/v1/records/{rec['id']}/pdf?lang=ar", headers=hc).status_code == 200
     assert client.delete(f"/api/v1/projects/{pid}/header", headers=hc).json()["has_header"] is False
     inbox = client.get("/api/v1/inbox", headers=site["hce"]).json()
@@ -401,3 +401,31 @@ def test_inbox_hides_returned_revision_once_a_newer_one_is_answered(client, site
     act(client, site["hce"], r1["id"], "approve_as_noted", comment="ملاحظة")
     ids = {i["id"] for i in client.get("/api/v1/inbox", headers=site["hqa"]).json()}
     assert rec["id"] not in ids and r1["id"] not in ids
+
+
+def test_routing_modes(client, site):
+    pid, hc = site["pid"], site["hc"]
+    url = f"/api/v1/projects/{pid}/settings"
+    assert client.get(url, headers=hc).json()["routing"] == {"submittal": "discipline", "inspection": "discipline"}
+    # discipline (default): addressed to the civil engineer, who has it in his inbox
+    rec = submit(client, site, new_sub(client, site))
+    got = client.get(f"/api/v1/records/{rec['id']}", headers=site["hqa"]).json()
+    assert [u["id"] for u in got["addressed_to"]] == [site["ce"]]
+    assert any(i["id"] == rec["id"] for i in client.get("/api/v1/inbox", headers=site["hce"]).json())
+    # manager: addressed to the consultant PM; the engineer sees it once assigned
+    assert client.put(url, headers=hc, json={"routing": {"submittal": "manager"}}).json()["routing"]["submittal"] == "manager"
+    rec2 = submit(client, site, new_sub(client, site))
+    got = client.get(f"/api/v1/records/{rec2['id']}", headers=site["hqa"]).json()
+    assert [u["full_name_en"] for u in got["addressed_to"]] == ["Consultant PM"]
+    assert not any(i["id"] == rec2["id"] for i in client.get("/api/v1/inbox", headers=site["hce"]).json())
+    assert any(i["id"] == rec2["id"] for i in client.get("/api/v1/inbox", headers=site["hk"]).json())
+    # choose: the contractor picks the engineer
+    client.put(url, headers=hc, json={"routing": {"submittal": "choose"}})
+    cands = client.get(f"/api/v1/projects/{pid}/addressees?type=submittal&discipline_id={site['cdisc']['C']}", headers=site["hqa"]).json()
+    assert cands[0]["id"] == site["ce"] and cands[-1]["full_name_en"] == "Consultant PM"
+    rec3 = new_sub(client, site, addressed_to=site["ce"])
+    assert rec3["addressed_to"][0]["id"] == site["ce"]
+    bad = client.post(f"/api/v1/projects/{pid}/records", headers=site["hqa"], json={
+        "title": "xyz", "discipline_id": site["cdisc"]["C"], "addressed_to": site["ee"] if "ee" in site else str(rec["id"])})
+    assert bad.status_code == 422
+    assert client.put(url, headers=hc, json={"routing": {"submittal": "nobody"}}).status_code == 422

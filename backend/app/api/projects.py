@@ -11,7 +11,7 @@ from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
 from app.core.kinds import new_code, submittal_kinds
 from app.api.structure import apply_type
-from app.api.records import periods
+from app.api.records import ROUTING_MODES, periods, routing
 from app.models.structure import ProjectType
 from app.core.mailer import mail_enabled
 from app.core.notify import channels, mahami_enabled
@@ -137,10 +137,11 @@ def get_project(project_id: UUID, c: Ctx = Depends(ctx)):
 @router.get("/{project_id}/settings", response_model=ProjectSettingsOut)
 def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     a = project_access(c, project_id)
-    reply, resub = {}, {}
+    reply, resub, route = {}, {}, {}
     for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort)):
         reply[rt.code], resub[rt.code] = periods(a.project, rt)
-    return ProjectSettingsOut(reply_hours=reply, resubmit_hours=resub,
+        route[rt.code] = routing(a.project, rt)
+    return ProjectSettingsOut(reply_hours=reply, resubmit_hours=resub, routing=route,
                               link_submittals=bool((a.project.settings or {}).get("link_submittals", False)),
                               notify=NotifyChannels(**channels(a.project)),
                               submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project)],
@@ -188,6 +189,13 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
             old = dict(settings.get(key, {}))
             settings[key] = {**old, **new}
             changes.update({f"{key}_{k}": v for k, v in diff(old, settings[key]).items()})
+    for code, mode in body.routing.items():
+        if code not in codes or mode not in ROUTING_MODES:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_routing")
+    if body.routing:
+        old_r = dict(settings.get("routing", {}))
+        settings["routing"] = {**old_r, **body.routing}
+        changes.update({f"routing_{k}": v for k, v in diff(old_r, settings["routing"]).items()})
     if body.link_submittals is not None and body.link_submittals != bool(settings.get("link_submittals", False)):
         changes["link_submittals"] = [settings.get("link_submittals", False), body.link_submittals]
         settings["link_submittals"] = body.link_submittals

@@ -119,7 +119,9 @@
     "reset_expired": "This link is invalid or expired.",
     "header_not_image": "The letterhead must be a PNG or JPG image.",
     "performed_in_future": "The inspection time cannot be in the future.",
-    "invalid_link": "Only this project's submittals can be linked."
+    "invalid_link": "Only this project's submittals can be linked.",
+    "invalid_addressee": "This person cannot answer requests of this discipline.",
+    "invalid_routing": "Invalid routing."
   },
   "common": {
     "cancel": "Cancel",
@@ -301,7 +303,8 @@
     "daysLate": "{{count}} days past the date",
     "requiredByWas": "Was needed by {{date}}",
     "notPrinted": "Seen by the contractor and consultant only; not printed.",
-    "addressedTo": "Submitted to"
+    "addressedTo": "Submitted to",
+    "addressedToHint": "The consultant engineer this request goes to"
   },
   "back": {
     "projects": "All projects",
@@ -330,7 +333,14 @@
     "resubmitDays": "Contractor resubmission",
     "hours": "h",
     "linkSubmittals": "Link inspections to material submittals",
-    "linkSubmittalsHint": "The inspection form lists the stage's submittals to pick the ones it relies on, and warns when they are not approved."
+    "linkSubmittalsHint": "The inspection form lists the stage's submittals to pick the ones it relies on, and warns when they are not approved.",
+    "routingTitle": "Who requests go to",
+    "routingHint": "The consultant PM always sees every request and can answer or reassign it.",
+    "routing": {
+      "discipline": "The consultant engineers of the discipline",
+      "manager": "The consultant PM, who assigns it",
+      "choose": "The contractor picks the engineer"
+    }
   },
   "resp": {
     "title": "Consultant's comments",

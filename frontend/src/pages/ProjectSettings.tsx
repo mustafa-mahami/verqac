@@ -1,8 +1,8 @@
-import { ActionIcon, Alert, Button, Card, Group, NumberInput, Stack, Switch, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Button, Card, Group, NumberInput, Select, Stack, Switch, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, ApiError, type ProjectSettings as Settings, type RecordType, type SubmittalKind } from '../api';
+import { api, ApiError, type ProjectSettings as Settings, type RecordType, type Routing, type SubmittalKind } from '../api';
 import { pick } from '../i18n';
 import ProjectHeader from './ProjectHeader';
 import ProjectStructure from './ProjectStructure';
@@ -32,15 +32,16 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const [reply, setReply] = useState<Record<string, number>>({});
   const [resub, setResub] = useState<Record<string, number>>({});
   const [links, setLinks] = useState(false);
+  const [route, setRoute] = useState<Record<string, Routing>>({});
   const [notify, setNotify] = useState({ email: false, mahami: false });
   const [kinds, setKinds] = useState<SubmittalKind[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
+    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (_at: string) =>
-      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, notify, submittal_kinds: kinds }) }),
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, routing: route, notify, submittal_kinds: kinds }) }),
     onSuccess: (s, at) => {
       qc.setQueryData(['settings', projectId], s);
       qc.invalidateQueries({ queryKey: ['recMeta', projectId] });
@@ -82,6 +83,16 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
                 <Period hours={resub[rt.code] ?? 0} disabled={!editable} label={t('settings.resubmitDays')}
                   onChange={(h) => setResub({ ...resub, [rt.code]: h })} />
               </Group>
+            </Group>
+          ))}
+          <Title order={6} mt="sm">{t('settings.routingTitle')}</Title>
+          <Text size="xs" c="dimmed">{t('settings.routingHint')}</Text>
+          {types.data.map((rt) => (
+            <Group key={rt.code} justify="space-between" wrap="nowrap">
+              <Text size="sm">{pick(rt, 'name')}</Text>
+              <Select w={400} allowDeselect={false} disabled={!editable} value={route[rt.code] ?? 'discipline'}
+                onChange={(v) => v && setRoute({ ...route, [rt.code]: v as Routing })}
+                data={(['discipline', 'manager', 'choose'] as const).map((m) => ({ value: m, label: t(`settings.routing.${m}`) }))} />
             </Group>
           ))}
           <Switch mt="xs" label={t('settings.linkSubmittals')} description={t('settings.linkSubmittalsHint')} checked={links}

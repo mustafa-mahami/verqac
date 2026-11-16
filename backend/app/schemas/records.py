@@ -98,6 +98,7 @@ class RecordIn(BaseModel):
     performed_at: datetime | None = None
     requested_for: datetime | None = None  # inspections: when it should take place (empty = now)
     linked_ids: list[UUID] = []  # inspections: approved submittals of the materials
+    addressed_to: UUID | None = None  # "choose" routing: the consultant engineer the request goes to
 
 
 class RequiredByIn(BaseModel):
@@ -117,6 +118,7 @@ class RecordPatch(BaseModel):
     location_ids: list[UUID] | None = None
     requested_for: datetime | None = None
     linked_ids: list[UUID] | None = None
+    addressed_to: UUID | None = None
 
 
 class TransitionIn(BaseModel):
@@ -254,6 +256,7 @@ class RecordMeta(BaseModel):
     states: list["StateOut"] = []  # this type's workflow states (labels for the dashboard)
     link_submittals: bool = False
     reply_hours: int = 0
+    routing: str = "discipline"
 
 
 class AssignIn(BaseModel):

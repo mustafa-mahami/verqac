@@ -4,10 +4,10 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, ApiError, type LinkedRef, type Place, type RecordDetail, type RecordMeta, type RecordRow } from '../api';
+import { api, ApiError, type LinkedRef, type Place, type RecordDetail, type RecordMeta, type RecordRow, type User } from '../api';
 import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
 import { PlacePicker, placeText, rowTitle, useStructure } from './Structure';
@@ -53,9 +53,19 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
     initialValues: {
       title: '', discipline_id: meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0]?.value ?? '',
       item: '', manufacturer: '', supplier: '', drawing_ref: '', spec_ref: '', boq_ref: '', quantity: '', unit: '',
-      required_by: '', required_by_note: '', files: [] as File[], requested_for: '', linked: [] as string[],
+      required_by: '', required_by_note: '', files: [] as File[], requested_for: '', linked: [] as string[], addressed_to: '',
     },
   });
+
+  const choose = meta.routing === 'choose';
+  const addressees = useQuery({
+    queryKey: ['addressees', projectId, type, form.values.discipline_id], enabled: choose,
+    queryFn: () => api<User[]>(`/projects/${projectId}/addressees?type=${type}${form.values.discipline_id ? `&discipline_id=${form.values.discipline_id}` : ''}`),
+  });
+  useEffect(() => {
+    const ids = addressees.data?.map((u) => u.id) ?? [];
+    if (ids.length && !ids.includes(form.values.addressed_to)) form.setFieldValue('addressed_to', ids[0]);
+  }, [addressees.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = form.onSubmit(async (v) => {
     setError(null);
@@ -68,6 +78,7 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
           record_type: type, title: place.topic_id ? null : v.title.trim(), description: blank(v.description),
           requested_for: isIR && v.requested_for ? new Date(v.requested_for).toISOString() : null,
           linked_ids: isIR ? v.linked : [],
+          addressed_to: choose ? v.addressed_to || null : null,
           discipline_id: v.discipline_id || null, number: blank(v.number),
           ...place,
           required_by: !isIR && v.required_by ? v.required_by : null,
@@ -111,6 +122,10 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
             : <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} searchable {...form.getInputProps('submittal_kind')} />}
           <TextInput label={t('rec.number')} placeholder={t('rec.numberHint')} dir="ltr" {...form.getInputProps('number')} />
         </SimpleGrid>
+        {choose && (
+          <Select label={t('rec.addressedTo')} description={t('rec.addressedToHint')} allowDeselect={false} required
+            data={(addressees.data ?? []).map((u) => ({ value: u.id, label: pick(u, 'full_name') }))} {...form.getInputProps('addressed_to')} />
+        )}
         {isIR && meta.link_submittals && (
           <LinkPicker projectId={projectId} stageId={place.stage_id} value={form.values.linked} onChange={(v) => form.setFieldValue('linked', v)} />
         )}
