@@ -243,3 +243,28 @@ def test_replacement_engineer_sees_predecessor_records(client, site):
     assert client.get(f"/api/v1/records/{answered['id']}", headers=hnew).status_code == 200
     r = act(client, hnew, pending["id"], "approve_as_noted", comment="1- ...\n2- ...\n3- ...")
     assert r.status_code == 200 and r.json()["response_comment"].count("\n") == 2
+
+
+def test_public_verify_stamp(client, site):
+    from sqlalchemy import text
+
+    from app.core.db import session_scope
+
+    rec = submit(client, site, new_sub(client, site))
+    r = act(client, site["hce"], rec["id"], "reject", comment="غير مطابق")
+    stamp = r.json()["events"][-1]["stamp"]
+    v = client.get(f"/api/v1/verify/{stamp.upper()}")  # no sign-in; case does not matter
+    assert v.status_code == 200, v.text
+    v = v.json()
+    assert v["intact"] is True and (v["number"], v["rev_no"]) == (rec["number"], 0)
+    assert v["decision"]["code"] == "rejected" and v["latest_rev"] == 0 and v["latest_state"] is None
+    assert "files" not in v and "response_comment" not in v  # summary only
+    # a newer revision is reported
+    client.post(f"/api/v1/records/{rec['id']}/revise", headers=site["hqa"])
+    assert client.get(f"/api/v1/verify/{stamp}").json()["latest_rev"] == 1
+    # any change to what was answered breaks the match
+    with session_scope(bypass=True) as db:
+        db.execute(text("UPDATE records SET response_comment = 'مطابق' WHERE id = :i"), {"i": rec["id"]})
+    assert client.get(f"/api/v1/verify/{stamp}").json()["intact"] is False
+    assert client.get("/api/v1/verify/" + "0" * 64).status_code == 404
+    assert client.get("/api/v1/verify/not-a-stamp").status_code == 404

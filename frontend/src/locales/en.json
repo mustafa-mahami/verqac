@@ -309,5 +309,26 @@
     "label": "Assign to engineer",
     "none": "All engineers of the discipline",
     "assignedTo": "Assigned to {{name}}"
+  },
+  "verify": {
+    "title": "Verify a consultant reply",
+    "stamp": "Approval stamp",
+    "ok": "✓ Genuine and unchanged",
+    "okHint": "This reply was issued on Verqac, and its data, files and the consultant's decision match exactly what is stored. Compare the details below with the paper in your hands.",
+    "changed": "✗ The stored data no longer matches the stamp",
+    "changedHint": "The stamp exists, but the stored reply changed after it was issued. Do not rely on this paper; contact the consultant.",
+    "newer": "A newer revision of this request exists: R{{rev}} — status: {{state}}. Make sure you work from the latest revision.",
+    "cancelled": "This request was cancelled after it was answered.",
+    "notFound": "Stamp not found",
+    "notFoundHint": "No reply on the platform has this stamp. The paper may not come from the platform, or it was copied incorrectly.",
+    "project": "Project",
+    "record": "Request",
+    "subject": "Subject",
+    "decision": "Consultant decision",
+    "answeredAt": "Answered on",
+    "answeredBy": "Answered by",
+    "onBehalf": "on behalf of",
+    "consultant": "Consultant",
+    "contractor": "Contractor"
   }
 }

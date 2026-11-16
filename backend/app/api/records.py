@@ -365,7 +365,7 @@ def _stamp(c: Ctx, rec: Record, state: WorkflowState) -> str:
                          .where(Attachment.record_id == rec.id).order_by(StoredFile.sha256)).all()
     payload = {"number": rec.number, "rev": rec.rev_no, "title": rec.title, "description": rec.description,
                "details": _details(c, rec).model_dump(mode="json"), "files": files, "state": state.code,
-               "comment": rec.response_comment, "answered_at": rec.answered_at.isoformat(),
+               "comment": rec.response_comment, "answered_at": rec.answered_at.astimezone(UTC).isoformat(),
                "answered_by": str(rec.answered_by), "on_behalf_of": str(rec.answered_on_behalf_of)}
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 

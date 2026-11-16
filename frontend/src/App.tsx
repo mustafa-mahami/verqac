@@ -6,6 +6,7 @@ import { applyLanguage, pick } from './i18n';
 import Bell from './pages/Bell';
 import Inbox from './pages/Inbox';
 import Invite from './pages/Invite';
+import Verify from './pages/Verify';
 import Login from './pages/Login';
 import OrgUsers from './pages/OrgUsers';
 import ProjectPage from './pages/ProjectPage';
@@ -90,6 +91,8 @@ export default function App() {
     <Routes>
       {/* an invitation link works signed in or not */}
       <Route path="/invite/:token" element={<Invite />} />
+      {/* the QR on a printed reply opens this, for anyone */}
+      <Route path="/v/:stamp" element={<Verify />} />
       {!me && <Route path="/register" element={<Register />} />}
       <Route path="*" element={me ? <Shell /> : <Login />} />
     </Routes>

@@ -24,7 +24,12 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
 .sign { border: 1px solid #c9ced6; padding: 8px; min-height: 76px; }
 .sign b { display: block; margin-bottom: 4px; }
 .muted { color: #666; font-size: 8.5pt; }
-.stamp { margin-top: 12px; font-size: 8pt; color: #555; border-top: 1px dashed #aaa; padding-top: 6px; }
+.stamp { margin-top: 12px; border-top: 1px dashed #aaa; padding-top: 8px; display: flex; gap: 12px; align-items: center; page-break-inside: avoid; }
+.stamp img { width: 26mm; height: 26mm; flex: none; }
+.stamp .txt { font-size: 8pt; color: #555; line-height: 1.6; }
+.stamp .code { font-size: 12pt; font-weight: 700; color: #111; letter-spacing: 1px; }
+.stamp .full { font-size: 6.5pt; color: #777; word-break: break-all; }
+.multi { white-space: pre-line; }
 .draft { color: #b00; font-weight: 700; }
 </style>
 </head>
@@ -42,7 +47,7 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
     <tr><th>{{ t.consultant }}</th><td>{{ consultant }}</td><th>{{ t.owner }}</th><td>{{ owner }}</td></tr>
     <tr><th>{{ t.discipline }}</th><td>{{ discipline }}</td><th>{{ t.submitted_on }}</th><td class="ltr">{{ submitted_at }}</td></tr>
     <tr><th>{{ t.subject }}</th><td colspan="3">{{ title }}</td></tr>
-    {% if description %}<tr><th>{{ t.description }}</th><td colspan="3">{{ description }}</td></tr>{% endif %}
+    {% if description %}<tr><th>{{ t.description }}</th><td colspan="3" class="multi">{{ description }}</td></tr>{% endif %}
     <tr><th>{{ t.due }}</th><td class="ltr">{{ due_at }}</td><th>{{ t.answered_on }}</th><td class="ltr">{{ answered_at }}</td></tr>
   </table>
 
@@ -66,13 +71,22 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
     <span class="box"><span class="tick">{{ '✓' if code == state_category else '' }}</span>{{ label }}</span>
     {% endfor %}
   </div>
-  <table><tr><th>{{ t.comments }}</th><td>{{ response_comment or '' }}</td></tr></table>
+  <table><tr><th>{{ t.comments }}</th><td class="multi">{{ response_comment or "" }}</td></tr></table>
 
   <div class="signs">
     <div class="sign"><b>{{ t.submitted_by }}</b>{{ submitted_by }}<br><span class="ltr muted">{{ submitted_at }}</span></div>
     <div class="sign"><b>{{ t.answered_by }}</b>{{ answered_by }}{% if on_behalf %}<br><span class="muted">{{ t.on_behalf }} {{ on_behalf }}</span>{% endif %}<br><span class="ltr muted">{{ answered_at }}</span></div>
   </div>
 
-  {% if stamp %}<div class="stamp">{{ t.stamp }}: <span class="ltr">SHA-256 {{ stamp }}</span></div>{% endif %}
+  {% if stamp %}
+  <div class="stamp">
+    <img src="{{ qr }}" alt="QR">
+    <div class="txt">
+      <div>{{ t.stamp }}: <span class="ltr code">{{ stamp_short }}</span></div>
+      <div>{{ t.scan }}</div>
+      <div class="ltr full">{{ verify_url }}</div>
+    </div>
+  </div>
+  {% endif %}
 </body>
 </html>
