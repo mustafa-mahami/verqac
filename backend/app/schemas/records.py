@@ -1,0 +1,159 @@
+from datetime import datetime
+from decimal import Decimal
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, Field
+
+from app.schemas.core import DisciplineOut, Out, UserOut
+
+
+class StateOut(Out):
+    id: UUID
+    code: str
+    name_ar: str
+    name_en: str
+    category: str
+    color: str
+
+
+class TransitionOut(Out):
+    action: str
+    name_ar: str
+    name_en: str
+    requires_comment: bool
+    style: str
+    effect: str
+
+
+class RecordTypeOut(Out):
+    id: UUID
+    code: str
+    prefix: str
+    name_ar: str
+    name_en: str
+    review_days: int
+
+
+class SubmittalDetailsIO(BaseModel):
+    submittal_kind: str | None = Field(default=None, max_length=100)
+    item: str | None = Field(default=None, max_length=300)
+    manufacturer: str | None = Field(default=None, max_length=200)
+    supplier: str | None = Field(default=None, max_length=200)
+    drawing_ref: str | None = Field(default=None, max_length=200)
+    spec_ref: str | None = Field(default=None, max_length=200)
+    boq_ref: str | None = Field(default=None, max_length=100)
+    quantity: Decimal | None = None
+    unit: str | None = Field(default=None, max_length=30)
+
+
+class RecordIn(BaseModel):
+    record_type: str = "submittal"
+    title: str = Field(min_length=2, max_length=300)
+    description: str | None = None
+    discipline_id: UUID | None = None
+    number: str | None = Field(default=None, max_length=60)  # manual number (e.g. migrated); else generated
+    details: SubmittalDetailsIO = SubmittalDetailsIO()
+
+
+class RecordPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=300)
+    description: str | None = None
+    discipline_id: UUID | None = None
+    details: SubmittalDetailsIO | None = None
+
+
+class TransitionIn(BaseModel):
+    action: str
+    comment: str | None = Field(default=None, max_length=10000)
+    on_behalf_of: UUID | None = None
+
+
+class CommentIn(BaseModel):
+    body: str = Field(min_length=1, max_length=10000)
+    visibility: Literal["shared", "internal"] = "shared"
+
+
+class RecordRow(BaseModel):
+    id: UUID
+    number: str
+    rev_no: int
+    title: str
+    state: StateOut
+    discipline: DisciplineOut | None
+    submitted_at: datetime | None
+    due_at: datetime | None
+    answered_at: datetime | None
+    overdue: bool
+    revisions: int  # how many revisions this number has
+
+
+class EventOut(BaseModel):
+    id: int
+    action: str
+    to_state: StateOut | None
+    actor: UserOut
+    on_behalf_of: UserOut | None
+    channel: str
+    comment: str | None
+    stamp: str | None
+    at: datetime
+
+
+class CommentOut(BaseModel):
+    id: UUID
+    author: UserOut
+    party_kind: str
+    visibility: str
+    body: str
+    created_at: datetime
+
+
+class AttachmentOut(BaseModel):
+    id: UUID
+    file_id: UUID
+    filename: str
+    content_type: str
+    size: int
+    kind: str
+    party_kind: str
+    created_at: datetime
+
+
+class RevisionRef(BaseModel):
+    id: UUID
+    rev_no: int
+    state: StateOut
+
+
+class RecordDetail(BaseModel):
+    id: UUID
+    project_id: UUID
+    record_type: RecordTypeOut
+    number: str
+    rev_no: int
+    title: str
+    description: str | None
+    discipline: DisciplineOut | None
+    state: StateOut
+    from_party_kind: str
+    created_by: UserOut
+    created_at: datetime
+    submitted_by: UserOut | None
+    submitted_at: datetime | None
+    due_at: datetime | None
+    overdue: bool
+    answered_by: UserOut | None
+    answered_on_behalf_of: UserOut | None
+    answered_at: datetime | None
+    response_comment: str | None
+    details: SubmittalDetailsIO
+    transitions: list[TransitionOut]
+    can_edit: bool
+    can_revise: bool
+    can_attach: list[str]  # attachment kinds the user may add now
+    can_act_on_behalf: bool
+    events: list[EventOut]
+    comments: list[CommentOut]
+    attachments: list[AttachmentOut]
+    revisions: list[RevisionRef]

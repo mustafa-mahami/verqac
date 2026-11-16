@@ -8,6 +8,7 @@ import os
 os.environ.setdefault("VERQAC_DATABASE_URL", "postgresql+psycopg://verqac_app:verqac_app@localhost:5432/verqac_test")
 os.environ.setdefault("VERQAC_MIGRATION_DATABASE_URL",
                       "postgresql+psycopg://verqac_owner:verqac_owner@localhost:5432/verqac_test")
+os.environ.setdefault("VERQAC_FILES_DIR", "/tmp/verqac-test-files")
 os.environ.setdefault("VERQAC_JWT_SECRET", "test-secret-test-secret-test-secret-32")
 
 import pytest  # noqa: E402

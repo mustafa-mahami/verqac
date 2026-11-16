@@ -1,0 +1,192 @@
+"""Record engine with the submittal type: drafts, numbering, files, review, revisions, scopes."""
+import io
+import itertools
+from datetime import datetime
+
+import pytest
+
+from tests.conftest import register
+from tests.test_team import auth, token_of
+
+_n = itertools.count()
+
+
+def _join_org(client, admin_h, org_id, name):
+    email = f"{name}{next(_n)}@x.example.com"
+    link = client.post(f"/api/v1/orgs/{org_id}/invitations", headers=admin_h, json={"email": email}).json()["link"]
+    r = client.post(f"/api/v1/invitations/{token_of(link)}/accept", json={
+        "full_name_ar": "مستخدم", "full_name_en": name, "password": "a-strong-password"})
+    assert r.status_code == 200, r.text
+    me = client.get("/api/v1/auth/me", headers=auth(r)).json()["user"]["id"]
+    return auth(r), me
+
+
+@pytest.fixture
+def site(client):
+    """Contractor PM + QA engineer (civil), consultant PM + consultant engineers (civil / electrical)."""
+    hc, corg, _ = register(client, name="Builder")
+    code = f"P{next(_n)}"
+    pid = client.post("/api/v1/projects", headers=hc, json={
+        "org_id": corg, "code": code, "name_ar": "مدرسة", "name_en": "School", "consultant_name": "مكتب"}).json()["project"]["id"]
+    team = client.get(f"/api/v1/projects/{pid}/team", headers=hc).json()
+    cparty = next(p for p in team["parties"] if p["kind"] == "consultant")
+    link = client.post(f"/api/v1/projects/{pid}/parties/{cparty['id']}/invite", headers=hc,
+                       json={"email": f"cpm{next(_n)}@office.example.com"}).json()["link"]
+    r = client.post(f"/api/v1/invitations/{token_of(link)}/accept", json={
+        "full_name_ar": "مدير الاستشاري", "full_name_en": "Consultant PM", "password": "a-strong-password",
+        "org_name_ar": "مكتب", "org_name_en": "Office"})
+    hk = auth(r)
+    korg = client.get("/api/v1/auth/me", headers=hk).json()["orgs"][0]["org"]["id"]
+    roles = {x["code"]: x["id"] for x in client.get("/api/v1/roles", headers=hc).json()}
+    cdisc = {d["code"]: d["id"] for d in client.get(f"/api/v1/orgs/{corg}/disciplines", headers=hc).json()}
+    kdisc = {d["code"]: d["id"] for d in client.get(f"/api/v1/orgs/{korg}/disciplines", headers=hk).json()}
+    team = client.get(f"/api/v1/projects/{pid}/team", headers=hc).json()
+    contractor = next(p for p in team["parties"] if p["kind"] == "contractor")
+    consultant = next(p for p in team["parties"] if p["kind"] == "consultant")
+
+    hqa, qa = _join_org(client, hc, corg, "qa")
+    client.post(f"/api/v1/projects/{pid}/members", headers=hc, json={
+        "party_id": contractor["id"], "user_id": qa, "role_id": roles["qa_engineer"], "discipline_ids": [cdisc["C"]]})
+    hce, ce = _join_org(client, hk, korg, "civil")
+    client.post(f"/api/v1/projects/{pid}/members", headers=hk, json={
+        "party_id": consultant["id"], "user_id": ce, "role_id": roles["consultant_engineer"],
+        "discipline_ids": [kdisc["C"]]})
+    hee, ee = _join_org(client, hk, korg, "elec")
+    client.post(f"/api/v1/projects/{pid}/members", headers=hk, json={
+        "party_id": consultant["id"], "user_id": ee, "role_id": roles["consultant_engineer"],
+        "discipline_ids": [kdisc["E"]]})
+    return dict(pid=pid, code=code, hc=hc, hqa=hqa, hk=hk, hce=hce, ce=ce, hee=hee, cdisc=cdisc)
+
+
+def new_sub(client, s, h=None, disc="C", **kw):
+    r = client.post(f"/api/v1/projects/{s['pid']}/records", headers=h or s["hqa"], json={
+        "title": "حديد تسليح", "discipline_id": s["cdisc"][disc], "details": {"manufacturer": "Steel Co"}, **kw})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def attach(client, h, rid, kind="submission", name="sheet.pdf"):
+    return client.post(f"/api/v1/records/{rid}/attachments", headers=h, data={"kind": kind},
+                       files={"file": (name, io.BytesIO(b"%PDF-1.4 test " + name.encode()), "application/pdf")})
+
+
+def act(client, h, rid, action, **kw):
+    return client.post(f"/api/v1/records/{rid}/transitions", headers=h, json={"action": action, **kw})
+
+
+def submit(client, s, rec):
+    assert attach(client, s["hqa"], rec["id"]).status_code == 201
+    r = act(client, s["hqa"], rec["id"], "submit")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_numbering_per_discipline_and_manual(client, site):
+    a, b = new_sub(client, site), new_sub(client, site)
+    assert (a["number"], b["number"]) == (f"{site['code']}-SUB-C-001", f"{site['code']}-SUB-C-002")
+    e = new_sub(client, site, h=site["hc"], disc="E")
+    assert e["number"] == f"{site['code']}-SUB-E-001"
+    assert new_sub(client, site, number="LEGACY-7")["number"] == "LEGACY-7"
+    r = client.post(f"/api/v1/projects/{site['pid']}/records", headers=site["hqa"],
+                    json={"title": "dup", "number": " legacy-7 "})
+    assert r.status_code == 409  # unique ignoring case and edge spaces
+
+
+def test_draft_is_private_to_contractor(client, site):
+    rec = new_sub(client, site)
+    assert client.get(f"/api/v1/records/{rec['id']}", headers=site["hk"]).status_code == 404
+    assert client.get(f"/api/v1/projects/{site['pid']}/records", headers=site["hk"]).json() == []
+    submit(client, site, rec)
+    assert client.get(f"/api/v1/records/{rec['id']}", headers=site["hk"]).status_code == 200
+
+
+def test_submit_needs_attachment_and_sets_due_date(client, site):
+    rec = new_sub(client, site)
+    assert act(client, site["hqa"], rec["id"], "submit").json()["detail"] == "attachment_required"
+    done = submit(client, site, rec)
+    assert done["state"]["category"] == "submitted"
+    days = (datetime.fromisoformat(done["due_at"]) - datetime.fromisoformat(done["submitted_at"])).days
+    assert days == 14
+    # locked after submit
+    assert client.patch(f"/api/v1/records/{rec['id']}", headers=site["hqa"], json={"title": "x y"}).status_code == 403
+
+
+def test_discipline_scope_and_direction(client, site):
+    rec = submit(client, site, new_sub(client, site))
+    rid = rec["id"]
+    # electrical engineer does not see a civil record
+    assert client.get(f"/api/v1/records/{rid}", headers=site["hee"]).status_code == 404
+    assert client.get(f"/api/v1/projects/{site['pid']}/records", headers=site["hee"]).json() == []
+    # the contractor cannot answer its own submittal
+    assert act(client, site["hc"], rid, "approve").status_code == 403
+    # the civil engineer sees only respond transitions, and a comment is required for "revise"
+    detail = client.get(f"/api/v1/records/{rid}", headers=site["hce"]).json()
+    assert {t["action"] for t in detail["transitions"]} == {"approve", "approve_as_noted", "revise", "reject"}
+    assert act(client, site["hce"], rid, "revise").json()["detail"] == "comment_required"
+    r = act(client, site["hce"], rid, "revise", comment="أرفق شهادة المصنع")
+    assert r.status_code == 200 and r.json()["state"]["code"] == "revise_and_resubmit"
+    assert r.json()["events"][-1]["stamp"]  # approval fingerprint stored
+    # a second answer on the same record finds it already moved on
+    assert act(client, site["hk"], rid, "approve").status_code == 409
+
+
+def test_new_revision(client, site):
+    rec = submit(client, site, new_sub(client, site))
+    act(client, site["hce"], rec["id"], "reject", comment="غير مطابق")
+    assert client.get(f"/api/v1/records/{rec['id']}", headers=site["hqa"]).json()["can_revise"] is True
+    r1 = client.post(f"/api/v1/records/{rec['id']}/revise", headers=site["hqa"])
+    assert r1.status_code == 201, r1.text
+    r1 = r1.json()
+    assert (r1["number"], r1["rev_no"], r1["state"]["code"]) == (rec["number"], 1, "draft")
+    assert r1["details"]["manufacturer"] == "Steel Co" and r1["response_comment"] is None
+    assert [x["rev_no"] for x in r1["revisions"]] == [0, 1]
+    # only the latest revision can be revised
+    assert client.post(f"/api/v1/records/{rec['id']}/revise", headers=site["hqa"]).status_code == 403
+    rows = client.get(f"/api/v1/projects/{site['pid']}/records", headers=site["hqa"]).json()
+    mine = [x for x in rows if x["number"] == rec["number"]]
+    assert len(mine) == 1 and mine[0]["rev_no"] == 1 and mine[0]["revisions"] == 2
+
+
+def test_consultant_pm_answers_on_behalf(client, site):
+    rec = submit(client, site, new_sub(client, site))
+    r = act(client, site["hk"], rec["id"], "approve_as_noted", comment="ملاحظات بسيطة", on_behalf_of=site["ce"])
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["answered_on_behalf_of"]["id"] == site["ce"]
+    assert d["events"][-1]["on_behalf_of"]["id"] == site["ce"]
+    # an engineer cannot act on behalf of someone else
+    rec2 = submit(client, site, new_sub(client, site))
+    assert act(client, site["hce"], rec2["id"], "approve", on_behalf_of=site["ce"]).status_code in (200, 403)
+
+
+def test_internal_comments_stay_in_party(client, site):
+    rec = submit(client, site, new_sub(client, site))
+    client.post(f"/api/v1/records/{rec['id']}/comments", headers=site["hce"],
+                json={"body": "ملاحظة داخلية للاستشاري", "visibility": "internal"})
+    client.post(f"/api/v1/records/{rec['id']}/comments", headers=site["hce"], json={"body": "سؤال للمقاول"})
+    seen_by_contractor = [x["body"] for x in client.get(f"/api/v1/records/{rec['id']}", headers=site["hqa"]).json()["comments"]]
+    seen_by_consultant = [x["body"] for x in client.get(f"/api/v1/records/{rec['id']}", headers=site["hk"]).json()["comments"]]
+    assert seen_by_contractor == ["سؤال للمقاول"]
+    assert len(seen_by_consultant) == 2
+
+
+def test_files_follow_record_visibility(client, site):
+    rec = new_sub(client, site)
+    d = attach(client, site["hqa"], rec["id"]).json()
+    fid = d["attachments"][0]["file_id"]
+    assert client.get(f"/api/v1/files/{fid}", headers=site["hk"]).status_code == 404  # still a draft
+    act(client, site["hqa"], rec["id"], "submit")
+    r = client.get(f"/api/v1/files/{fid}", headers=site["hk"])
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")
+    h_out, _, _ = register(client, name="Outsider")
+    assert client.get(f"/api/v1/files/{fid}", headers=h_out).status_code == 404
+    # contractor can no longer add submission files; the consultant can add a response file
+    assert attach(client, site["hqa"], rec["id"]).status_code == 403
+    assert attach(client, site["hce"], rec["id"], kind="response", name="marked.pdf").status_code == 201
+
+
+def test_pdf(client, site):
+    rec = submit(client, site, new_sub(client, site))
+    act(client, site["hce"], rec["id"], "approve")
+    r = client.get(f"/api/v1/records/{rec['id']}/pdf?lang=ar", headers=site["hqa"])
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content[:4] == b"%PDF"

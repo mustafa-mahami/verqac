@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     invitation_days: int = 14
 
+    files_dir: str = "/data/files"
+    max_upload_mb: int = 50
+
     # E-mail is optional: without SMTP the invitation link is shown to the inviter to send by hand.
     smtp_host: str = ""
     smtp_port: int = 587
