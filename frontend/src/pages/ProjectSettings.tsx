@@ -13,15 +13,16 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const settings = useQuery({ queryKey: ['settings', projectId], queryFn: () => api<Settings>(`/projects/${projectId}/settings`) });
   const types = useQuery({ queryKey: ['recordTypes'], queryFn: () => api<RecordType[]>('/record-types') });
   const [days, setDays] = useState<Record<string, number>>({});
+  const [redays, setRedays] = useState<Record<string, number>>({});
   const [notify, setNotify] = useState({ email: false, mahami: false });
   const [kinds, setKinds] = useState<SubmittalKind[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setDays(settings.data.review_days); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
+    if (settings.data) { setDays(settings.data.review_days); setRedays(settings.data.resubmit_days); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (_at: string) =>
-      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ review_days: days, notify, submittal_kinds: kinds }) }),
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ review_days: days, resubmit_days: redays, notify, submittal_kinds: kinds }) }),
     onSuccess: (s, at) => {
       qc.setQueryData(['settings', projectId], s);
       qc.invalidateQueries({ queryKey: ['recMeta', projectId] });
@@ -47,12 +48,24 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
         <Title order={5}>{t('settings.reviewTitle')}</Title>
         <Text size="sm" c="dimmed" mb="md">{t('settings.reviewHint')}</Text>
         <Stack gap="sm">
+          <Group justify="space-between" wrap="nowrap">
+            <span />
+            <Group gap="md" wrap="nowrap">
+              <Text size="xs" c="dimmed" w={140} ta="center">{t('settings.replyDays')}</Text>
+              <Text size="xs" c="dimmed" w={140} ta="center">{t('settings.resubmitDays')}</Text>
+            </Group>
+          </Group>
           {types.data.map((rt) => (
-            <Group key={rt.code} justify="space-between">
+            <Group key={rt.code} justify="space-between" wrap="nowrap">
               <Text size="sm">{pick(rt, 'name')}</Text>
-              <NumberInput w={140} min={1} max={365} disabled={!editable} rightSection={<Text size="xs" c="dimmed" pe={8}>{t('settings.days')}</Text>}
-                rightSectionWidth={44} value={days[rt.code] ?? rt.review_days}
-                onChange={(v) => setDays({ ...days, [rt.code]: Number(v) || 1 })} />
+              <Group gap="md" wrap="nowrap">
+                <NumberInput w={140} min={1} max={365} disabled={!editable} rightSection={<Text size="xs" c="dimmed" pe={8}>{t('settings.days')}</Text>}
+                  rightSectionWidth={44} value={days[rt.code] ?? rt.review_days} aria-label={t('settings.replyDays')}
+                  onChange={(v) => setDays({ ...days, [rt.code]: Number(v) || 1 })} />
+                <NumberInput w={140} min={1} max={365} disabled={!editable} rightSection={<Text size="xs" c="dimmed" pe={8}>{t('settings.days')}</Text>}
+                  rightSectionWidth={44} value={redays[rt.code] ?? 7} aria-label={t('settings.resubmitDays')}
+                  onChange={(v) => setRedays({ ...redays, [rt.code]: Number(v) || 1 })} />
+              </Group>
             </Group>
           ))}
         </Stack>

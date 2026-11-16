@@ -233,6 +233,11 @@ export default function Submittals({ projectId }: { projectId: string }) {
                     <Table.Td>
                       <Text size="sm" c={r.overdue ? 'red' : undefined} fw={r.overdue ? 600 : undefined}>{fmtDate(r.due_at)}</Text>
                       {r.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
+                      {r.resubmit_due_at && (
+                        <Badge size="xs" tt="none" variant="light" color={r.resubmit_overdue ? 'red' : 'orange'} style={{ display: 'block' }}>
+                          {t(r.resubmit_overdue ? 'resubmit.lateShort' : 'resubmit.byShort')} {fmtDate(r.resubmit_due_at)}
+                        </Badge>
+                      )}
                       {r.required_by && ['draft', 'submitted'].includes(r.state.category) && (
                         <Badge size="xs" tt="none" variant="light" color={requiredColor(r.required_by)} style={{ display: 'block' }}>
                           {t('rec.requiredByShort')} {fmtDate(r.required_by)}

@@ -136,6 +136,19 @@ def _review_days(a: ProjectAccess, rt: RecordType) -> int:
     return int((a.project.settings or {}).get("review_days", {}).get(rt.code, rt.review_days))
 
 
+RESUBMIT_STATES = ("revise_and_resubmit", "rejected")
+DEFAULT_RESUBMIT_DAYS = 7
+
+
+def resubmit_days(project, rt_code: str) -> int:
+    return int((project.settings or {}).get("resubmit_days", {}).get(rt_code, DEFAULT_RESUBMIT_DAYS))
+
+
+def _resubmit_overdue(rec: Record) -> bool:
+    return (rec.state_category in RESUBMIT_STATES and rec.resubmit_due_at is not None
+            and rec.resubmitted_at is None and rec.resubmit_due_at < datetime.now(UTC))
+
+
 # ----------------------------------------------------------------------------- serialisation
 def _state(c: Ctx, state_id) -> WorkflowState:
     return c.db.get(WorkflowState, state_id)
@@ -213,7 +226,8 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         submitted_by=_user(c, rec.submitted_by), submitted_at=rec.submitted_at, due_at=rec.due_at,
         overdue=_overdue(rec), answered_by=_user(c, rec.answered_by),
         answered_on_behalf_of=_user(c, rec.answered_on_behalf_of), answered_at=rec.answered_at,
-        response_comment=rec.response_comment, required_by=rec.required_by, required_by_note=rec.required_by_note,
+        response_comment=rec.response_comment, resubmit_due_at=rec.resubmit_due_at,
+        resubmitted_at=rec.resubmitted_at, resubmit_overdue=_resubmit_overdue(rec), required_by=rec.required_by, required_by_note=rec.required_by_note,
         can_set_required_by=_can_set_required_by(rec, a, p), details=(det := _details(c, rec)),
         submittal_kind_name=kind_name(a.project, det.submittal_kind), transitions=trans,
         stage=(place := _place_out(c, rec))[0], all_locations=rec.all_locations, locations=place[1], topic=place[2],
@@ -315,6 +329,8 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
                              discipline=DisciplineOut.model_validate(d) if d else None,
                              submitted_at=r.submitted_at, due_at=r.due_at, answered_at=r.answered_at,
                              overdue=_overdue(r), revisions=counts[r.revision_group_id], required_by=r.required_by,
+                             resubmit_due_at=r.resubmit_due_at if r.resubmitted_at is None else None,
+                             resubmit_overdue=_resubmit_overdue(r),
                              submittal_kind=kind_code(a.project, kinds.get(r.id)), submittal_kind_name=kind_name(a.project, kinds.get(r.id)),
                              stage_id=r.stage_id, topic_id=r.topic_id, all_locations=r.all_locations,
                              location_ids=r.location_ids or []))
@@ -526,9 +542,16 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
     if t.effect == "submit":
         rec.submitted_by, rec.submitted_at = c.user.id, now
         rec.due_at = now + timedelta(days=_review_days(a, rt))
+        if rec.rev_no > 0:  # this revision answers the previous one's request to resubmit
+            prev = c.db.scalar(select(Record).where(Record.revision_group_id == rec.revision_group_id,
+                                                    Record.rev_no == rec.rev_no - 1))
+            if prev is not None and prev.resubmitted_at is None:
+                prev.resubmitted_at = now
     elif t.effect == "respond":
         rec.answered_by, rec.answered_at, rec.answered_on_behalf_of = c.user.id, now, on_behalf
         rec.response_comment = comment
+        if to.category in RESUBMIT_STATES:
+            rec.resubmit_due_at = now + timedelta(days=resubmit_days(a.project, rt.code))
     rec.state_id, rec.state_category, rec.updated_at = to.id, to.category, now
     c.db.flush()
     stamp = _stamp(c, rec, to) if t.effect == "respond" else None
@@ -643,7 +666,11 @@ def inbox(c: Ctx = Depends(ctx)):
                                      project_name_ar=a.project.name_ar, project_name_en=a.project.name_en,
                                      record_type=RecordTypeOut.model_validate(rt), number=r.number, rev_no=r.rev_no,
                                      title=r.title, state=StateOut.model_validate(_state(c, r.state_id)),
-                                     reason=reason, due_at=r.due_at, overdue=_overdue(r), required_by=r.required_by,
+                                     reason=reason,
+                                     # a returned request is due by the resubmission date, not the reply date
+                                     due_at=r.resubmit_due_at if reason == "returned" else r.due_at,
+                                     overdue=_resubmit_overdue(r) if reason == "returned" else _overdue(r),
+                                     required_by=r.required_by,
                                      assigned_to_me=r.assigned_to == c.user.id, updated_at=r.updated_at,
                                      submittal_kind_name=kind_name(a.project, kinds.get(r.id))))
     order = {"reply": 0, "returned": 1, "draft": 2}

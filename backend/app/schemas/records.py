@@ -128,6 +128,8 @@ class RecordRow(BaseModel):
     overdue: bool
     revisions: int  # how many revisions this number has
     required_by: date | None = None
+    resubmit_due_at: datetime | None = None  # open resubmission deadline (none once the next revision is in)
+    resubmit_overdue: bool = False
     submittal_kind: str | None = None
     submittal_kind_name: KindName | None = None
     stage_id: UUID | None = None
@@ -196,6 +198,9 @@ class RecordDetail(BaseModel):
     answered_at: datetime | None
     response_comment: str | None
     required_by: date | None = None  # the author's "answer needed by" (supply schedule); not printed
+    resubmit_due_at: datetime | None = None
+    resubmitted_at: datetime | None = None
+    resubmit_overdue: bool = False
     required_by_note: str | None = None
     can_set_required_by: bool = False
     details: SubmittalDetailsIO

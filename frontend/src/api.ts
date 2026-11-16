@@ -112,6 +112,7 @@ export interface RecordMeta { record_type: RecordType; can_create: boolean; disc
 export interface RecordRow {
   id: string; number: string; rev_no: number; title: string; state: State; discipline: Discipline | null;
   submitted_at: string | null; due_at: string | null; answered_at: string | null; overdue: boolean; revisions: number; required_by: string | null;
+  resubmit_due_at: string | null; resubmit_overdue: boolean;
   submittal_kind: string | null; submittal_kind_name: { ar: string; en: string } | null;
   stage_id: string | null; topic_id: string | null; all_locations: boolean; location_ids: string[];
 }
@@ -131,7 +132,8 @@ export interface RecordDetail {
   description: string | null; discipline: Discipline | null; state: State; from_party_kind: string;
   created_by: User; created_at: string; submitted_by: User | null; submitted_at: string | null; due_at: string | null;
   overdue: boolean; answered_by: User | null; answered_on_behalf_of: User | null; answered_at: string | null;
-  response_comment: string | null; required_by: string | null; required_by_note: string | null; can_set_required_by: boolean; details: SubmittalDetails;
+  response_comment: string | null; required_by: string | null;
+  resubmit_due_at: string | null; resubmitted_at: string | null; resubmit_overdue: boolean; required_by_note: string | null; can_set_required_by: boolean; details: SubmittalDetails;
   stage: { id: string; name_ar: string; name_en: string; scope: string } | null; all_locations: boolean;
   topic: { id: string; name_ar: string; name_en: string } | null;
   locations: { id: string; kind: string; name_ar: string; name_en: string }[]; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
@@ -142,7 +144,7 @@ export interface RecordDetail {
 
 export interface ProjectStats { records: number; open: number; overdue: number }
 export interface ProjectSettings {
-  review_days: Record<string, number>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
+  review_days: Record<string, number>; resubmit_days: Record<string, number>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
   email_available: boolean; mahami_available: boolean; can_edit: boolean; has_header: boolean;
 }
 export interface InboxItem {

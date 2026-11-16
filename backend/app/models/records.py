@@ -120,6 +120,10 @@ class Record(Base):
     # latest date the author needs the answer by (e.g. from the supply schedule); never printed
     required_by: Mapped[date | None] = mapped_column(Date)
     required_by_note: Mapped[str | None] = mapped_column(String(300))
+    # after "revise and resubmit" / "rejected": the author has until resubmit_due_at to submit the next
+    # revision; resubmitted_at is set when it does (the record then stops counting as overdue)
+    resubmit_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resubmitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # work stage and locations the record covers (FK added by migration 0008); all_locations = the whole project
     stage_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     topic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # FK added by migration 0009

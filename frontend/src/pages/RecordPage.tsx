@@ -303,6 +303,15 @@ export default function RecordPage() {
       {error && <Alert color="red" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
       {isDraft && <Alert color="gray">{t('rec.draftNote')}</Alert>}
       {isDraft && r.no_discipline_engineer && <Alert color="yellow">{t('rec.noEngineer')}</Alert>}
+      {r.resubmit_due_at && !r.resubmitted_at && (() => {
+        const n = daysUntil(r.resubmit_due_at.slice(0, 10));
+        return (
+          <Alert color={r.resubmit_overdue ? 'red' : 'orange'} variant="light"
+            title={`${t('resubmit.by')}: ${fmtDate(r.resubmit_due_at)} — ${n < 0 ? t('rec.daysLate', { count: -n }) : n === 0 ? t('rec.dueToday') : t('rec.daysLeft', { count: n })}`}>
+            <Text size="sm">{t('resubmit.hint')}</Text>
+          </Alert>
+        );
+      })()}
       <RequiredBy key={`${r.id}-${r.required_by}-${r.required_by_note}`} rec={r} onDone={put} />
 
       {(others.length > 0 || r.can_edit || r.can_revise) && (

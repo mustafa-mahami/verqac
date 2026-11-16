@@ -74,7 +74,9 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
     <span class="box"><span class="tick">{{ '✓' if code == state_category else '' }}</span>{{ label }}</span>
     {% endfor %}
   </div>
-  <table><tr><th>{{ t.comments }}</th><td class="multi">{{ response_comment or "" }}</td></tr></table>
+  <table><tr><th>{{ t.comments }}</th><td class="multi">{{ response_comment or "" }}</td></tr>
+  {% if resubmit_by %}<tr><th>{{ t.resubmit }}</th><td>{{ t.resubmit_text.format(days=resubmit_days) }} <span class="ltr">{{ resubmit_by }}</span></td></tr>{% endif %}
+  </table>
 
   <div class="signs">
     <div class="sign"><b>{{ t.submitted_by }}</b>{{ submitted_by }}<br><span class="ltr muted">{{ submitted_at }}</span></div>

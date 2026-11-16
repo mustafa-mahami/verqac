@@ -305,8 +305,8 @@
     "submittals": "Submittals list"
   },
   "settings": {
-    "reviewTitle": "Consultant reply period",
-    "reviewHint": "Days allowed to answer each record type, per the contract or the quality plan. A new period applies to records submitted after saving.",
+    "reviewTitle": "Reply and resubmission periods",
+    "reviewHint": "Days set by the contract or quality plan: for the consultant to answer, and for the contractor to submit the next revision after “revise and resubmit” or “rejected”. New periods apply to what is submitted or answered after saving.",
     "days": "days",
     "saved": "Settings saved.",
     "readOnly": "Only the project manager can change these.",
@@ -321,7 +321,9 @@
     "kindEn": "English name",
     "kindActive": "Active",
     "kindInactive": "Off — not offered for new requests",
-    "kindAdd": "Add a type"
+    "kindAdd": "Add a type",
+    "replyDays": "Consultant reply",
+    "resubmitDays": "Contractor resubmission"
   },
   "resp": {
     "title": "Consultant's comments",
@@ -388,7 +390,8 @@
     "submittedFrom": "Submitted from",
     "to": "to",
     "clear": "Clear filters",
-    "kind": "Submittal type:"
+    "kind": "Submittal type:",
+    "resubmit_overdue": "Resubmission overdue"
   },
   "structure": {
     "stage": "Stage",
@@ -477,5 +480,11 @@
     "upload": "Upload letterhead",
     "replace": "Replace",
     "remove": "Remove"
+  },
+  "resubmit": {
+    "by": "Resubmit by",
+    "byShort": "Resubmit by",
+    "lateShort": "Resubmission late since",
+    "hint": "The consultant asked for a new revision. Create a “New revision” and submit it by this date; submitting it closes this deadline."
   }
 }

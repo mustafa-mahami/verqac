@@ -35,7 +35,9 @@ export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = fa
       if ((f.from && day < f.from) || (f.to && day > f.to)) return false;
     }
     if (ignoreStatus || f.status === 'all') return true;
-    return f.status === 'overdue' ? r.overdue : r.state.category === f.status;
+    if (f.status === 'overdue') return r.overdue;
+    if (f.status === 'resubmit_overdue') return r.resubmit_overdue;
+    return r.state.category === f.status;
   });
 }
 
@@ -66,6 +68,7 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
     ...CATEGORIES.filter(([c]) => (c !== 'draft' || showDraft) && (c !== 'cancelled' || count(c) > 0))
       .map(([key, color]) => ({ key, color })),
     { key: 'overdue', color: 'red' },
+    { key: 'resubmit_overdue', color: 'red' },
   ];
 
   return (
@@ -129,9 +132,9 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
                 background: active ? `var(--mantine-color-${color}-light)` : undefined,
                 opacity: n === 0 && !active ? 0.55 : 1,
               }}>
-              <Text fz={26} fw={700} lh={1.1} c={key === 'overdue' && n > 0 ? 'red' : `${color}.7`}>{n}</Text>
+              <Text fz={26} fw={700} lh={1.1} c={key.endsWith('overdue') && n > 0 ? 'red' : `${color}.7`}>{n}</Text>
               <Group gap={6} wrap="nowrap" mt={2}>
-                {key !== 'all' && key !== 'overdue' && <Badge size="xs" circle color={color} variant="filled"> </Badge>}
+                {key !== 'all' && !key.endsWith('overdue') && <Badge size="xs" circle color={color} variant="filled"> </Badge>}
                 <Text size="xs" fw={500} c="dimmed" lineClamp={1}>{t(`stats.${key}`)}</Text>
               </Group>
             </UnstyledButton>

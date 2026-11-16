@@ -361,3 +361,32 @@ def test_header_banner_and_addressed_to(client, site):
     assert client.delete(f"/api/v1/projects/{pid}/header", headers=hc).json()["has_header"] is False
     inbox = client.get("/api/v1/inbox", headers=site["hce"]).json()
     assert any(i["id"] == rec["id"] for i in inbox)
+
+
+def test_resubmission_period(client, site):
+    pid, hc = site["pid"], site["hc"]
+    s = client.get(f"/api/v1/projects/{pid}/settings", headers=hc).json()
+    assert s["resubmit_days"]["submittal"] == 7
+    assert client.put(f"/api/v1/projects/{pid}/settings", headers=hc, json={"resubmit_days": {"submittal": 5}}).json()["resubmit_days"]["submittal"] == 5
+    rec = submit(client, site, new_sub(client, site))
+    r = act(client, site["hce"], rec["id"], "revise", comment="عدّل الكميات").json()
+    assert r["resubmit_due_at"] and r["resubmit_overdue"] is False and r["resubmitted_at"] is None
+    from datetime import datetime
+    assert (datetime.fromisoformat(r["resubmit_due_at"]) - datetime.fromisoformat(r["answered_at"])).days == 5
+    # the contractor's inbox shows the resubmission date for the returned request
+    item = next(i for i in client.get("/api/v1/inbox", headers=site["hqa"]).json() if i["id"] == rec["id"])
+    assert item["reason"] == "returned" and datetime.fromisoformat(item["due_at"]) == datetime.fromisoformat(r["resubmit_due_at"])
+    # overdue once the date passes
+    from sqlalchemy import text
+
+    from app.core.db import session_scope
+    with session_scope(bypass=True) as db:
+        db.execute(text("UPDATE records SET resubmit_due_at = now() - interval '1 day' WHERE id = :i"), {"i": rec["id"]})
+    row = next(x for x in client.get(f"/api/v1/projects/{pid}/records", headers=hc).json() if x["number"] == rec["number"])
+    assert row["resubmit_overdue"] is True
+    # submitting R1 closes R0's resubmission
+    r1 = client.post(f"/api/v1/records/{rec['id']}/revise", headers=site["hqa"]).json()
+    act(client, site["hqa"], r1["id"], "submit")
+    r0 = client.get(f"/api/v1/records/{rec['id']}", headers=site["hqa"]).json()
+    assert r0["resubmitted_at"] and r0["resubmit_overdue"] is False
+    assert client.get(f"/api/v1/records/{rec['id']}/pdf?lang=ar", headers=hc).status_code == 200
