@@ -55,7 +55,12 @@
     "consultantName": "Consultant (invited later)",
     "ownerName": "Owner (invited later)",
     "create": "Create project",
-    "org": "Organization"
+    "org": "Organization",
+    "colCode": "Code",
+    "colName": "Project",
+    "colRecords": "Submittals",
+    "colOpen": "Awaiting reply",
+    "colOverdue": "Overdue"
   },
   "errors": {
     "invalid_credentials": "Wrong email or password.",
@@ -86,7 +91,8 @@
     "cannot_respond": "Your role cannot answer this record.",
     "cannot_revise": "A new revision is made from the latest revision only.",
     "file_too_large": "The file is over the limit (50 MB).",
-    "cannot_attach": "Files cannot be added now."
+    "cannot_attach": "Files cannot be added now.",
+    "invalid_review_days": "The period must be 1 to 365 days."
   },
   "common": {
     "cancel": "Cancel",
@@ -158,7 +164,8 @@
   "project": {
     "tabs": {
       "submittals": "Submittals",
-      "team": "Team"
+      "team": "Team",
+      "settings": "Settings"
     }
   },
   "rec": {
@@ -242,5 +249,21 @@
       "Sample",
       "Document"
     ]
+  },
+  "back": {
+    "projects": "All projects",
+    "submittals": "Submittals list"
+  },
+  "settings": {
+    "reviewTitle": "Consultant reply period",
+    "reviewHint": "Days allowed to answer each record type, per the contract or the quality plan. A new period applies to records submitted after saving.",
+    "days": "days",
+    "saved": "Settings saved.",
+    "readOnly": "Only the project manager can change these."
+  },
+  "resp": {
+    "title": "Consultant's comments",
+    "placeholder": "Write the comments, one per line…",
+    "hint": "Saved with the decision and shown on the record and the PDF. The draft is kept on this device until you choose a decision."
   }
 }

@@ -1,35 +1,72 @@
-import { Alert, Badge, Button, Card, Group, Modal, Select, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Card, Group, Modal, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type ProjectItem } from '../api';
 import { useAuth } from '../auth';
 import { pick } from '../i18n';
 
-function ProjectCard({ item }: { item: ProjectItem }) {
+function partyName(item: ProjectItem, kind: string) {
+  const p = item.parties.find((x) => x.kind === kind);
+  if (!p) return null;
+  return { name: p.org ? pick(p.org, 'name') : p.placeholder_name, joined: p.status === 'active' };
+}
+
+function ProjectsTable({ items }: { items: ProjectItem[] }) {
   const { t } = useTranslation();
-  const p = item.project;
-  return (
-    <Card withBorder padding="md" component={Link} to={`/projects/${p.id}`} style={{ cursor: 'pointer' }}>
-      <Group justify="space-between" align="flex-start" wrap="nowrap">
-        <div>
-          <Text fw={600}>{pick(p, 'name')}</Text>
-          <Text size="sm" c="dimmed" dir="ltr" ta="start">{p.code}</Text>
-        </div>
-        {item.my_role && <Badge variant="light" tt="none" style={{ flexShrink: 0 }}>{pick(item.my_role, 'name')}</Badge>}
+  const navigate = useNavigate();
+  const party = (item: ProjectItem, kind: string) => {
+    const x = partyName(item, kind);
+    if (!x) return <Text size="sm" c="dimmed">—</Text>;
+    return (
+      <Group gap={4} wrap="nowrap">
+        <Text size="sm" lineClamp={1}>{x.name}</Text>
+        {!x.joined && <Badge size="xs" color="gray" variant="outline" tt="none" style={{ flexShrink: 0 }}>{t('partyStatus.invited')}</Badge>}
       </Group>
-      <Stack gap={4} mt="sm">
-        {item.parties.map((party) => (
-          <Group key={party.id} gap="xs" wrap="nowrap">
-            <Text size="sm" c="dimmed" w={80}>{t(`party.${party.kind}`)}</Text>
-            <Text size="sm" truncate>{party.org ? pick(party.org, 'name') : party.placeholder_name}</Text>
-            {party.status !== 'active' && <Badge size="xs" color="gray" variant="outline" tt="none" style={{ flexShrink: 0 }}>{t(`partyStatus.${party.status}`)}</Badge>}
-          </Group>
-        ))}
-      </Stack>
+    );
+  };
+  return (
+    <Card withBorder p={0}>
+      <Table.ScrollContainer minWidth={980}>
+        <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>{t('projects.colCode')}</Table.Th>
+              <Table.Th>{t('projects.colName')}</Table.Th>
+              <Table.Th>{t('projects.client')}</Table.Th>
+              <Table.Th>{t('party.consultant')}</Table.Th>
+              <Table.Th>{t('party.owner')}</Table.Th>
+              <Table.Th>{t('projects.myRole')}</Table.Th>
+              <Table.Th ta="center">{t('projects.colRecords')}</Table.Th>
+              <Table.Th ta="center">{t('projects.colOpen')}</Table.Th>
+              <Table.Th ta="center">{t('projects.colOverdue')}</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {items.map((item) => {
+              const p = item.project;
+              return (
+                <Table.Tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/projects/${p.id}`)}>
+                  <Table.Td><Text size="sm" fw={600} dir="ltr">{p.code}</Text></Table.Td>
+                  <Table.Td><Text size="sm" fw={500} lineClamp={1}>{pick(p, 'name')}</Text></Table.Td>
+                  <Table.Td><Text size="sm" lineClamp={1}>{p.client_name ?? '—'}</Text></Table.Td>
+                  <Table.Td>{party(item, 'consultant')}</Table.Td>
+                  <Table.Td>{party(item, 'owner')}</Table.Td>
+                  <Table.Td><Text size="sm">{item.my_role ? pick(item.my_role, 'name') : '—'}</Text></Table.Td>
+                  <Table.Td ta="center"><Text size="sm">{item.stats.records}</Text></Table.Td>
+                  <Table.Td ta="center"><Text size="sm" fw={item.stats.open ? 600 : 400}>{item.stats.open}</Text></Table.Td>
+                  <Table.Td ta="center">
+                    {item.stats.overdue ? <Badge color="red" tt="none">{item.stats.overdue}</Badge> : <Text size="sm" c="dimmed">0</Text>}
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
     </Card>
   );
 }
@@ -97,15 +134,13 @@ export default function Projects() {
   const canCreate = (me?.orgs ?? []).some((m) => m.org_role === 'admin' && m.org.kind !== 'owner');
 
   return (
-    <Stack maw={1100} mx="auto">
+    <Stack maw={1300} mx="auto">
       <Group justify="space-between">
         <Title order={3}>{t('projects.title')}</Title>
         {canCreate && <Button onClick={open}>{t('projects.new')}</Button>}
       </Group>
       {!isLoading && data?.length === 0 && <Text c="dimmed">{t('projects.empty')}</Text>}
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-        {data?.map((item) => <ProjectCard key={item.project.id} item={item} />)}
-      </SimpleGrid>
+      {!!data?.length && <ProjectsTable items={data} />}
       <Modal opened={opened} onClose={close} title={t('projects.new')} size="lg">
         <NewProject onClose={close} />
       </Modal>

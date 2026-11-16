@@ -12,6 +12,7 @@ import {
 } from '../api';
 import { fmtDate, fmtSize, stateColor } from '../format';
 import i18n, { pick } from '../i18n';
+import BackButton from './BackButton';
 
 const DETAIL_KEYS = ['submittal_kind', 'item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
 const LTR = new Set(['drawing_ref', 'spec_ref', 'boq_ref']);
@@ -61,6 +62,50 @@ function ActionForm({ rec, tr, onDone }: { rec: RecordDetail; tr: Transition; on
         <Button type="submit" color={btnColor[tr.style] ?? 'verqac'} loading={go.isPending}>{pick(tr, 'name')}</Button>
       </Stack>
     </form>
+  );
+}
+
+/** The consultant writes the comments in a large field on the page, then picks the decision under it. */
+function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transitions: Transition[]; onDone: (r: RecordDetail) => void }) {
+  const { t } = useTranslation();
+  const key = `verqac.resp.${rec.id}`;
+  const [text, setText] = useState(() => { try { return localStorage.getItem(key) ?? ''; } catch { return ''; } });
+  const [onBehalf, setOnBehalf] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const team = useQuery({
+    queryKey: ['team', rec.project_id], enabled: rec.can_act_on_behalf,
+    queryFn: () => api<Team>(`/projects/${rec.project_id}/team`),
+  });
+  const colleagues = (team.data?.members ?? []).filter((m) => m.is_active && m.party_id === team.data?.my_party_id);
+  const keep = (v: string) => { setText(v); try { localStorage.setItem(key, v); } catch { /* storage unavailable */ } };
+  const go = useMutation({
+    mutationFn: (tr: Transition) => {
+      if (tr.requires_comment && !text.trim()) throw new ApiError(422, 'comment_required');
+      return api<RecordDetail>(`/records/${rec.id}/transitions`, {
+        method: 'POST', body: JSON.stringify({ action: tr.action, comment: text.trim() || null, on_behalf_of: onBehalf }),
+      });
+    },
+    onSuccess: (r) => { try { localStorage.removeItem(key); } catch { /* ignore */ } onDone(r); },
+    onError: (e) => setError(errText(e)),
+  });
+  return (
+    <Card withBorder style={{ borderColor: 'var(--mantine-color-verqac-3)' }}>
+      <Title order={5}>{t('resp.title')}</Title>
+      <Text size="xs" c="dimmed" mb="sm">{t('resp.hint')}</Text>
+      {error && <Alert color="red" mb="sm" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
+      <Textarea placeholder={t('resp.placeholder')} autosize minRows={6} maxRows={20} value={text}
+        onChange={(e) => keep(e.currentTarget.value)} />
+      {rec.can_act_on_behalf && colleagues.length > 1 && (
+        <Select mt="sm" label={t('rec.onBehalfOf')} clearable placeholder={t('rec.myself')} value={onBehalf} onChange={setOnBehalf}
+          data={colleagues.map((m) => ({ value: m.user.id, label: `${pick(m.user, 'full_name')} · ${pick(m.role, 'name')}` }))} />
+      )}
+      <Group gap="xs" mt="md">
+        {transitions.map((tr) => (
+          <Button key={tr.action} color={btnColor[tr.style] ?? 'verqac'} loading={go.isPending && go.variables?.action === tr.action}
+            onClick={() => { setError(null); go.mutate(tr); }}>{pick(tr, 'name')}</Button>
+        ))}
+      </Group>
+    </Card>
   );
 }
 
@@ -149,10 +194,12 @@ export default function RecordPage() {
   if (!r) return null;
   const isDraft = r.state.category === 'draft';
   const det = r.details;
+  const responses = r.transitions.filter((x) => x.effect === 'respond');
+  const others = r.transitions.filter((x) => x.effect !== 'respond');
 
   return (
     <Stack maw={1200} mx="auto">
-      <Anchor component={Link} to={`/projects/${r.project_id}`} size="sm">{t('rec.back')}</Anchor>
+      <BackButton to={`/projects/${r.project_id}?tab=submittals`} label={t('back.submittals')} />
       <Group justify="space-between" align="flex-start">
         <div>
           <Group gap="xs">
@@ -172,9 +219,9 @@ export default function RecordPage() {
       {error && <Alert color="red" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
       {isDraft && <Alert color="gray">{t('rec.draftNote')}</Alert>}
 
-      {(r.transitions.length > 0 || r.can_edit || r.can_revise) && (
+      {(others.length > 0 || r.can_edit || r.can_revise) && (
         <Group gap="xs">
-          {r.transitions.map((tr) => (
+          {others.map((tr) => (
             <Button key={tr.action} color={btnColor[tr.style] ?? 'verqac'} variant={tr.style === 'subtle' ? 'subtle' : 'filled'}
               onClick={() => setAction(tr)}>{pick(tr, 'name')}</Button>
           ))}
@@ -186,6 +233,7 @@ export default function RecordPage() {
       <Grid gutter="md">
         <Grid.Col span={{ base: 12, md: 8 }}>
           <Stack>
+            {responses.length > 0 && <ResponsePanel rec={r} transitions={responses} onDone={put} />}
             {r.answered_at && (
               <Card withBorder style={{ borderInlineStartWidth: 4, borderInlineStartColor: `var(--mantine-color-${stateColor(r.state.color)}-6)` }}>
                 <Text fw={600} mb={4}>{t('rec.response')}: {pick(r.state, 'name')}</Text>

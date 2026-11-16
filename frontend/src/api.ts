@@ -61,7 +61,7 @@ export interface Project {
   client_name: string | null; donor_name: string | null; contract_no: string | null;
   description: string | null; start_date: string | null; end_date: string | null;
 }
-export interface ProjectItem { project: Project; my_role: Role | null; parties: Party[] }
+export interface ProjectItem { project: Project; my_role: Role | null; parties: Party[]; stats: ProjectStats }
 
 export interface Discipline { id: string; code: string; name_ar: string; name_en: string }
 export interface InviteOut { link: string; email: string; email_sent: boolean; expires_at: string }
@@ -123,3 +123,6 @@ export interface RecordDetail {
   can_revise: boolean; can_attach: string[]; can_act_on_behalf: boolean; events: RecordEvent[];
   comments: RecordComment[]; attachments: Attachment[]; revisions: { id: string; rev_no: number; state: State }[];
 }
+
+export interface ProjectStats { records: number; open: number; overdue: number }
+export interface ProjectSettings { review_days: Record<string, number>; can_edit: boolean }

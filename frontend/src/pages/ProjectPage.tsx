@@ -1,9 +1,11 @@
-import { Anchor, Stack, Tabs, Text, Title } from '@mantine/core';
+import { Stack, Tabs, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { api, type ProjectItem } from '../api';
 import { pick } from '../i18n';
+import BackButton from './BackButton';
+import ProjectSettings from './ProjectSettings';
 import ProjectTeam from './ProjectTeam';
 import Submittals from './Submittals';
 
@@ -16,7 +18,7 @@ export default function ProjectPage() {
 
   return (
     <Stack maw={1200} mx="auto">
-      <Anchor component={Link} to="/projects" size="sm">{t('team.back')}</Anchor>
+      <BackButton to="/projects" label={t('back.projects')} />
       {item.data && (
         <div>
           <Title order={3}>{pick(item.data.project, 'name')}</Title>
@@ -27,9 +29,11 @@ export default function ProjectPage() {
         <Tabs.List>
           <Tabs.Tab value="submittals">{t('project.tabs.submittals')}</Tabs.Tab>
           <Tabs.Tab value="team">{t('project.tabs.team')}</Tabs.Tab>
+          <Tabs.Tab value="settings">{t('project.tabs.settings')}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="submittals" pt="md"><Submittals projectId={id} /></Tabs.Panel>
         <Tabs.Panel value="team" pt="md"><ProjectTeam /></Tabs.Panel>
+        <Tabs.Panel value="settings" pt="md"><ProjectSettings projectId={id} /></Tabs.Panel>
       </Tabs>
     </Stack>
   );
