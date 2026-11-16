@@ -1,4 +1,5 @@
-import { Badge, Card, Stack, Table, Text, Title } from '@mantine/core';
+import { Badge, Card, Group, Select, Stack, Table, Text, Title } from '@mantine/core';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -12,11 +13,29 @@ export default function Inbox() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const items = useQuery({ queryKey: ['inbox'], queryFn: () => api<InboxItem[]>('/inbox'), refetchInterval: 60_000 });
+  const [project, setProject] = useState<string | null>(null);
+  const [kind, setKind] = useState<string | null>(null);
+  const all = items.data ?? [];
+  const kindName = (i: InboxItem) => (i.submittal_kind_name ? pick({ n_ar: i.submittal_kind_name.ar, n_en: i.submittal_kind_name.en }, 'n') : '');
+  const projects = [...new Map(all.map((i) => [i.project_id, `${i.project_code} · ${pick({ n_ar: i.project_name_ar, n_en: i.project_name_en }, 'n')}`])).entries()];
+  const kinds = [...new Set(all.map(kindName).filter(Boolean))];
+  const shown = all.filter((i) => (!project || i.project_id === project) && (!kind || kindName(i) === kind));
 
   return (
     <Stack maw={1300} mx="auto">
-      <Title order={3}>{t('inbox.title')}</Title>
-      {items.isSuccess && items.data.length === 0 ? <Text c="dimmed">{t('inbox.empty')}</Text> : (
+      <Group justify="space-between">
+        <Title order={3}>{t('inbox.title')}</Title>
+        <Group gap="xs">
+          {projects.length > 1 && (
+            <Select size="xs" w={240} clearable placeholder={t('inbox.allProjects')} value={project} onChange={setProject}
+              data={projects.map(([value, label]) => ({ value, label }))} />
+          )}
+          {kinds.length > 1 && (
+            <Select size="xs" w={180} clearable placeholder={t('inbox.allKinds')} value={kind} onChange={setKind} data={kinds} />
+          )}
+        </Group>
+      </Group>
+      {items.isSuccess && shown.length === 0 ? <Text c="dimmed">{t('inbox.empty')}</Text> : (
         <Card withBorder p={0}>
           <Table.ScrollContainer minWidth={900}>
             <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
@@ -31,7 +50,7 @@ export default function Inbox() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {items.data?.map((i) => (
+                {shown.map((i) => (
                   <Table.Tr key={i.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/records/${i.id}`)}>
                     <Table.Td>
                       <Badge tt="none" variant="light" color={reasonColor[i.reason]}>{t(`inbox.reason.${i.reason}`)}</Badge>

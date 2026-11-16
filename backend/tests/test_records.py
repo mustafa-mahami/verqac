@@ -341,3 +341,23 @@ def test_required_by_date(client, site):
     # after the answer it is history: no more changes
     act(client, site["hce"], rid, "approve")
     assert client.put(url, headers=site["hqa"], json={"required_by": None}).status_code == 403
+
+
+def test_header_banner_and_addressed_to(client, site):
+    import io
+    pid, hc = site["pid"], site["hc"]
+    png = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+           b"\x00\x00\x00\rIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82")
+    up = lambda h, ct="image/png": client.post(f"/api/v1/projects/{pid}/header", headers=h,
+                                               files={"file": ("logos.png", io.BytesIO(png), ct)})
+    assert up(site["hk"]).status_code == 403
+    assert up(hc, "application/pdf").json()["detail"] == "header_not_image"
+    assert up(hc).json()["has_header"] is True and up(hc).status_code == 200  # replacing works too
+    assert client.get(f"/api/v1/projects/{pid}/header", headers=site["hk"]).content == png
+    rec = submit(client, site, new_sub(client, site))
+    names = [u["full_name_en"] for u in client.get(f"/api/v1/records/{rec['id']}", headers=hc).json()["addressed_to"]]
+    assert names == ["Consultant PM"]
+    assert client.get(f"/api/v1/records/{rec['id']}/pdf?lang=ar", headers=hc).status_code == 200
+    assert client.delete(f"/api/v1/projects/{pid}/header", headers=hc).json()["has_header"] is False
+    inbox = client.get("/api/v1/inbox", headers=site["hce"]).json()
+    assert any(i["id"] == rec["id"] for i in inbox)

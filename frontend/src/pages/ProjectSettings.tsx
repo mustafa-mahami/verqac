@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, type ProjectSettings as Settings, type RecordType, type SubmittalKind } from '../api';
 import { pick } from '../i18n';
+import ProjectHeader from './ProjectHeader';
 import ProjectStructure from './ProjectStructure';
 
 export default function ProjectSettings({ projectId }: { projectId: string }) {
@@ -40,6 +41,7 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
 
   return (
     <Stack maw={900}>
+      <ProjectHeader projectId={projectId} settings={settings.data} />
       <ProjectStructure projectId={projectId} />
       <Card withBorder>
         <Title order={5}>{t('settings.reviewTitle')}</Title>

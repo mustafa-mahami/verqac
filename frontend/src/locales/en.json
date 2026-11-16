@@ -114,7 +114,10 @@
     "invalid_location": "That location is not in this project.",
     "invalid_topic": "That subject does not belong to the chosen stage.",
     "topic_in_use": "A subject used by requests cannot be deleted. Switch it off instead.",
-    "title_required": "Pick or type the subject."
+    "title_required": "Pick or type the subject.",
+    "wrong_password": "The current password is not right.",
+    "reset_expired": "This link is invalid or expired.",
+    "header_not_image": "The letterhead must be a PNG or JPG image."
   },
   "common": {
     "cancel": "Cancel",
@@ -294,7 +297,8 @@
     "dueToday": "today",
     "daysLate": "{{count}} days past the date",
     "requiredByWas": "Was needed by {{date}}",
-    "notPrinted": "Seen by the contractor and consultant only; not printed."
+    "notPrinted": "Seen by the contractor and consultant only; not printed.",
+    "addressedTo": "Submitted to"
   },
   "back": {
     "projects": "All projects",
@@ -333,7 +337,9 @@
       "draft": "Your draft"
     },
     "project": "Project",
-    "assignedToMe": "Assigned to you"
+    "assignedToMe": "Assigned to you",
+    "allProjects": "All projects",
+    "allKinds": "All submittal types"
   },
   "bell": {
     "title": "Notifications",
@@ -435,5 +441,41 @@
     "addTopic": "Add a subject",
     "pickTopic": "Pick the subject",
     "filterTopic": "Subject:"
+  },
+  "account": {
+    "title": "My account",
+    "forgot": "Forgot your password?",
+    "forgotTitle": "Reset your password",
+    "forgotHint": "Enter your e-mail and we'll send a link to set a new password, valid for one hour.",
+    "sendLink": "Send the link",
+    "linkSent": "If the e-mail is registered, the link arrives within minutes. Check the spam folder too.",
+    "noMail": "E-mail sending is not set up on the platform yet. Ask your organization admin for a reset link from Organization settings.",
+    "backToLogin": "Back to sign in",
+    "resetTitle": "Set a new password",
+    "resetExpired": "This link is invalid, expired or already used. Ask for a new one.",
+    "resetFor": "For",
+    "resetDone": "Your new password is set. Sign in with it; sessions on other devices were closed.",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm password",
+    "savePassword": "Save password",
+    "passwordHint": "At least 10 characters",
+    "mismatch": "The passwords don't match.",
+    "language": "Language of the interface and notifications",
+    "changePassword": "Change password",
+    "currentPassword": "Current password",
+    "otherDevices": "After the change, your sessions on other devices are closed.",
+    "passwordChanged": "Password changed.",
+    "resetLink": "Password reset link",
+    "resetLinkTitle": "Password reset link for {{name}}",
+    "resetLinkHint": "Send this link to the employee (WhatsApp, say). One use only, valid until {{date}}; nobody else sees it.",
+    "resetLinkEmailed": "It was also e-mailed to them."
+  },
+  "header": {
+    "title": "Project letterhead (logos)",
+    "hint": "One wide image with the logos of the owner, consultant, contractor and others, printed at the top of the project's papers. Suggested size: 2000–2500 px wide, 250–400 px high, PNG on white, up to 5 MB.",
+    "none": "No letterhead yet. Papers print the contractor's name.",
+    "upload": "Upload letterhead",
+    "replace": "Replace",
+    "remove": "Remove"
   }
 }

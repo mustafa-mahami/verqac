@@ -9,6 +9,9 @@ import Invite from './pages/Invite';
 import Verify from './pages/Verify';
 import Login from './pages/Login';
 import OrgPage from './pages/OrgPage';
+import Account from './pages/Account';
+import Forgot from './pages/Forgot';
+import Reset from './pages/Reset';
 import ProjectPage from './pages/ProjectPage';
 import RecordPage from './pages/RecordPage';
 import Projects from './pages/Projects';
@@ -57,7 +60,7 @@ function Shell() {
           </Group>
           <Group gap="xs">
             <Bell />
-            {me && <Text size="sm" c="dimmed">{pick(me.user, 'full_name')}</Text>}
+            {me && <Text size="sm" c="dimmed" component={Link} to="/account" title={t('account.title')}>{pick(me.user, 'full_name')}</Text>}
             <LanguageButton />
             <Button variant="light" size="compact-sm" onClick={signOut}>
               {t('auth.logout')}
@@ -72,6 +75,7 @@ function Shell() {
           <Route path="/projects/:id" element={<ProjectPage />} />
           <Route path="/records/:id" element={<RecordPage />} />
           <Route path="/org" element={<OrgPage />} />
+          <Route path="/account" element={<Account />} />
           <Route path="*" element={<Navigate to="/inbox" replace />} />
         </Routes>
       </AppShell.Main>
@@ -94,6 +98,8 @@ export default function App() {
       {/* the QR on a printed reply opens this, for anyone */}
       <Route path="/v/:stamp" element={<Verify />} />
       {!me && <Route path="/register" element={<Register />} />}
+      {!me && <Route path="/forgot" element={<Forgot />} />}
+      <Route path="/reset/:token" element={<Reset />} />
       <Route path="*" element={me ? <Shell /> : <Login />} />
     </Routes>
   );

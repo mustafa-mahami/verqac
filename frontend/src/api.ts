@@ -80,6 +80,14 @@ export interface InvitationInfo {
 }
 
 /** Download a protected file (the token is in memory, so a plain link cannot carry it). */
+/** A protected file as an object URL (for an <img> preview); the caller revokes it. */
+export async function blobUrl(path: string): Promise<string | null> {
+  const go = () => fetch(`/api/v1${path}`, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}, credentials: 'include' });
+  let r = await go();
+  if (r.status === 401 && (await refreshSession())) r = await go();
+  return r.ok ? URL.createObjectURL(await r.blob()) : null;
+}
+
 export async function openProtected(path: string, filename: string, inline = false) {
   const go = () => fetch(`/api/v1${path}`, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}, credentials: 'include' });
   let r = await go();
@@ -128,19 +136,20 @@ export interface RecordDetail {
   topic: { id: string; name_ar: string; name_en: string } | null;
   locations: { id: string; kind: string; name_ar: string; name_en: string }[]; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
   can_revise: boolean; can_attach: string[]; can_act_on_behalf: boolean; events: RecordEvent[];
-  assigned_to: User | null; can_assign: boolean; assign_candidates: User[]; no_discipline_engineer: boolean;
+  assigned_to: User | null; addressed_to: User[]; can_assign: boolean; assign_candidates: User[]; no_discipline_engineer: boolean;
   comments: RecordComment[]; attachments: Attachment[]; revisions: { id: string; rev_no: number; state: State }[];
 }
 
 export interface ProjectStats { records: number; open: number; overdue: number }
 export interface ProjectSettings {
   review_days: Record<string, number>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
-  email_available: boolean; mahami_available: boolean; can_edit: boolean;
+  email_available: boolean; mahami_available: boolean; can_edit: boolean; has_header: boolean;
 }
 export interface InboxItem {
   id: string; project_id: string; project_code: string; project_name_ar: string; project_name_en: string;
   record_type: RecordType; number: string; rev_no: number; title: string; state: State;
-  reason: 'reply' | 'returned' | 'draft'; due_at: string | null; required_by: string | null; overdue: boolean; assigned_to_me: boolean; updated_at: string;
+  reason: 'reply' | 'returned' | 'draft'; due_at: string | null; required_by: string | null;
+  submittal_kind_name: { ar: string; en: string } | null; overdue: boolean; assigned_to_me: boolean; updated_at: string;
 }
 export interface NotificationItem { id: number; record_id: string | null; event: string; title_ar: string; title_en: string; body: string | null; created_at: string; read: boolean }
 export interface Notifications { unread: number; items: NotificationItem[] }

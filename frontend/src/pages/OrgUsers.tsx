@@ -1,11 +1,11 @@
-import { ActionIcon, Alert, Badge, Button, Card, Group, Menu, Modal, SegmentedControl, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Card, CopyButton, Group, Menu, Modal, SegmentedControl, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, type InviteOut, type OrgMember, type PendingInvite } from '../api';
 import { useAuth } from '../auth';
-import { pick } from '../i18n';
+import i18n, { pick } from '../i18n';
 import InviteLink from './InviteLink';
 
 export default function OrgUsers() {
@@ -30,6 +30,15 @@ export default function OrgUsers() {
     mutationFn: ({ uid, body }: { uid: string; body: Record<string, unknown> }) =>
       api<OrgMember[]>(`/orgs/${orgId}/members/${uid}`, { method: 'PATCH', body: JSON.stringify(body) }),
     onSuccess: (rows) => { qc.setQueryData(['orgMembers', orgId], rows); setConfirm(null); },
+    onError: (e) => setError(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic'))),
+  });
+  const [reset, setReset] = useState<{ name: string; link: string; expires_at: string; emailed: boolean } | null>(null);
+  const resetLink = useMutation({
+    mutationFn: async (m: OrgMember) => ({
+      name: pick(m.user, 'full_name'),
+      ...(await api<{ link: string; expires_at: string; emailed: boolean }>(`/orgs/${orgId}/members/${m.user.id}/reset-link`, { method: 'POST' })),
+    }),
+    onSuccess: setReset,
     onError: (e) => setError(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic'))),
   });
   if (!admin) return null;
@@ -91,6 +100,7 @@ export default function OrgUsers() {
                             <Menu.Item onClick={() => patch.mutate({ uid: m.user.id, body: { org_role: m.org_role === 'admin' ? 'member' : 'admin' } })}>
                               {m.org_role === 'admin' ? t('org.makeMember') : t('org.makeAdmin')}
                             </Menu.Item>
+                            {m.is_active && <Menu.Item onClick={() => resetLink.mutate(m)}>{t('account.resetLink')}</Menu.Item>}
                           </Menu.Dropdown>
                         </Menu>
                       )}
@@ -102,6 +112,20 @@ export default function OrgUsers() {
           </Table>
         </Table.ScrollContainer>
       </Card>
+      <Modal opened={!!reset} onClose={() => setReset(null)} title={reset ? t('account.resetLinkTitle', { name: reset.name }) : ''}>
+        {reset && (
+          <Stack>
+            <Text size="sm">
+              {t('account.resetLinkHint', { date: new Date(reset.expires_at).toLocaleString(i18n.language === 'en' ? 'en-GB' : 'ar-PS-u-nu-latn') })}
+              {reset.emailed && ` ${t('account.resetLinkEmailed')}`}
+            </Text>
+            <TextInput value={reset.link} readOnly dir="ltr" onFocus={(e) => e.currentTarget.select()} />
+            <CopyButton value={reset.link}>
+              {({ copied, copy }) => <Button color={copied ? 'teal' : undefined} onClick={copy}>{copied ? t('invite.copied') : t('invite.copy')}</Button>}
+            </CopyButton>
+          </Stack>
+        )}
+      </Modal>
       <Modal opened={!!confirm} onClose={() => setConfirm(null)} title={t('org.suspend')}>
         {confirm && (
           <Stack>

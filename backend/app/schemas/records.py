@@ -210,6 +210,7 @@ class RecordDetail(BaseModel):
     can_attach: list[str]  # attachment kinds the user may add now
     can_act_on_behalf: bool
     assigned_to: UserOut | None = None
+    addressed_to: list[UserOut] = []  # who the request goes to: the assigned engineer, else the consultant PM(s)
     can_assign: bool = False
     assign_candidates: list[UserOut] = []
     no_discipline_engineer: bool = False  # draft: no consultant engineer covers this discipline yet
@@ -245,6 +246,7 @@ class InboxItem(BaseModel):
     reason: Literal["reply", "returned", "draft"]
     due_at: datetime | None
     required_by: date | None = None
+    submittal_kind_name: KindName | None = None
     overdue: bool
     assigned_to_me: bool
     updated_at: datetime

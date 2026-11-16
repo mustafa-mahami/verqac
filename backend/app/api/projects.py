@@ -1,7 +1,8 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
@@ -14,7 +15,8 @@ from app.models.structure import ProjectType
 from app.core.mailer import mail_enabled
 from app.core.notify import channels, mahami_enabled
 from app.models.core import Organization, OrgMember, Project, ProjectMember, ProjectParty, Role
-from app.models.records import Record, RecordType, SubmittalDetails
+from app.core import storage
+from app.models.records import Record, RecordType, StoredFile, SubmittalDetails
 from app.schemas.core import (OrgOut, PartyOut, ProjectIn, ProjectListItem, ProjectOut, ProjectSettingsIn, SubmittalKind,
                               ProjectSettingsOut, ProjectStats, RoleOut, NotifyChannels)
 
@@ -139,6 +141,7 @@ def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
             for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort))}
     return ProjectSettingsOut(review_days=days, notify=NotifyChannels(**channels(a.project)),
                               submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project)],
+                              has_header=bool((a.project.settings or {}).get("header_file_id")),
                               email_available=mail_enabled(), mahami_available=mahami_enabled(),
                               can_edit=a.can_manage_project)
 
@@ -194,3 +197,62 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
           ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
     return get_settings(project_id, c)
+
+
+# ----------------------------------------------------------------------------- letterhead banner
+HEADER_TYPES = {"image/png", "image/jpeg", "image/webp"}
+HEADER_MAX = 5 * 1024 * 1024
+
+
+def _drop_header(c: Ctx, project: Project) -> None:
+    fid = (project.settings or {}).get("header_file_id")
+    f = c.db.get(StoredFile, fid) if fid else None
+    if f is not None:
+        storage.delete(f.storage_key)
+        c.db.delete(f)
+    project.settings = {k: v for k, v in (project.settings or {}).items() if k != "header_file_id"}
+
+
+@router.post("/{project_id}/header", response_model=ProjectSettingsOut)
+def upload_header(project_id: UUID, file: UploadFile, c: Ctx = Depends(ctx)):
+    """The project's letterhead: one wide image with the parties' logos, printed at the top of every page."""
+    a = project_access(c, project_id)
+    require(a.can_manage_project, "manage_project_required")
+    if (file.content_type or "") not in HEADER_TYPES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "header_not_image")
+    key, size, sha = storage.save_upload(project_id, file)
+    if size > HEADER_MAX:
+        storage.delete(key)
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "file_too_large")
+    _drop_header(c, a.project)
+    f = StoredFile(project_id=project_id, storage_key=key, filename=(file.filename or "header")[:255],
+                   content_type=file.content_type, size=size, sha256=sha, uploaded_by=c.user.id)
+    c.db.add(f)
+    c.db.flush()
+    a.project.settings = {**(a.project.settings or {}), "header_file_id": str(f.id)}
+    audit(c.db, entity="project", action="header", entity_id=project_id, actor=c.user.id,
+          org_id=a.project.owner_org_id, project_id=project_id, changes={"file": f.filename, "sha256": sha},
+          ip=c.meta.ip, user_agent=c.meta.user_agent)
+    c.db.flush()
+    return get_settings(project_id, c)
+
+
+@router.delete("/{project_id}/header", response_model=ProjectSettingsOut)
+def delete_header(project_id: UUID, c: Ctx = Depends(ctx)):
+    a = project_access(c, project_id)
+    require(a.can_manage_project, "manage_project_required")
+    _drop_header(c, a.project)
+    audit(c.db, entity="project", action="header_removed", entity_id=project_id, actor=c.user.id,
+          org_id=a.project.owner_org_id, project_id=project_id, ip=c.meta.ip, user_agent=c.meta.user_agent)
+    c.db.flush()
+    return get_settings(project_id, c)
+
+
+@router.get("/{project_id}/header")
+def get_header(project_id: UUID, c: Ctx = Depends(ctx)):
+    a = project_access(c, project_id)
+    fid = (a.project.settings or {}).get("header_file_id")
+    f = c.db.get(StoredFile, fid) if fid else None
+    if f is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    return FileResponse(storage.path_of(f.storage_key), media_type=f.content_type)

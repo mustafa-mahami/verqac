@@ -220,6 +220,7 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         can_edit=is_draft and p.can("edit", rec), can_revise=can_revise, can_attach=attach,
         can_act_on_behalf=bool(a.role and a.role.act_on_behalf and p.can("respond", rec)),
         assigned_to=_user(c, rec.assigned_to), can_assign=can_assign, assign_candidates=candidates,
+        addressed_to=_addressed_to(c, rec, rt),
         no_discipline_engineer=no_engineer,
         events=events, comments=comments, attachments=atts, revisions=revs,
     )
@@ -236,6 +237,20 @@ def _responder_party(c: Ctx, rec: Record, rt: RecordType) -> uuid.UUID | None:
 def _responders(c: Ctx, rec: Record, rt: RecordType) -> list:
     party = _responder_party(c, rec, rt)
     return members_who_can(c, rec.project_id, party, rt, "respond", rec.discipline_id) if party else []
+
+
+def _addressed_to(c: Ctx, rec: Record, rt: RecordType) -> list[UserOut]:
+    """The person the request is addressed to: the assigned engineer, else the responder party's manager(s)."""
+    if rec.assigned_to:
+        return [_user(c, rec.assigned_to)]
+    seen, out = set(), []
+    for m, r in _responders(c, rec, rt):
+        if r.act_on_behalf and m.user_id not in seen:
+            seen.add(m.user_id)
+            u = _user(c, m.user_id)
+            if u:
+                out.append(u)
+    return out
 
 
 def _check_discipline(c: Ctx, a: ProjectAccess, discipline_id: uuid.UUID | None) -> Discipline | None:
@@ -606,6 +621,8 @@ def inbox(c: Ctx = Depends(ctx)):
                                                  Record.state_category.in_(("draft", "submitted", "revise_and_resubmit", "rejected"))))
         latest: dict[uuid.UUID, int] = {}
         recs = list(recs)
+        kinds = dict(c.db.execute(select(SubmittalDetails.record_id, SubmittalDetails.submittal_kind)
+                                  .where(SubmittalDetails.record_id.in_([r.id for r in recs]))).all()) if recs else {}
         for r in recs:
             latest[r.revision_group_id] = max(latest.get(r.revision_group_id, -1), r.rev_no)
         for r in recs:
@@ -627,7 +644,8 @@ def inbox(c: Ctx = Depends(ctx)):
                                      record_type=RecordTypeOut.model_validate(rt), number=r.number, rev_no=r.rev_no,
                                      title=r.title, state=StateOut.model_validate(_state(c, r.state_id)),
                                      reason=reason, due_at=r.due_at, overdue=_overdue(r), required_by=r.required_by,
-                                     assigned_to_me=r.assigned_to == c.user.id, updated_at=r.updated_at))
+                                     assigned_to_me=r.assigned_to == c.user.id, updated_at=r.updated_at,
+                                     submittal_kind_name=kind_name(a.project, kinds.get(r.id))))
     order = {"reply": 0, "returned": 1, "draft": 2}
     def soonest(x: InboxItem) -> datetime:
         when = [x.due_at or x.updated_at]

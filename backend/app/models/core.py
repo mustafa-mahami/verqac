@@ -223,6 +223,20 @@ class Invitation(Base):
     created_at: Mapped[datetime] = created()
 
 
+class PasswordReset(Base):
+    """One-time link to set a new password: e-mailed on "forgot password", or made by an org admin."""
+
+    __tablename__ = "password_resets"
+
+    id: Mapped[uuid.UUID] = pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))  # an admin; NULL = self-service
+    created_at: Mapped[datetime] = created()
+
+
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 

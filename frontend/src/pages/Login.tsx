@@ -35,6 +35,7 @@ export default function Login() {
           <TextInput label={t('auth.email')} type="email" dir="ltr" required autoComplete="username" {...form.getInputProps('email')} />
           <PasswordInput label={t('auth.password')} dir="ltr" required autoComplete="current-password" {...form.getInputProps('password')} />
           <Button type="submit" loading={form.submitting}>{t('auth.login')}</Button>
+          <Anchor component={Link} to="/forgot" size="sm">{t('account.forgot')}</Anchor>
           <Anchor component={Link} to="/register" size="sm">{t('auth.noAccount')}</Anchor>
         </Stack>
       </form>

@@ -348,6 +348,7 @@ export default function RecordPage() {
                 <Field label={t('rec.submitted')} value={fmtDate(r.submitted_at, true)} />
                 <Field label={t('rec.due')} value={fmtDate(r.due_at)} />
                 <Field label={t('rec.submittedBy')} value={r.submitted_by ? pick(r.submitted_by, 'full_name') : null} />
+                <Field label={t('rec.addressedTo')} value={r.addressed_to.map((u) => pick(u, 'full_name')).join(i18n.language === 'en' ? ', ' : '، ') || null} />
               </SimpleGrid>
               {r.description && <Text size="sm" mt="sm" style={{ whiteSpace: 'pre-wrap' }}>{r.description}</Text>}
             </Card>

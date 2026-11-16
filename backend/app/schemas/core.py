@@ -134,6 +134,7 @@ class ProjectSettingsOut(BaseModel):
     review_days: dict[str, int]  # record type code -> days the responder has to answer
     notify: NotifyChannels
     submittal_kinds: list[SubmittalKind]
+    has_header: bool = False  # a letterhead banner was uploaded
     email_available: bool  # SMTP configured on the server
     mahami_available: bool  # Mahami URL and key configured on the server
     can_edit: bool

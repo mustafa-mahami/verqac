@@ -1,4 +1,5 @@
 """PDF of one record, in Arabic or English, from the record's live data."""
+import base64
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -18,7 +19,7 @@ T = {
            "discipline": "التخصص", "submitted_on": "تاريخ التقديم", "subject": "الموضوع", "description": "الوصف",
            "due": "موعد الرد", "answered_on": "تاريخ الرد", "details": "التفاصيل", "attachments": "المرفقات",
            "decision": "قرار الاستشاري", "comments": "ملاحظات الاستشاري", "submitted_by": "قدّمه (المقاول)",
-           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
+           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "submitted_by_row": "مقدّم الطلب", "addressed_to": "موجّه إلى", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
            "kind": {"submission": "مرفق التقديم", "response": "مرفق الرد", "photo": "صورة", "other": "أخرى"},
            "fields": {"submittal_kind": "نوع الاعتماد", "item": "البند / المادة", "manufacturer": "المصنّع",
                       "supplier": "المورّد / الوكيل", "drawing_ref": "رقم المخطط", "spec_ref": "بند المواصفات",
@@ -27,7 +28,7 @@ T = {
            "discipline": "Discipline", "submitted_on": "Submitted on", "subject": "Subject", "description": "Description",
            "due": "Reply due", "answered_on": "Answered on", "details": "Details", "attachments": "Attachments",
            "decision": "Consultant decision", "comments": "Consultant comments", "submitted_by": "Submitted by (Contractor)",
-           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
+           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "submitted_by_row": "Submitted by", "addressed_to": "Submitted to", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
            "kind": {"submission": "Submission", "response": "Response", "photo": "Photo", "other": "Other"},
            "fields": {"submittal_kind": "Submittal type", "item": "Item / material", "manufacturer": "Manufacturer",
                       "supplier": "Supplier / agent", "drawing_ref": "Drawing no.", "spec_ref": "Spec section",
@@ -51,6 +52,21 @@ def _n(obj, lang: str, base: str = "name") -> str:
 def _qr(url: str) -> str:
     """QR of the public verification link, as an inline SVG data URI (vector, sharp when printed)."""
     return segno.make(url, error="m").svg_data_uri(scale=1, border=0, dark="#111")
+
+
+def header_image(c: Ctx, project) -> str | None:
+    """The project's letterhead banner (logos of the parties) as a data URI, if one was uploaded."""
+    from app.core import storage
+    from app.models.records import StoredFile
+    fid = (project.settings or {}).get("header_file_id")
+    f = c.db.get(StoredFile, fid) if fid else None
+    if f is None:
+        return None
+    try:
+        data = storage.path_of(f.storage_key).read_bytes()
+    except Exception:
+        return None
+    return f"data:{f.content_type};base64,{base64.b64encode(data).decode()}"
 
 
 def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> bytes:
@@ -89,6 +105,10 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         attachments=[{"filename": x.filename, "kind": t["kind"].get(x.kind, x.kind)} for x in d.attachments],
         submitted_by=_n(d.submitted_by, lang, "full_name"), answered_by=_n(d.answered_by, lang, "full_name"),
         on_behalf=_n(d.answered_on_behalf_of, lang, "full_name"),
+        title_text=getattr(d.topic, f"name_{lang}") if d.topic else d.title,
+        submitter=_n(d.submitted_by or d.created_by, lang, "full_name"),
+        addressed_to=("، " if lang == "ar" else ", ").join(_n(u, lang, "full_name") for u in d.addressed_to),
+        header=header_image(c, a.project),
         stamp=stamp, stamp_short="-".join(stamp[i:i + 4] for i in range(0, 12, 4)).upper() if stamp else None,
         verify_url=verify_url, qr=_qr(verify_url) if verify_url else None,
     )

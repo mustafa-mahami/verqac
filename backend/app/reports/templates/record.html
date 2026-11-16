@@ -30,12 +30,14 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
 .stamp .code { font-size: 12pt; font-weight: 700; color: #111; letter-spacing: 1px; }
 .stamp .full { font-size: 6.5pt; color: #777; word-break: break-all; }
 .multi { white-space: pre-line; }
+.banner { display: block; width: 100%; max-height: 32mm; object-fit: contain; margin-bottom: 8px; }
 .draft { color: #b00; font-weight: 700; }
 </style>
 </head>
 <body>
+  {% if header %}<img class="banner" src="{{ header }}" alt="">{% endif %}
   <div class="head">
-    <div class="org">{{ contractor }}<small>{{ project_name }} · <span class="ltr">{{ project_code }}</span></small></div>
+    <div class="org">{% if not header %}{{ contractor }}{% endif %}<small>{{ project_name }} · <span class="ltr">{{ project_code }}</span></small></div>
     <div class="doc">
       <h1>{{ type_name }}</h1>
       <div class="num ltr">{{ number }} · Rev. {{ rev }}</div>
@@ -46,7 +48,8 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
   <table>
     <tr><th>{{ t.consultant }}</th><td>{{ consultant }}</td><th>{{ t.owner }}</th><td>{{ owner }}</td></tr>
     <tr><th>{{ t.discipline }}</th><td>{{ discipline }}</td><th>{{ t.submitted_on }}</th><td class="ltr">{{ submitted_at }}</td></tr>
-    <tr><th>{{ t.subject }}</th><td colspan="3">{{ title }}</td></tr>
+    <tr><th>{{ t.submitted_by_row }}</th><td>{{ submitter }}</td><th>{{ t.addressed_to }}</th><td>{{ addressed_to }}</td></tr>
+    <tr><th>{{ t.subject }}</th><td colspan="3">{{ title_text }}</td></tr>
     {% if description %}<tr><th>{{ t.description }}</th><td colspan="3" class="multi">{{ description }}</td></tr>{% endif %}
     <tr><th>{{ t.due }}</th><td class="ltr">{{ due_at }}</td><th>{{ t.answered_on }}</th><td class="ltr">{{ answered_at }}</td></tr>
   </table>
