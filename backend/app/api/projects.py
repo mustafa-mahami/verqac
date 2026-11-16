@@ -9,6 +9,8 @@ from app.core.access import project_access, require
 from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
 from app.core.kinds import new_code, submittal_kinds
+from app.api.structure import apply_type
+from app.models.structure import ProjectType
 from app.core.mailer import mail_enabled
 from app.core.notify import channels, mahami_enabled
 from app.models.core import Organization, OrgMember, Project, ProjectMember, ProjectParty, Role
@@ -83,7 +85,12 @@ def create_project(body: ProjectIn, c: Ctx = Depends(ctx)):
                                             func.upper(Project.code) == body.code.upper())):
         raise HTTPException(status.HTTP_409_CONFLICT, "project_code_taken")
 
-    fields = body.model_dump(exclude={"org_id", "consultant_name", "owner_name"})
+    fields = body.model_dump(exclude={"org_id", "consultant_name", "owner_name", "project_type_id"})
+    ptype = None
+    if body.project_type_id:
+        ptype = c.db.get(ProjectType, body.project_type_id)
+        if ptype is None or ptype.org_id != org.id:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "not_found")
     project = Project(owner_org_id=org.id, **fields)
     c.db.add(project)
     try:
@@ -101,6 +108,8 @@ def create_project(body: ProjectIn, c: Ctx = Depends(ctx)):
 
     role = c.db.scalar(select(Role).where(Role.org_id.is_(None), Role.code == role_code))
     c.db.add(ProjectMember(project_id=project.id, user_id=c.user.id, party_id=own_party.id, role_id=role.id))
+    if ptype is not None:
+        apply_type(c, project, ptype)
     audit(c.db, entity="project", action="create", entity_id=project.id, actor=c.user.id, org_id=org.id,
           project_id=project.id, changes={"code": project.code, "name_en": project.name_en},
           ip=c.meta.ip, user_agent=c.meta.user_agent)

@@ -60,7 +60,8 @@
     "colName": "Project",
     "colRecords": "Submittals",
     "colOpen": "Awaiting reply",
-    "colOverdue": "Overdue"
+    "colOverdue": "Overdue",
+    "typeHint": "Copies its stages and locations"
   },
   "errors": {
     "invalid_credentials": "Wrong email or password.",
@@ -101,7 +102,16 @@
     "kind_name_required": "Enter the type name in Arabic and English.",
     "kind_one_active": "At least one type must stay active.",
     "invalid_kind": "This submittal type is not in the project's list.",
-    "cannot_set_required_by": "You cannot change the needed-by date of this request now."
+    "cannot_set_required_by": "You cannot change the needed-by date of this request now.",
+    "weights_must_total_100": "Active stage weights must total 100%.",
+    "stage_in_use": "A stage used by requests cannot be deleted. Switch it off instead.",
+    "location_in_use": "A location used by requests cannot be deleted. Switch it off instead.",
+    "type_in_use": "A type used by projects cannot be deleted. Switch it off instead.",
+    "type_duplicate": "Two types have the same name.",
+    "labels_required": "Enter the group and unit names in Arabic and English.",
+    "name_required": "Enter the Arabic and English name on every line.",
+    "invalid_stage": "That stage is not in this project.",
+    "invalid_location": "That location is not in this project."
   },
   "common": {
     "cancel": "Cancel",
@@ -111,7 +121,7 @@
   },
   "nav": {
     "projects": "Projects",
-    "orgUsers": "Organization users",
+    "orgUsers": "Organization",
     "inbox": "Awaiting me"
   },
   "team": {
@@ -182,7 +192,11 @@
     "makeAdmin": "Make organization admin",
     "makeMember": "Make regular user",
     "suspendConfirm": "Sign-in is closed and they leave every project of the organization. Their records and answers stay. After reactivating, add them to projects again from the team page.",
-    "noProjects": "No projects"
+    "noProjects": "No projects",
+    "tabs": {
+      "users": "Users",
+      "types": "Project types"
+    }
   },
   "project": {
     "tabs": {
@@ -366,5 +380,50 @@
     "to": "to",
     "clear": "Clear filters",
     "kind": "Submittal type:"
+  },
+  "structure": {
+    "stage": "Stage",
+    "pickLocations": "Pick one or more",
+    "wholeProject": "Whole project",
+    "wholeGroup": "whole",
+    "whole": "Whole project",
+    "perLocation": "Per location",
+    "wholeStageHint": "This stage is done for the whole project, so the request covers all of it.",
+    "nameAr": "Arabic name",
+    "nameEn": "English name",
+    "scope": "Scope",
+    "weight": "Weight",
+    "inactive": "Off — not offered for new requests",
+    "usedHint": "Used by requests: switch it off instead of deleting.",
+    "addStage": "Add a stage",
+    "total": "Total",
+    "typeTitle": "Project type",
+    "applyHint": "Pick the project type to copy its stages and locations from the template, then adjust them here.",
+    "projectType": "Project type",
+    "apply": "Apply template",
+    "stagesTitle": "Project stages",
+    "stagesHint": "Work stages and their weight in progress (active ones total 100%). Requests pick a stage now; inspections will later.",
+    "locationsTitle": "{{group}}s and {{unit}}s",
+    "locationsHint": "Where work happens. A request covers one or more of them, or the whole project.",
+    "addUnit": "Add {{unit}}",
+    "addGroup": "Add {{group}}",
+    "typesTitle": "Project types",
+    "typesHint": "A template per type: stages, weights and default locations. Copied into a project when it is created; editing a template leaves existing projects as they are.",
+    "newType": "New type",
+    "stagesCount": "{{count}} stages",
+    "groupLabelAr": "اسم المجموعة",
+    "groupLabelEn": "Group name",
+    "groupLabelHint": "مبنى / منطقة",
+    "unitLabelAr": "اسم الوحدة",
+    "unitLabelEn": "Unit name",
+    "unitLabelHint": "طابق / مقطع",
+    "templateStages": "Template stages",
+    "templateUnits": "Default {{unit}}s",
+    "deleteType": "Delete type",
+    "addType": "Add a project type",
+    "location": "Location",
+    "filterStage": "Stage:",
+    "filterLocation": "Location:",
+    "all": "All"
   }
 }

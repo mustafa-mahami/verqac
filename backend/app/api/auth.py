@@ -10,6 +10,7 @@ from app.core.db import session_scope
 from app.core.deps import Ctx, RequestMeta, ctx, has_active_membership, request_meta, system_db
 from app.core.security import create_access_token, hash_password, hash_token, new_opaque_token, verify_password
 from app.core.seed import DEFAULT_DISCIPLINES
+from app.core.seed_structure import seed_project_types
 from app.models.core import Discipline, Organization, OrgMember, RefreshToken, User
 from app.schemas.core import LoginIn, MembershipOut, MeOut, OrgOut, RegisterOrgIn, TokenOut, UserOut
 
@@ -53,6 +54,7 @@ def register_org(body: RegisterOrgIn, response: Response, db: Session = Depends(
     db.add(OrgMember(org_id=org.id, user_id=user.id, org_role="admin"))
     for i, (code, ar, en) in enumerate(DEFAULT_DISCIPLINES):
         db.add(Discipline(org_id=org.id, code=code, name_ar=ar, name_en=en, sort=(i + 1) * 10))
+    seed_project_types(db, org.id)
     audit(db, entity="organization", action="register", entity_id=org.id, actor=user.id, org_id=org.id,
           changes={"name_en": org.name_en, "kind": org.kind}, ip=meta.ip, user_agent=meta.user_agent)
     return _issue(db, user, response, meta)

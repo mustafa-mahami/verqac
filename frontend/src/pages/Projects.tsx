@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { api, ApiError, type ProjectItem } from '../api';
+import { api, ApiError, type ProjectItem, type ProjectTypeT } from '../api';
 import { useAuth } from '../auth';
 import { pick } from '../i18n';
 
@@ -80,8 +80,12 @@ function NewProject({ onClose }: { onClose: () => void }) {
   const form = useForm({
     initialValues: {
       org_id: adminOrgs[0]?.org.id ?? '', code: '', name_ar: '', name_en: '', client_name: '', donor_name: '',
-      contract_no: '', start_date: '', end_date: '', consultant_name: '', owner_name: '',
+      contract_no: '', start_date: '', end_date: '', consultant_name: '', owner_name: '', project_type_id: '',
     },
+  });
+  const types = useQuery({
+    queryKey: ['projectTypes', form.values.org_id], enabled: !!form.values.org_id,
+    queryFn: () => api<ProjectTypeT[]>(`/orgs/${form.values.org_id}/project-types`),
   });
   const create = useMutation({
     mutationFn: (v: typeof form.values) => {
@@ -103,8 +107,13 @@ function NewProject({ onClose }: { onClose: () => void }) {
           <Select label={t('projects.org')} data={adminOrgs.map((m) => ({ value: m.org.id, label: pick(m.org, 'name') }))}
             {...form.getInputProps('org_id')} />
         )}
-        <TextInput label={t('projects.code')} description={t('projects.codeHint')} dir="ltr" required maxLength={20}
-          {...form.getInputProps('code')} />
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <TextInput label={t('projects.code')} description={t('projects.codeHint')} dir="ltr" required maxLength={20}
+            {...form.getInputProps('code')} />
+          <Select label={t('structure.projectType')} description={t('projects.typeHint')} clearable
+            data={(types.data ?? []).filter((x) => x.is_active).map((x) => ({ value: x.id!, label: pick(x, 'name') }))}
+            {...form.getInputProps('project_type_id')} />
+        </SimpleGrid>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <TextInput label={t('projects.nameAr')} dir="rtl" required {...form.getInputProps('name_ar')} />
           <TextInput label={t('projects.nameEn')} dir="ltr" required {...form.getInputProps('name_en')} />

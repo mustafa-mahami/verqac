@@ -72,6 +72,7 @@ class ProjectIn(BaseModel):
     # names written until the consultant / owner accept their invitation (design doc section 6)
     consultant_name: str | None = Field(default=None, max_length=200)
     owner_name: str | None = Field(default=None, max_length=200)
+    project_type_id: UUID | None = None  # copies the type's stages and locations into the project
 
 
 class RoleOut(Out):

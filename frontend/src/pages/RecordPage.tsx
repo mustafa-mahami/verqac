@@ -8,11 +8,12 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  api, ApiError, openProtected, type RecordDetail, type RecordMeta, type Team, type Transition,
+  api, ApiError, openProtected, type Place, type RecordDetail, type RecordMeta, type Team, type Transition,
 } from '../api';
 import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../format';
 import i18n, { pick } from '../i18n';
 import BackButton from './BackButton';
+import { PlacePicker, useStructure } from './Structure';
 
 const DETAIL_KEYS = ['submittal_kind', 'item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
 const LTR = new Set(['drawing_ref', 'spec_ref', 'boq_ref']);
@@ -182,6 +183,9 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
   const [error, setError] = useState<string | null>(null);
   const meta = useQuery({ queryKey: ['recMeta', rec.project_id], queryFn: () => api<RecordMeta>(`/projects/${rec.project_id}/records/meta?type=submittal`) });
   const d = rec.details;
+  const structure = useStructure(rec.project_id);
+  const initialPlace: Place = { stage_id: rec.stage?.id ?? null, all_locations: rec.all_locations, location_ids: rec.locations.map((x) => x.id) };
+  const [place, setPlace] = useState<Place>(initialPlace);
   const kindOptions = (meta.data?.submittal_kinds ?? []).map((k) => ({ value: k.code ?? '', label: pick(k, 'name') }));
   // a record may hold a kind that was since deactivated (or legacy text): keep it selectable
   if (d.submittal_kind && !kindOptions.some((o) => o.value === d.submittal_kind))
@@ -200,6 +204,7 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
         body: JSON.stringify({
           title: v.title.trim(), description: blank(v.description), discipline_id: v.discipline_id || null,
           details: Object.fromEntries(DETAIL_KEYS.map((k) => [k, blank(v[k])])),
+          ...place,
         }),
       });
     },
@@ -212,6 +217,7 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
         <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />
         <Select label={t('rec.discipline')} allowDeselect={false}
           data={(meta.data?.disciplines ?? []).map((x) => ({ value: x.id, label: pick(x, 'name') }))} {...form.getInputProps('discipline_id')} />
+        {structure.data && <PlacePicker structure={structure.data} value={place} onChange={setPlace} keep={initialPlace} />}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <Select label={t('rec.f.submittal_kind')} allowDeselect={false} data={kindOptions} {...form.getInputProps('submittal_kind')} />
           {DETAIL_KEYS.filter((k) => k !== 'submittal_kind').map((k) => <TextInput key={k} label={t(`rec.f.${k}`)} dir={LTR.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />)}
@@ -326,6 +332,11 @@ export default function RecordPage() {
             <Card withBorder>
               <Title order={5} mb="sm">{t('rec.details')}</Title>
               <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+                {r.stage && <Field label={t('structure.stage')} value={pick(r.stage, 'name')} />}
+                {(r.all_locations || r.locations.length > 0) && (
+                  <Field label={t('structure.location')}
+                    value={r.all_locations ? t('structure.wholeProject') : r.locations.map((x) => pick(x, 'name')).join(i18n.language === 'en' ? ', ' : '، ')} />
+                )}
                 {DETAIL_KEYS.filter((k) => k !== 'unit').map((k) => (
                   <Field key={k} label={t(`rec.f.${k}`)} ltr={LTR.has(k)}
                     value={k === 'quantity' && det.quantity != null ? `${Number(det.quantity)} ${det.unit ?? ''}`

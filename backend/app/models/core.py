@@ -159,6 +159,8 @@ class Project(Base):
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
     settings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    # FK added by migration 0008 (project_types is created after this table)
+    project_type_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_at: Mapped[datetime] = created()
 

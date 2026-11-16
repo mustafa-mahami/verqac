@@ -105,6 +105,7 @@ export interface RecordRow {
   id: string; number: string; rev_no: number; title: string; state: State; discipline: Discipline | null;
   submitted_at: string | null; due_at: string | null; answered_at: string | null; overdue: boolean; revisions: number; required_by: string | null;
   submittal_kind: string | null; submittal_kind_name: { ar: string; en: string } | null;
+  stage_id: string | null; all_locations: boolean; location_ids: string[];
 }
 export interface SubmittalDetails {
   submittal_kind: string | null; item: string | null; manufacturer: string | null; supplier: string | null;
@@ -122,7 +123,9 @@ export interface RecordDetail {
   description: string | null; discipline: Discipline | null; state: State; from_party_kind: string;
   created_by: User; created_at: string; submitted_by: User | null; submitted_at: string | null; due_at: string | null;
   overdue: boolean; answered_by: User | null; answered_on_behalf_of: User | null; answered_at: string | null;
-  response_comment: string | null; required_by: string | null; required_by_note: string | null; can_set_required_by: boolean; details: SubmittalDetails; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
+  response_comment: string | null; required_by: string | null; required_by_note: string | null; can_set_required_by: boolean; details: SubmittalDetails;
+  stage: { id: string; name_ar: string; name_en: string; scope: string } | null; all_locations: boolean;
+  locations: { id: string; kind: string; name_ar: string; name_en: string }[]; submittal_kind_name: { ar: string; en: string } | null; transitions: Transition[]; can_edit: boolean;
   can_revise: boolean; can_attach: string[]; can_act_on_behalf: boolean; events: RecordEvent[];
   assigned_to: User | null; can_assign: boolean; assign_candidates: User[]; no_discipline_engineer: boolean;
   comments: RecordComment[]; attachments: Attachment[]; revisions: { id: string; rev_no: number; state: State }[];
@@ -140,3 +143,20 @@ export interface InboxItem {
 }
 export interface NotificationItem { id: number; record_id: string | null; event: string; title_ar: string; title_en: string; body: string | null; created_at: string; read: boolean }
 export interface Notifications { unread: number; items: NotificationItem[] }
+
+// ---- project structure (mirror app/schemas/structure.py)
+export type StageScope = 'per_location' | 'whole';
+export interface TemplateStage { name_ar: string; name_en: string; scope: StageScope; weight: number | string }
+export interface ProjectTypeT {
+  id: string | null; name_ar: string; name_en: string; group_label_ar: string; group_label_en: string;
+  unit_label_ar: string; unit_label_en: string; stages: TemplateStage[]; units: { name_ar: string; name_en: string }[]; is_active: boolean;
+}
+export interface StageT extends TemplateStage { id: string | null; is_active: boolean; used: boolean }
+export interface UnitT { id: string | null; name_ar: string; name_en: string; is_active: boolean; used: boolean }
+export interface GroupT extends UnitT { units: UnitT[] }
+export interface TypeRef { id: string; name_ar: string; name_en: string }
+export interface Structure {
+  project_type: TypeRef | null; labels: { group_ar: string; group_en: string; unit_ar: string; unit_en: string };
+  stages: StageT[]; locations: GroupT[]; can_edit: boolean; types: TypeRef[];
+}
+export interface Place { stage_id: string | null; all_locations: boolean; location_ids: string[] }

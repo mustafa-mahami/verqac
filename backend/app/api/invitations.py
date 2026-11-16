@@ -17,6 +17,7 @@ from app.core.audit import audit
 from app.core.deps import RequestMeta, _bearer, request_meta, system_db
 from app.core.security import decode_access_token, hash_password, hash_token
 from app.core.seed import DEFAULT_DISCIPLINES
+from app.core.seed_structure import seed_project_types
 from app.models.core import (Discipline, Invitation, Organization, OrgMember, Project, ProjectMember, ProjectParty,
                              Role, User)
 from app.schemas.core import AcceptIn, InvitationInfo, OrgOut, ProjectOut, RoleOut, TokenOut
@@ -76,6 +77,7 @@ def _new_org(db: Session, kind: str, name_ar: str, name_en: str, locale: str, ad
     db.add(OrgMember(org_id=org.id, user_id=admin.id, org_role="admin"))
     for i, (code, ar, en) in enumerate(DEFAULT_DISCIPLINES):
         db.add(Discipline(org_id=org.id, code=code, name_ar=ar, name_en=en, sort=(i + 1) * 10))
+    seed_project_types(db, org.id)
     return org
 
 

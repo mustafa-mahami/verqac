@@ -7,9 +7,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, ApiError, type RecordDetail, type RecordMeta, type RecordRow } from '../api';
+import { api, ApiError, type Place, type RecordDetail, type RecordMeta, type RecordRow } from '../api';
 import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
+import { PlacePicker, placeText, useStructure } from './Structure';
 import RecordStats, { applyFilter, CATEGORIES, type StatsFilter } from './RecordStats';
 
 const DETAIL_KEYS = ['item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
@@ -19,6 +20,8 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const structure = useStructure(projectId);
+  const [place, setPlace] = useState<Place>({ stage_id: null, all_locations: false, location_ids: [] });
   const kinds = meta.submittal_kinds.map((k) => ({ value: k.code ?? '', label: pick(k, 'name') }));
   const form = useForm({
     initialValues: {
@@ -38,6 +41,7 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
         body: JSON.stringify({
           record_type: 'submittal', title: v.title.trim(), description: blank(v.description),
           discipline_id: v.discipline_id || null, number: blank(v.number),
+          ...place,
           required_by: v.required_by || null, required_by_note: v.required_by ? blank(v.required_by_note) : null,
           details: {
             submittal_kind: v.submittal_kind || null, item: blank(v.item), manufacturer: blank(v.manufacturer),
@@ -71,6 +75,7 @@ function NewSubmittal({ projectId, meta, onClose }: { projectId: string; meta: R
           <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} searchable {...form.getInputProps('submittal_kind')} />
           <TextInput label={t('rec.number')} placeholder={t('rec.numberHint')} dir="ltr" {...form.getInputProps('number')} />
         </SimpleGrid>
+        {structure.data && <PlacePicker structure={structure.data} value={place} onChange={setPlace} />}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           {DETAIL_KEYS.map((k) => (
             <TextInput key={k} label={t(`rec.f.${k}`)} dir={['drawing_ref', 'spec_ref', 'boq_ref', 'quantity'].includes(k) ? 'ltr' : undefined}
@@ -147,14 +152,16 @@ export default function Submittals({ projectId }: { projectId: string }) {
   });
   // the dashboard filter lives in the URL, so "back" from a record returns to the same view
   const [params, setParams] = useSearchParams();
+  const structure = useStructure(projectId);
   const filter: StatsFilter = {
     status: params.get('st') ?? 'all', discipline: params.get('disc') ?? 'all', kind: params.get('kind') ?? 'all',
+    stage: params.get('stage') ?? 'all', loc: params.get('loc') ?? 'all',
     q: params.get('q') ?? '', from: params.get('from') ?? '', to: params.get('to') ?? '',
   };
   const setFilter = (f: StatsFilter) => {
     const next = new URLSearchParams(params);
     const put = (k: string, v: string | undefined, empty = '') => (v && v !== empty ? next.set(k, v) : next.delete(k));
-    put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('kind', f.kind, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
+    put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('kind', f.kind, 'all'); put('stage', f.stage, 'all'); put('loc', f.loc, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
     setParams(next, { replace: true });
   };
   const sort = (params.get('sort') ?? 'number') as SortKey;
@@ -166,8 +173,8 @@ export default function Submittals({ projectId }: { projectId: string }) {
     nextDir === 'asc' ? next.delete('dir') : next.set('dir', nextDir);
     setParams(next, { replace: true });
   };
-  const shown = useMemo(() => sortRows(applyFilter(rows.data ?? [], filter), sort, dir),
-    [rows.data, filter.status, filter.discipline, filter.kind, filter.q, filter.from, filter.to, sort, dir]);
+  const shown = useMemo(() => sortRows(applyFilter(rows.data ?? [], filter, false, structure.data), sort, dir),
+    [rows.data, structure.data, filter.status, filter.discipline, filter.kind, filter.stage, filter.loc, filter.q, filter.from, filter.to, sort, dir]);
   const narrowed = !!(filter.q || filter.from || filter.to);
 
   return (
@@ -191,7 +198,8 @@ export default function Submittals({ projectId }: { projectId: string }) {
         {meta.data?.can_create && <Button onClick={() => setOpen(true)}>{t('rec.new')}</Button>}
       </Group>
       {rows.data && rows.data.length > 0 && (
-        <RecordStats rows={rows.data} filter={filter} onChange={setFilter} showDraft={meta.data?.party_kind === 'contractor'} />
+        <RecordStats rows={rows.data} filter={filter} onChange={setFilter} showDraft={meta.data?.party_kind === 'contractor'}
+          structure={structure.data} />
       )}
       {rows.isSuccess && shown.length === 0 ? <Text c="dimmed">{rows.data.length ? t('stats.noneHere') : t('rec.empty')}</Text> : (
         <Card withBorder p={0}>
@@ -211,7 +219,12 @@ export default function Submittals({ projectId }: { projectId: string }) {
                 {shown.map((r) => (
                   <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/records/${r.id}`)}>
                     <Table.Td><Text size="sm" fw={500} dir="ltr" ta="start" style={{ whiteSpace: 'nowrap' }}>{r.number} · R{r.rev_no}</Text></Table.Td>
-                    <Table.Td><Text size="sm" lineClamp={2}>{r.title}</Text></Table.Td>
+                    <Table.Td>
+                      <Text size="sm" lineClamp={2}>{r.title}</Text>
+                      {(r.stage_id || r.all_locations || r.location_ids.length > 0) && (
+                        <Text size="xs" c="dimmed" lineClamp={1}>{placeText(structure.data, r)}</Text>
+                      )}
+                    </Table.Td>
                     <Table.Td><Text size="sm">{r.discipline ? pick(r.discipline, 'name') : ''}</Text></Table.Td>
                     <Table.Td><Badge tt="none" variant="light" color={stateColor(r.state.color)}>{pick(r.state, 'name')}</Badge></Table.Td>
                     <Table.Td><Text size="sm">{fmtDate(r.submitted_at)}</Text></Table.Td>

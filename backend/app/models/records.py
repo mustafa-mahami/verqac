@@ -11,7 +11,7 @@ from datetime import date, datetime
 from sqlalchemy import (
     BigInteger, Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.core import Base, created, pk
@@ -120,6 +120,10 @@ class Record(Base):
     # latest date the author needs the answer by (e.g. from the supply schedule); never printed
     required_by: Mapped[date | None] = mapped_column(Date)
     required_by_note: Mapped[str | None] = mapped_column(String(300))
+    # work stage and locations the record covers (FK added by migration 0008); all_locations = the whole project
+    stage_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    all_locations: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    location_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)))
     answered_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     answered_on_behalf_of: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

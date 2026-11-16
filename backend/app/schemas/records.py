@@ -40,6 +40,20 @@ class KindName(BaseModel):
     en: str
 
 
+class StageRef(BaseModel):
+    id: UUID
+    name_ar: str
+    name_en: str
+    scope: str
+
+
+class LocationRef(BaseModel):
+    id: UUID
+    kind: str  # group (a whole building / zone) or unit (floor / section)
+    name_ar: str  # with the group's name when the project has several groups
+    name_en: str
+
+
 class SubmittalDetailsIO(BaseModel):
     submittal_kind: str | None = Field(default=None, max_length=100)
     item: str | None = Field(default=None, max_length=300)
@@ -61,6 +75,9 @@ class RecordIn(BaseModel):
     details: SubmittalDetailsIO = SubmittalDetailsIO()
     required_by: date | None = None
     required_by_note: str | None = Field(default=None, max_length=300)
+    stage_id: UUID | None = None
+    all_locations: bool = False
+    location_ids: list[UUID] = []
 
 
 class RequiredByIn(BaseModel):
@@ -73,6 +90,10 @@ class RecordPatch(BaseModel):
     description: str | None = None
     discipline_id: UUID | None = None
     details: SubmittalDetailsIO | None = None
+    # sent together: the stage and where it applies
+    stage_id: UUID | None = None
+    all_locations: bool | None = None
+    location_ids: list[UUID] | None = None
 
 
 class TransitionIn(BaseModel):
@@ -101,6 +122,9 @@ class RecordRow(BaseModel):
     required_by: date | None = None
     submittal_kind: str | None = None
     submittal_kind_name: KindName | None = None
+    stage_id: UUID | None = None
+    all_locations: bool = False
+    location_ids: list[UUID] = []
 
 
 class EventOut(BaseModel):
@@ -167,6 +191,9 @@ class RecordDetail(BaseModel):
     can_set_required_by: bool = False
     details: SubmittalDetailsIO
     submittal_kind_name: KindName | None = None  # details.submittal_kind shown in both languages
+    stage: StageRef | None = None
+    all_locations: bool = False
+    locations: list[LocationRef] = []
     transitions: list[TransitionOut]
     can_edit: bool
     can_revise: bool

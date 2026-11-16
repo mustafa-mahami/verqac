@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, type ProjectSettings as Settings, type RecordType, type SubmittalKind } from '../api';
 import { pick } from '../i18n';
+import ProjectStructure from './ProjectStructure';
 
 export default function ProjectSettings({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
@@ -38,7 +39,8 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const editable = settings.data.can_edit;
 
   return (
-    <Stack maw={640}>
+    <Stack maw={900}>
+      <ProjectStructure projectId={projectId} />
       <Card withBorder>
         <Title order={5}>{t('settings.reviewTitle')}</Title>
         <Text size="sm" c="dimmed" mb="md">{t('settings.reviewHint')}</Text>

@@ -18,7 +18,7 @@ T = {
            "discipline": "التخصص", "submitted_on": "تاريخ التقديم", "subject": "الموضوع", "description": "الوصف",
            "due": "موعد الرد", "answered_on": "تاريخ الرد", "details": "التفاصيل", "attachments": "المرفقات",
            "decision": "قرار الاستشاري", "comments": "ملاحظات الاستشاري", "submitted_by": "قدّمه (المقاول)",
-           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
+           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
            "kind": {"submission": "مرفق التقديم", "response": "مرفق الرد", "photo": "صورة", "other": "أخرى"},
            "fields": {"submittal_kind": "نوع الاعتماد", "item": "البند / المادة", "manufacturer": "المصنّع",
                       "supplier": "المورّد / الوكيل", "drawing_ref": "رقم المخطط", "spec_ref": "بند المواصفات",
@@ -27,7 +27,7 @@ T = {
            "discipline": "Discipline", "submitted_on": "Submitted on", "subject": "Subject", "description": "Description",
            "due": "Reply due", "answered_on": "Answered on", "details": "Details", "attachments": "Attachments",
            "decision": "Consultant decision", "comments": "Consultant comments", "submitted_by": "Submitted by (Contractor)",
-           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
+           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
            "kind": {"submission": "Submission", "response": "Response", "photo": "Photo", "other": "Other"},
            "fields": {"submittal_kind": "Submittal type", "item": "Item / material", "manufacturer": "Manufacturer",
                       "supplier": "Supplier / agent", "drawing_ref": "Drawing no.", "spec_ref": "Spec section",
@@ -72,6 +72,11 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
     if det.get("quantity") is not None:
         det["quantity"] = f"{float(det['quantity']):g} {det.get('unit') or ''}".strip()
     pairs = [(t["fields"][k], det.get(k) or "", k in LTR_FIELDS) for k in t["fields"]]
+    sep = "، " if lang == "ar" else ", "
+    place = t["all_locations"] if d.all_locations else sep.join(getattr(x, f"name_{lang}") for x in d.locations)
+    if d.stage or place:
+        pairs = [(t["stage"], getattr(d.stage, f"name_{lang}") if d.stage else "", False),
+                 (t["locations"], place, False)] + pairs
     rows = [(*pairs[i], *(pairs[i + 1] if i + 1 < len(pairs) else ("", "", False))) for i in range(0, len(pairs), 2)]
     ctx = dict(
         lang=lang, t=t, contractor=parties.get("contractor", ""), consultant=parties.get("consultant", ""),

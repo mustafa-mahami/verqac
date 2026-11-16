@@ -8,7 +8,7 @@ import Inbox from './pages/Inbox';
 import Invite from './pages/Invite';
 import Verify from './pages/Verify';
 import Login from './pages/Login';
-import OrgUsers from './pages/OrgUsers';
+import OrgPage from './pages/OrgPage';
 import ProjectPage from './pages/ProjectPage';
 import RecordPage from './pages/RecordPage';
 import Projects from './pages/Projects';
@@ -71,7 +71,7 @@ function Shell() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
           <Route path="/records/:id" element={<RecordPage />} />
-          <Route path="/org" element={<OrgUsers />} />
+          <Route path="/org" element={<OrgPage />} />
           <Route path="*" element={<Navigate to="/inbox" replace />} />
         </Routes>
       </AppShell.Main>

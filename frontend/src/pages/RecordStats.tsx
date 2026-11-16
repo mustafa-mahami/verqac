@@ -1,6 +1,7 @@
-import { Badge, Card, Group, SegmentedControl, SimpleGrid, Text, UnstyledButton } from '@mantine/core';
+import { Badge, Card, Group, SegmentedControl, Select, SimpleGrid, Text, UnstyledButton } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
-import type { RecordRow } from '../api';
+import type { RecordRow, Structure } from '../api';
+import { coversLocation, locationOptions } from './Structure';
 import { pick } from '../i18n';
 
 /** State categories in workflow order, with the colours the states use. Same for every record type. */
@@ -11,6 +12,7 @@ export const CATEGORIES = [
 
 export interface StatsFilter {
   status: string; discipline: string; kind?: string; // kind: submittal type code or "all"
+  stage?: string; loc?: string; // a stage id / a location id (building or floor), or "all"
   q?: string; from?: string; to?: string; // text in number/title; submission date range (YYYY-MM-DD, inclusive)
 }
 
@@ -18,11 +20,13 @@ export interface StatsFilter {
 const dayOf = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 /** Which rows a filter keeps: status is "all", "overdue" or a state category; discipline is a code or "all". */
-export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = false): RecordRow[] {
+export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = false, structure?: Structure): RecordRow[] {
   const q = (f.q ?? '').trim().toLowerCase();
   return rows.filter((r) => {
     if (f.discipline !== 'all' && r.discipline?.code !== f.discipline) return false;
     if (f.kind && f.kind !== 'all' && r.submittal_kind !== f.kind) return false;
+    if (f.stage && f.stage !== 'all' && r.stage_id !== f.stage) return false;
+    if (f.loc && f.loc !== 'all' && structure && !coversLocation(structure, r, f.loc)) return false;
     if (q && !r.number.toLowerCase().includes(q) && !r.title.toLowerCase().includes(q)) return false;
     if (f.from || f.to) {
       if (!r.submitted_at) return false; // drafts were not submitted in any period
@@ -38,8 +42,8 @@ export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = fa
  * Register dashboard: one tile per state category with its count, plus all and overdue.
  * A tile filters the list below; a discipline switch appears when the list spans several disciplines.
  */
-export default function RecordStats({ rows, filter, onChange, showDraft }: {
-  rows: RecordRow[]; filter: StatsFilter; onChange: (f: StatsFilter) => void; showDraft: boolean;
+export default function RecordStats({ rows, filter, onChange, showDraft, structure }: {
+  rows: RecordRow[]; filter: StatsFilter; onChange: (f: StatsFilter) => void; showDraft: boolean; structure?: Structure;
 }) {
   const { t } = useTranslation();
   const disciplines = new Map<string, RecordRow['discipline']>();
@@ -47,8 +51,11 @@ export default function RecordStats({ rows, filter, onChange, showDraft }: {
   const kinds = new Map<string, string>();
   rows.forEach((r) => r.submittal_kind && kinds.set(r.submittal_kind,
     r.submittal_kind_name ? pick({ n_ar: r.submittal_kind_name.ar, n_en: r.submittal_kind_name.en }, 'n') : r.submittal_kind));
-  const inScope = applyFilter(rows, filter, true);
-  const count = (status: string) => applyFilter(inScope, { ...filter, status }).length;
+  const inScope = applyFilter(rows, filter, true, structure);
+  const count = (status: string) => applyFilter(inScope, { ...filter, status }, false, structure).length;
+  const usedStages = new Set(rows.map((r) => r.stage_id).filter(Boolean));
+  const stageOptions = (structure?.stages ?? []).filter((x) => usedStages.has(x.id)).map((x) => ({ value: x.id!, label: pick(x, 'name') }));
+  const hasPlaces = rows.some((r) => r.all_locations || r.location_ids.length > 0);
 
   const tiles: { key: string; color: string }[] = [
     { key: 'all', color: 'verqac' },
@@ -59,7 +66,7 @@ export default function RecordStats({ rows, filter, onChange, showDraft }: {
 
   return (
     <Card withBorder p="sm">
-      {(disciplines.size > 1 || kinds.size > 1) && (
+      {(disciplines.size > 1 || kinds.size > 1 || stageOptions.length > 0 || hasPlaces) && (
         <Group mb="sm" gap="lg">
           {disciplines.size > 1 && (
             <Group gap="xs">
@@ -77,6 +84,22 @@ export default function RecordStats({ rows, filter, onChange, showDraft }: {
                 onChange={(v) => onChange({ ...filter, kind: v })}
                 data={[{ value: 'all', label: t('stats.allDisciplines') },
                   ...[...kinds.entries()].map(([value, label]) => ({ value, label }))]} />
+            </Group>
+          )}
+          {stageOptions.length > 0 && (
+            <Group gap="xs">
+              <Text size="sm" c="dimmed">{t('structure.filterStage')}</Text>
+              <Select size="xs" w={200} searchable value={filter.stage || 'all'} allowDeselect={false}
+                data={[{ value: 'all', label: t('structure.all') }, ...stageOptions]}
+                onChange={(v) => onChange({ ...filter, stage: v ?? 'all' })} />
+            </Group>
+          )}
+          {hasPlaces && structure && (
+            <Group gap="xs">
+              <Text size="sm" c="dimmed">{t('structure.filterLocation')}</Text>
+              <Select size="xs" w={220} searchable value={filter.loc || 'all'} allowDeselect={false}
+                data={[{ value: 'all', label: t('structure.all') }, ...(locationOptions(structure, [], true) as never[])]}
+                onChange={(v) => onChange({ ...filter, loc: v ?? 'all' })} />
             </Group>
           )}
         </Group>
