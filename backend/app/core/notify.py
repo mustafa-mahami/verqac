@@ -15,6 +15,7 @@ from sqlalchemy import insert, select
 from app.core.config import get_settings
 from app.core.deps import Ctx
 from app.core.mailer import mail_enabled, send_mail
+from app.core.push import send_push
 from app.models.core import Discipline, Project, ProjectMember, Role, RolePermission, User
 from app.models.records import Notification, Record, RecordType
 
@@ -68,12 +69,16 @@ def notify(c: Ctx, bg: BackgroundTasks, *, project: Project, rec: Record, event:
         {"user_id": u, "project_id": project.id, "record_id": rec.id, "event": event, "title_ar": title_ar[:300],
          "title_en": title_en[:300], "body": (body or "")[:2000] or None} for u in user_ids])
 
+    link = f"{get_settings().app_url.rstrip('/')}/records/{rec.id}"
+    # browser push (per user, not per project): the device shows it even when Verqac is closed
+    bg.add_task(send_push, set(user_ids), {"title": title_ar, "title_en": title_en, "body": body or "",
+                                           "url": f"/records/{rec.id}", "tag": f"{event}-{rec.id}"})
+
     ch = channels(project)
     want_mail, want_mahami = ch["email"] and mail_enabled(), ch["mahami"] and mahami_enabled()
     if not (want_mail or want_mahami):
         return
     emails = sorted(e.lower() for e in c.db.scalars(select(User.email).where(User.id.in_(user_ids), User.is_active)))
-    link = f"{get_settings().app_url.rstrip('/')}/records/{rec.id}"
     if want_mail:
         text = f"{title_ar}\n{body or ''}\n\n{title_en}\n\n{link}\n"
         for e in emails:

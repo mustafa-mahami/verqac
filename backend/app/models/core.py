@@ -223,6 +223,20 @@ class Invitation(Base):
     created_at: Mapped[datetime] = created()
 
 
+class PushSubscription(Base):
+    """A browser that asked for push notifications (Web Push): they arrive even when Verqac is closed."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[uuid.UUID] = pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200), nullable=False)
+    auth: Mapped[str] = mapped_column(String(100), nullable=False)
+    user_agent: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = created()
+
+
 class PasswordReset(Base):
     """One-time link to set a new password: e-mailed on "forgot password", or made by an org admin."""
 

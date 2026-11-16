@@ -350,7 +350,9 @@
     "desktop": "Desktop notifications",
     "sound": "Alert sound",
     "blocked": "The browser blocks notifications for this site; allow them from the lock icon next to the address.",
-    "whileOpen": "Works while Verqac is open in a tab, even minimized or behind other windows."
+    "whileOpen": "Works while Verqac is open in a tab, even minimized or behind other windows.",
+    "pushHint": "Turn on desktop notifications to get them with a sound even when Verqac is closed, as long as the browser runs on this device.",
+    "pushOn": "On for this device: notifications arrive with a sound and stay on screen until closed, even when Verqac is closed."
   },
   "assign": {
     "label": "Assign to engineer",

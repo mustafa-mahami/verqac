@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, type NotificationItem, type Notifications } from '../api';
 import { fmtDate } from '../format';
+import { currentSubscription, disablePush, enablePush, pushSupported } from '../push';
 import { pick } from '../i18n';
 
 // ---- browser alerts (while a Verqac tab is open, even in the background)
@@ -55,9 +56,28 @@ export default function Bell() {
   const [permission, setPermission] = useState(canDesktop() ? Notification.permission : 'denied');
   const lastSeen = useRef<number | null>(null);
   const setPref = (p: Prefs) => { setPrefs(p); savePrefs(p); };
+  // Web Push: the browser shows notifications even when Verqac is closed
+  const [pushOn, setPushOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void currentSubscription().then((s) => setPushOn(!!s)).catch(() => undefined); }, []);
+  // a push arrived while a tab is open: refresh now instead of waiting for the next poll
+  useEffect(() => {
+    if (!pushSupported()) return;
+    const on = (e: MessageEvent) => { if (e.data?.type === 'verqac-push') void qc.invalidateQueries({ queryKey: ['notifications'] }); };
+    navigator.serviceWorker.addEventListener('message', on);
+    return () => navigator.serviceWorker.removeEventListener('message', on);
+  }, [qc]);
   const toggleDesktop = async (on: boolean) => {
-    if (on && canDesktop() && Notification.permission !== 'granted') setPermission(await Notification.requestPermission());
-    setPref({ ...prefs, desktop: on });
+    setBusy(true);
+    try {
+      if (pushSupported()) {
+        if (on) { setPermission(await enablePush()); setPushOn(!!(await currentSubscription())); }
+        else { await disablePush(); setPushOn(false); }
+      } else if (on && canDesktop() && Notification.permission !== 'granted') {
+        setPermission(await Notification.requestPermission());
+      }
+      setPref({ ...prefs, desktop: on });
+    } finally { setBusy(false); }
   };
 
   // new notifications since the last poll: sound + a system notification
@@ -71,7 +91,7 @@ export default function Bell() {
     if (!fresh.length) return;
     qc.invalidateQueries({ queryKey: ['inbox'] });
     if (prefs.sound) chime();
-    if (prefs.desktop && canDesktop() && Notification.permission === 'granted') {
+    if (prefs.desktop && !pushOn && canDesktop() && Notification.permission === 'granted') {
       for (const n of fresh.slice(0, 3)) {
         const note = new Notification(pick(n, 'title'), { body: n.body ?? '', tag: `verqac-${n.id}`, icon: '/favicon.svg' });
         note.onclick = () => { window.focus(); note.close(); openItem(n); };
@@ -134,12 +154,13 @@ export default function Bell() {
         )}
         <Divider />
         <Stack gap={6} p="sm">
-          <Switch size="xs" label={t('bell.desktop')} checked={prefs.desktop && permission === 'granted'} disabled={!canDesktop() || permission === 'denied'}
+          <Switch size="xs" label={t('bell.desktop')} checked={(pushOn || prefs.desktop) && permission === 'granted'}
+            disabled={busy || !canDesktop() || permission === 'denied'}
             description={permission === 'denied' ? t('bell.blocked') : undefined}
             onChange={(e) => void toggleDesktop(e.currentTarget.checked)} />
           <Switch size="xs" label={t('bell.sound')} checked={prefs.sound}
             onChange={(e) => { setPref({ ...prefs, sound: e.currentTarget.checked }); if (e.currentTarget.checked) chime(); }} />
-          <Text size="xs" c="dimmed">{t('bell.whileOpen')}</Text>
+          <Text size="xs" c="dimmed">{t(pushOn ? 'bell.pushOn' : pushSupported() ? 'bell.pushHint' : 'bell.whileOpen')}</Text>
         </Stack>
       </Popover.Dropdown>
     </Popover>
