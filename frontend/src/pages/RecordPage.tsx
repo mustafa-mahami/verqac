@@ -356,6 +356,9 @@ export default function RecordPage() {
                 ))}
                 <Field label={t('rec.submitted')} value={fmtDate(r.submitted_at, true)} />
                 <Field label={t('rec.due')} value={fmtDate(r.due_at)} />
+                {r.answered_at && <Field label={t('rec.answered')} value={fmtDate(r.answered_at, true)} />}
+                {r.answered_by && <Field label={t('rec.answeredBy')} value={`${pick(r.answered_by, 'full_name')}${r.answered_on_behalf_of ? ` (${t('rec.onBehalf')} ${pick(r.answered_on_behalf_of, 'full_name')})` : ''}`} />}
+                {r.resubmit_due_at && <Field label={t('resubmit.byShort')} value={fmtDate(r.resubmit_due_at)} />}
                 <Field label={t('rec.submittedBy')} value={r.submitted_by ? pick(r.submitted_by, 'full_name') : null} />
                 <Field label={t('rec.addressedTo')} value={r.addressed_to.map((u) => pick(u, 'full_name')).join(i18n.language === 'en' ? ', ' : '، ') || null} />
               </SimpleGrid>
