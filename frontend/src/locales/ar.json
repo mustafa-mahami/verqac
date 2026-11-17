@@ -304,7 +304,8 @@
     "requiredByWas": "كان مطلوباً قبل {{date}}",
     "notPrinted": "ظاهر للمقاول والاستشاري فقط، ولا يُطبع في PDF.",
     "addressedTo": "موجّه إلى",
-    "addressedToHint": "مهندس الاستشاري الذي يوجَّه إليه الطلب"
+    "addressedToHint": "مهندس الاستشاري الذي يوجَّه إليه الطلب",
+    "answeredLate": "رُدّ عليه بعد الموعد"
   },
   "back": {
     "projects": "كل المشاريع",

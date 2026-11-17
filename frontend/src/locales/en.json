@@ -304,7 +304,8 @@
     "requiredByWas": "Was needed by {{date}}",
     "notPrinted": "Seen by the contractor and consultant only; not printed.",
     "addressedTo": "Submitted to",
-    "addressedToHint": "The consultant engineer this request goes to"
+    "addressedToHint": "The consultant engineer this request goes to",
+    "answeredLate": "Answered after the deadline"
   },
   "back": {
     "projects": "All projects",

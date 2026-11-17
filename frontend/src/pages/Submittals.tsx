@@ -151,7 +151,7 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
   );
 }
 
-type SortKey = 'number' | 'title' | 'discipline' | 'state' | 'submitted' | 'due';
+type SortKey = 'number' | 'title' | 'discipline' | 'state' | 'submitted' | 'due' | 'answered';
 const CAT_ORDER = Object.fromEntries(CATEGORIES.map(([c], i) => [c, i]));
 const collator = new Intl.Collator(['ar', 'en'], { numeric: true, sensitivity: 'base' });
 
@@ -164,6 +164,7 @@ function sortValue(r: RecordRow, key: SortKey): string | number | null {
     case 'state': return CAT_ORDER[r.state.category] ?? 99;
     case 'submitted': return r.submitted_at;
     case 'due': return r.due_at;
+    case 'answered': return r.answered_at;
   }
 }
 
@@ -266,6 +267,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                   <SortTh label={t('rec.state')} k="state" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={t('rec.submitted')} k="submitted" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={t('rec.due')} k="due" sort={sort} dir={dir} onSort={onSort} />
+                  <SortTh label={t('rec.answered')} k="answered" sort={sort} dir={dir} onSort={onSort} />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -294,6 +296,13 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                           {t('rec.requiredByShort')} {fmtDate(r.required_by)}
                         </Badge>
                       )}
+                    </Table.Td>
+                    <Table.Td>
+                      {(() => {
+                        const late = !!(r.answered_at && r.due_at && new Date(r.answered_at) > new Date(r.due_at));
+                        return <Text size="sm" c={late ? 'orange.8' : undefined} title={late ? t('rec.answeredLate') : undefined}>
+                          {fmtDate(r.answered_at, type === 'inspection')}</Text>;
+                      })()}
                     </Table.Td>
                   </Table.Tr>
                 ))}
