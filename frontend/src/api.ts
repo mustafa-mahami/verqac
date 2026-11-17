@@ -150,7 +150,7 @@ export interface RecordDetail {
 
 export interface ProjectStats { records: number; open: number; overdue: number }
 export interface ProjectSettings {
-  reply_hours: Record<string, number>; resubmit_hours: Record<string, number>; link_submittals: boolean; routing: Record<string, Routing>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
+  reply_hours: Record<string, number>; resubmit_hours: Record<string, number>; link_submittals: boolean; checklists: boolean; routing: Record<string, Routing>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
   email_available: boolean; mahami_available: boolean; can_edit: boolean; has_header: boolean;
 }
 export interface InboxItem {
@@ -178,7 +178,7 @@ export interface GroupT extends UnitT { units: UnitT[] }
 export interface TypeRef { id: string; name_ar: string; name_en: string }
 export interface Structure {
   project_type: TypeRef | null; labels: { group_ar: string; group_en: string; unit_ar: string; unit_en: string };
-  stages: StageT[]; locations: GroupT[]; can_edit: boolean; types: TypeRef[];
+  stages: StageT[]; locations: GroupT[]; can_edit: boolean; types: TypeRef[]; checklists: boolean;
 }
 export interface Place { stage_id: string | null; topic_id: string | null; all_locations: boolean; location_ids: string[] }
 

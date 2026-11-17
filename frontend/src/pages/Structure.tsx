@@ -55,8 +55,8 @@ function ChecklistEditor({ items, onChange, editable }: { items: CheckItem[]; on
 }
 
 /** Subjects under one stage: names, order, on/off (project stages), delete unless used. */
-function TopicsEditor({ topics, onChange, editable, withActive }: {
-  topics: TopicT[]; onChange: (t: TopicT[]) => void; editable: boolean; withActive: boolean;
+function TopicsEditor({ topics, onChange, editable, withActive, checklists }: {
+  topics: TopicT[]; onChange: (t: TopicT[]) => void; editable: boolean; withActive: boolean; checklists: boolean;
 }) {
   const { t } = useTranslation();
   const set = (i: number, patch: Partial<TopicT>) => onChange(topics.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -76,9 +76,11 @@ function TopicsEditor({ topics, onChange, editable, withActive }: {
             value={x.name_ar} onChange={(e) => set(i, { name_ar: e.currentTarget.value })} />
           <TextInput size="xs" flex={1} dir="ltr" aria-label={t('structure.nameEn')} placeholder={t('structure.nameEn')} disabled={!editable}
             value={x.name_en} onChange={(e) => set(i, { name_en: e.currentTarget.value })} />
-          <Button size="compact-xs" variant={(x.checklist ?? []).length ? 'light' : 'subtle'} color="gray" onClick={() => setOpen(i)}>
-            {t('checklist.button', { count: (x.checklist ?? []).length })}
-          </Button>
+          {checklists && (
+            <Button size="compact-xs" variant={(x.checklist ?? []).length ? 'light' : 'subtle'} color="gray" onClick={() => setOpen(i)}>
+              {t('checklist.button', { count: (x.checklist ?? []).length })}
+            </Button>
+          )}
           {withActive && <Switch size="xs" disabled={!editable} checked={x.is_active !== false} aria-label={t('settings.kindActive')}
             onChange={(e) => set(i, { is_active: e.currentTarget.checked })} />}
           {editable && (
@@ -106,8 +108,8 @@ function TopicsEditor({ topics, onChange, editable, withActive }: {
 }
 
 /** Rows of stages with name, scope, weight and their subjects; for type templates and a project's own stages. */
-export function StagesEditor<S extends TemplateStage & { is_active?: boolean; used?: boolean }>({ stages, onChange, editable, blank }: {
-  stages: S[]; onChange: (s: S[]) => void; editable: boolean; blank: S;
+export function StagesEditor<S extends TemplateStage & { is_active?: boolean; used?: boolean }>({ stages, onChange, editable, blank, checklists = true }: {
+  stages: S[]; onChange: (s: S[]) => void; editable: boolean; blank: S; checklists?: boolean;
 }) {
   const { t } = useTranslation();
   const set = (i: number, patch: Partial<S>) => onChange(stages.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -171,7 +173,7 @@ export function StagesEditor<S extends TemplateStage & { is_active?: boolean; us
               {open === i && (
                 <Table.Tr>
                   <Table.Td colSpan={cols} bg="gray.0">
-                    <TopicsEditor topics={s.topics ?? []} editable={editable} withActive={withActive}
+                    <TopicsEditor topics={s.topics ?? []} editable={editable} withActive={withActive} checklists={checklists}
                       onChange={(tp) => set(i, { topics: tp } as Partial<S>)} />
                   </Table.Td>
                 </Table.Tr>

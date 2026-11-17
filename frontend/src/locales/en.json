@@ -343,7 +343,9 @@
       "discipline": "The consultant engineers of the discipline",
       "manager": "The consultant PM, who assigns it",
       "choose": "The contractor picks the engineer"
-    }
+    },
+    "checklists": "Inspection checklists",
+    "checklistsHint": "The supervising engineer answers the checklist of the request's topic; it is printed with the reply. Edit the lists under the stage topics."
   },
   "resp": {
     "title": "Consultant's comments",

@@ -134,6 +134,7 @@ class ProjectSettingsOut(BaseModel):
     reply_hours: dict[str, int]  # record type code -> hours the responder has to answer
     resubmit_hours: dict[str, int]  # record type code -> hours the author has to resubmit after "revise"/"reject"
     link_submittals: bool = False  # inspections show and link the approved submittals of their stage
+    checklists: bool = False  # inspections are answered against their topic's checklist
     routing: dict[str, str] = {}  # record type code -> discipline | manager | choose
     notify: NotifyChannels
     submittal_kinds: list[SubmittalKind]
@@ -147,6 +148,7 @@ class ProjectSettingsIn(BaseModel):
     reply_hours: dict[str, int] = {}
     resubmit_hours: dict[str, int] = {}
     link_submittals: bool | None = None
+    checklists: bool | None = None
     routing: dict[str, str] = {}
     notify: NotifyChannels | None = None
     submittal_kinds: list[SubmittalKind] | None = None

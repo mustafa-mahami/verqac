@@ -94,6 +94,7 @@ class StructureOut(BaseModel):
     stages: list[StageIO]
     locations: list[GroupIO]
     can_edit: bool
+    checklists: bool = False  # the project uses inspection checklists
     types: list[TypeRef] = []  # the owner organization's types, to apply a template (editors only)
 
 

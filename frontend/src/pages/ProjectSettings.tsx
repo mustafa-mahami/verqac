@@ -32,19 +32,21 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const [reply, setReply] = useState<Record<string, number>>({});
   const [resub, setResub] = useState<Record<string, number>>({});
   const [links, setLinks] = useState(false);
+  const [checks, setChecks] = useState(false);
   const [route, setRoute] = useState<Record<string, Routing>>({});
   const [notify, setNotify] = useState({ email: false, mahami: false });
   const [kinds, setKinds] = useState<SubmittalKind[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
+    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (_at: string) =>
-      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, routing: route, notify, submittal_kinds: kinds }) }),
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, routing: route, notify, submittal_kinds: kinds }) }),
     onSuccess: (s, at) => {
       qc.setQueryData(['settings', projectId], s);
       qc.invalidateQueries({ queryKey: ['recMeta', projectId] });
+      qc.invalidateQueries({ queryKey: ['structure', projectId] });
       setMsg({ ok: true, text: t('settings.saved'), at });
     },
     onError: (e, at) => setMsg({ ok: false, text: t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic')), at }),
@@ -95,6 +97,8 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
                 data={(['discipline', 'manager', 'choose'] as const).map((m) => ({ value: m, label: t(`settings.routing.${m}`) }))} />
             </Group>
           ))}
+          <Switch mt="xs" label={t('settings.checklists')} description={t('settings.checklistsHint')} checked={checks}
+            disabled={!editable} onChange={(e) => setChecks(e.currentTarget.checked)} />
           <Switch mt="xs" label={t('settings.linkSubmittals')} description={t('settings.linkSubmittalsHint')} checked={links}
             disabled={!editable} onChange={(e) => setLinks(e.currentTarget.checked)} />
         </Stack>

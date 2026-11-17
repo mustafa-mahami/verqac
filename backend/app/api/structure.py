@@ -159,7 +159,8 @@ def structure_of(c: Ctx, project: Project, can_edit: bool) -> StructureOut:
             select(ProjectType).where(ProjectType.org_id == project.owner_org_id, ProjectType.is_active)
             .order_by(ProjectType.sort))]
     return StructureOut(project_type=ptype, labels=labels_of(project), stages=stages, locations=groups,
-                        can_edit=can_edit, types=types)
+                        can_edit=can_edit, types=types,
+                        checklists=bool((project.settings or {}).get("checklists", False)))
 
 
 def apply_type(c: Ctx, project: Project, t: ProjectType) -> None:

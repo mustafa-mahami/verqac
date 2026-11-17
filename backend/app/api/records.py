@@ -181,8 +181,12 @@ def _latest_rev(c: Ctx, rec: Record) -> int:
     return c.db.scalar(select(func.max(Record.rev_no)).where(Record.revision_group_id == rec.revision_group_id))
 
 
+def _checklists_on(project) -> bool:
+    return bool((project.settings or {}).get("checklists", False))
+
+
 def _topic_checklist(c: Ctx, rec: Record, rt: RecordType) -> list[dict]:
-    if rt.code != "inspection" or not rec.topic_id:
+    if rt.code != "inspection" or not rec.topic_id or not _checklists_on(c.db.get(Project, rec.project_id)):
         return []
     topic = c.db.get(ProjectStageTopic, rec.topic_id)
     return [{"ar": x["ar"], "en": x["en"], "result": None, "note": None} for x in (topic.checklist if topic else [])]
@@ -190,12 +194,20 @@ def _topic_checklist(c: Ctx, rec: Record, rt: RecordType) -> list[dict]:
 
 def _checklist(c: Ctx, rec: Record, rt: RecordType) -> list[dict]:
     """Fixed into the request at submission; a draft shows what its topic will be checked against."""
-    return rec.checklist if rec.checklist is not None else _topic_checklist(c, rec, rt)
+    if rec.checklist is not None:
+        # a waiting request whose project switched checklists off is answered without one
+        unanswered = not any(x.get("result") for x in rec.checklist)
+        return [] if unanswered and not _checklists_on(c.db.get(Project, rec.project_id)) else rec.checklist
+    return _topic_checklist(c, rec, rt)
 
 
-def _answer_checklist(rec: Record, answers, to: WorkflowState) -> None:
-    """Every line needs a result to answer; a plain acceptance cannot carry a non-conforming line."""
+def _answer_checklist(rec: Record, answers, to: WorkflowState, on: bool) -> None:
+    """Every line needs a result to answer; a plain acceptance cannot carry a non-conforming line.
+    If the project switched checklists off after this request was submitted, an answer without one drops it."""
     if not rec.checklist:
+        return
+    if not on and not answers:
+        rec.checklist = None
         return
     answers = answers or []
     if len(answers) != len(rec.checklist) or any(x.result is None for x in answers):
@@ -705,7 +717,7 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
             if body.performed_at and body.performed_at > now + timedelta(minutes=5):
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "performed_in_future")
             rec.performed_at = body.performed_at or now
-            _answer_checklist(rec, body.checklist, to)
+            _answer_checklist(rec, body.checklist, to, _checklists_on(a.project))
         if to.category in RESUBMIT_STATES:
             rec.resubmit_due_at = now + timedelta(hours=periods(a.project, rt)[1])
     rec.state_id, rec.state_category, rec.updated_at = to.id, to.category, now

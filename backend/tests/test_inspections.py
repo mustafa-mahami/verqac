@@ -73,6 +73,10 @@ def test_inspection_checklist(client, site):
     structure = st["stages"][0]
     slabs = next(tp for tp in structure["topics"] if tp["name_en"] == "Slabs")
     assert any(x["ar"].startswith("الغطاء الخرساني") for x in slabs["checklist"])
+    # off by default: no checklist on the request
+    off = _ir(client, site, stage_id=structure["id"], topic_id=slabs["id"], all_locations=True)
+    assert off["checklist"] == [] and st["checklists"] is False
+    assert client.put(f"/api/v1/projects/{pid}/settings", headers=hc, json={"checklists": True}).json()["checklists"] is True
     # the project edits its own copy: keep three lines (English falls back to Arabic)
     slabs["checklist"] = [{"ar": "الشدّات", "en": "Formwork"}, {"ar": "الحديد", "en": ""}, {"ar": "التمديدات", "en": "MEP"}]
     st = client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=st["stages"]).json()
@@ -98,3 +102,9 @@ def test_inspection_checklist(client, site):
     slabs2["checklist"] = [{"ar": "بند جديد", "en": "New"}]
     client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=st["stages"])
     assert len(client.get(f"/api/v1/records/{ir['id']}", headers=site["hqa"]).json()["checklist"]) == 3
+    # switched off while a request waits: it can be answered without the checklist, which is dropped
+    ir2 = _ir(client, site, stage_id=structure["id"], topic_id=slabs2["id"], all_locations=True)
+    act(client, site["hqa"], ir2["id"], "submit")
+    client.put(f"/api/v1/projects/{pid}/settings", headers=hc, json={"checklists": False})
+    r = client.post(f"/api/v1/records/{ir2['id']}/transitions", headers=site["hce"], json={"action": "accept"}).json()
+    assert r["state"]["code"] == "accepted" and r["checklist"] == []
