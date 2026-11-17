@@ -51,6 +51,8 @@ class Organization(Base):
     name_en: Mapped[str] = mapped_column(String(200), nullable=False)
     default_locale: Mapped[str] = mapped_column(String(5), nullable=False, server_default="ar")
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default="Asia/Hebron")
+    # {"calendar": {"weekend": [5], "holidays": [{"from", "to", "name"}]}}
+    settings: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = created()
 

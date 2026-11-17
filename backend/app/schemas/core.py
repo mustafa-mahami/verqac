@@ -130,6 +130,28 @@ class SubmittalKind(BaseModel):
     active: bool = True
 
 
+class HolidayIO(BaseModel):
+    from_: date = Field(alias="from")
+    to: date | None = None
+    name: str = Field(default="", max_length=100)
+    model_config = {"populate_by_name": True}
+
+    def stored(self) -> dict:
+        return {"from": self.from_.isoformat(), "to": (self.to or self.from_).isoformat(), "name": self.name.strip()}
+
+
+class OrgCalendar(BaseModel):
+    weekend: list[int] = [5]  # 0 = Sunday ... 6 = Saturday
+    holidays: list[HolidayIO] = []
+
+
+class ProjectCalendar(BaseModel):
+    weekend: list[int] | None = None  # None: the organization's
+    holidays: list[HolidayIO] = []  # in addition to the organization's
+    work_start: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    work_end: str | None = Field(default=None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
 class ProjectSettingsOut(BaseModel):
     reply_hours: dict[str, int]  # record type code -> hours the responder has to answer
     resubmit_hours: dict[str, int]  # record type code -> hours the author has to resubmit after "revise"/"reject"
@@ -137,6 +159,8 @@ class ProjectSettingsOut(BaseModel):
     checklists: bool = False  # inspections are answered against their topic's checklist
     reminders: bool = True  # reminders before and after reply / resubmission deadlines
     routing: dict[str, str] = {}  # record type code -> discipline | manager | choose
+    calendar: ProjectCalendar = ProjectCalendar()
+    org_calendar: OrgCalendar = OrgCalendar()  # the owner organization's, read only here
     notify: NotifyChannels
     submittal_kinds: list[SubmittalKind]
     has_header: bool = False  # a letterhead banner was uploaded
@@ -152,6 +176,7 @@ class ProjectSettingsIn(BaseModel):
     checklists: bool | None = None
     reminders: bool | None = None
     routing: dict[str, str] = {}
+    calendar: ProjectCalendar | None = None
     notify: NotifyChannels | None = None
     submittal_kinds: list[SubmittalKind] | None = None
 

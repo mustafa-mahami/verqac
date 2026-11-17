@@ -24,6 +24,7 @@ from app.models.structure import ProjectLocation, ProjectStage, ProjectStageTopi
 from app.core.seed_records import DEFAULT_PERIODS
 from app.core.kinds import active_codes, kind_code, kind_name, submittal_kinds
 from app.core.notify import members_who_can, notify
+from app.core.workcal import add_period, calendar_for
 from app.models.core import Discipline, Project, ProjectMember, ProjectParty, RolePermission, User
 from app.models.records import (Attachment, Record, RecordComment, RecordEvent, RecordType, StoredFile,
                                 SubmittalDetails, WorkflowState, WorkflowTransition)
@@ -703,7 +704,7 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
         rec.submitted_by, rec.submitted_at = c.user.id, now
         # the reply clock starts at the later of now and the time the inspection was asked for
         start = max(now, rec.requested_for) if rec.requested_for else now
-        rec.due_at = start + timedelta(hours=periods(a.project, rt)[0])
+        rec.due_at = add_period(start, periods(a.project, rt)[0], calendar_for(c.db, a.project))
         if rec.rev_no > 0:  # this revision answers the previous one's request to resubmit
             prev = c.db.scalar(select(Record).where(Record.revision_group_id == rec.revision_group_id,
                                                     Record.rev_no == rec.rev_no - 1))
@@ -719,7 +720,7 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
             rec.performed_at = body.performed_at or now
             _answer_checklist(rec, body.checklist, to, _checklists_on(a.project))
         if to.category in RESUBMIT_STATES:
-            rec.resubmit_due_at = now + timedelta(hours=periods(a.project, rt)[1])
+            rec.resubmit_due_at = add_period(now, periods(a.project, rt)[1], calendar_for(c.db, a.project))
     rec.state_id, rec.state_category, rec.updated_at = to.id, to.category, now
     c.db.flush()
     stamp = _stamp(c, rec, to) if t.effect == "respond" else None

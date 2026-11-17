@@ -11,6 +11,8 @@ from app.core.deps import Ctx, ctx
 from app.core.invites import create_invite
 from app.models.core import (Invitation, Organization, OrgMember, Project, ProjectMember, ProjectParty,
                              RefreshToken, Role, User)
+from app.core.workcal import org_calendar
+from app.schemas.core import OrgCalendar
 from app.schemas.core import (InviteOut, MemberProject, OrgInviteIn, OrgMemberOut, OrgMemberPatch, PendingInvite,
                               RoleOut, UserOut)
 
@@ -106,3 +108,25 @@ def invite_member(org_id: UUID, body: OrgInviteIn, bg: BackgroundTasks, c: Ctx =
     audit(c.db, entity="organization", action="invite_member", entity_id=org_id, actor=c.user.id, org_id=org_id,
           changes={"email": out.email, "org_role": body.org_role}, ip=c.meta.ip, user_agent=c.meta.user_agent)
     return out
+
+
+@router.get("/calendar", response_model=OrgCalendar)
+def get_calendar(org_id: UUID, c: Ctx = Depends(ctx)):
+    """Weekly days off and official holidays: reply periods skip them in this organization's projects."""
+    _membership(c, org_id)
+    return OrgCalendar(**org_calendar(c.db.get(Organization, org_id)))
+
+
+@router.put("/calendar", response_model=OrgCalendar)
+def put_calendar(org_id: UUID, body: OrgCalendar, c: Ctx = Depends(ctx)):
+    from app.api.projects import _check_weekend, _holidays  # local import: projects imports a lot
+    if _membership(c, org_id).org_role != "admin":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "org_admin_required")
+    _check_weekend(body.weekend)
+    org = c.db.get(Organization, org_id)
+    new = {"weekend": body.weekend, "holidays": _holidays(body.holidays)}
+    org.settings = {**(org.settings or {}), "calendar": new}
+    audit(c.db, entity="org", action="calendar", entity_id=org_id, actor=c.user.id, org_id=org_id,
+          changes={"weekend": body.weekend, "holidays": len(new["holidays"])}, ip=c.meta.ip, user_agent=c.meta.user_agent)
+    c.db.flush()
+    return OrgCalendar(**new)

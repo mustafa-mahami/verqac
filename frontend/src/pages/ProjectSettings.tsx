@@ -2,9 +2,10 @@ import { ActionIcon, Alert, Button, Card, Group, NumberInput, Select, Stack, Swi
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, ApiError, type ProjectSettings as Settings, type RecordType, type Routing, type SubmittalKind } from '../api';
+import { api, ApiError, type ProjectSettings as Settings, type ProjectCalendarT, type RecordType, type Routing, type SubmittalKind } from '../api';
 import { pick } from '../i18n';
 import ProjectHeader from './ProjectHeader';
+import { cleanHolidays, HolidaysEditor, holidayText, WeekendPicker } from './Calendar';
 import ProjectStructure from './ProjectStructure';
 
 /** A period as days + hours (stored in hours). */
@@ -34,16 +35,18 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const [links, setLinks] = useState(false);
   const [checks, setChecks] = useState(false);
   const [remind, setRemind] = useState(true);
+  const [cal, setCal] = useState<ProjectCalendarT>({ weekend: null, holidays: [], work_start: null, work_end: null });
   const [route, setRoute] = useState<Record<string, Routing>>({});
   const [notify, setNotify] = useState({ email: false, mahami: false });
   const [kinds, setKinds] = useState<SubmittalKind[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRemind(settings.data.reminders); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
+    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRemind(settings.data.reminders); setCal(settings.data.calendar); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (_at: string) =>
-      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, reminders: remind, routing: route, notify, submittal_kinds: kinds }) }),
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, reminders: remind, routing: route,
+        calendar: { ...cal, holidays: cleanHolidays(cal.holidays) }, notify, submittal_kinds: kinds }) }),
     onSuccess: (s, at) => {
       qc.setQueryData(['settings', projectId], s);
       qc.invalidateQueries({ queryKey: ['recMeta', projectId] });
@@ -108,6 +111,34 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
         {note('days')}
         {editable ? <Button mt="md" loading={save.isPending} onClick={() => save.mutate('days')}>{t('rec.save')}</Button>
           : <Text size="xs" c="dimmed" mt="md">{t('settings.readOnly')}</Text>}
+      </Card>
+      <Card withBorder>
+        <Title order={5}>{t('cal.projectTitle')}</Title>
+        <Text size="sm" c="dimmed" mb="md">{t('cal.projectHint')}</Text>
+        <Text fw={600} size="sm" mb={6}>{t('cal.weekend')}</Text>
+        <Switch mb="xs" disabled={!editable} checked={cal.weekend === null}
+          label={t('cal.useOrgWeekend', { days: settings.data.org_calendar.weekend.map((d) => t(`cal.day.${d}`)).join('، ') || t('cal.none') })}
+          onChange={(e) => setCal({ ...cal, weekend: e.currentTarget.checked ? null : [...settings.data!.org_calendar.weekend] })} />
+        {cal.weekend !== null && <WeekendPicker value={cal.weekend} disabled={!editable} onChange={(w) => setCal({ ...cal, weekend: w })} />}
+        <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.workHours')}</Text>
+        <Switch mb="xs" disabled={!editable} checked={cal.work_start !== null} label={t('cal.workHoursOn')} description={t('cal.workHoursHint')}
+          onChange={(e) => setCal({ ...cal, ...(e.currentTarget.checked ? { work_start: '07:00', work_end: '15:00' } : { work_start: null, work_end: null }) })} />
+        {cal.work_start !== null && (
+          <Group>
+            <TextInput type="time" w={140} label={t('cal.from')} disabled={!editable} value={cal.work_start ?? ''}
+              onChange={(e) => setCal({ ...cal, work_start: e.currentTarget.value })} />
+            <TextInput type="time" w={140} label={t('cal.to')} disabled={!editable} value={cal.work_end ?? ''}
+              onChange={(e) => setCal({ ...cal, work_end: e.currentTarget.value })} />
+          </Group>
+        )}
+        <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.orgHolidays')}</Text>
+        {settings.data.org_calendar.holidays.length
+          ? <Text size="sm">{settings.data.org_calendar.holidays.map(holidayText).join(' · ')}</Text>
+          : <Text size="sm" c="dimmed">{t('cal.noOrgHolidays')}</Text>}
+        <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.projectHolidays')}</Text>
+        <HolidaysEditor value={cal.holidays} editable={editable} onChange={(h) => setCal({ ...cal, holidays: h })} />
+        {note('calendar')}
+        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('calendar')}>{t('rec.save')}</Button>}
       </Card>
       <Card withBorder>
         <Title order={5}>{t('settings.notifyTitle')}</Title>

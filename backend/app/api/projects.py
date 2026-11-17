@@ -18,6 +18,8 @@ from app.core.notify import channels, mahami_enabled
 from app.models.core import Organization, OrgMember, Project, ProjectMember, ProjectParty, Role
 from app.core import storage
 from app.models.records import Record, RecordType, StoredFile, SubmittalDetails
+from app.core.workcal import org_calendar
+from app.schemas.core import OrgCalendar, ProjectCalendar
 from app.schemas.core import (OrgOut, PartyOut, ProjectIn, ProjectListItem, ProjectOut, ProjectSettingsIn, SubmittalKind,
                               ProjectSettingsOut, ProjectStats, RoleOut, NotifyChannels)
 
@@ -141,7 +143,10 @@ def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     for rt in c.db.scalars(select(RecordType).where(RecordType.org_id.is_(None)).order_by(RecordType.sort)):
         reply[rt.code], resub[rt.code] = periods(a.project, rt)
         route[rt.code] = routing(a.project, rt)
+    org = c.db.get(Organization, a.project.owner_org_id)
     return ProjectSettingsOut(reply_hours=reply, resubmit_hours=resub, routing=route,
+                              calendar=ProjectCalendar(**(a.project.settings or {}).get("calendar", {})),
+                              org_calendar=OrgCalendar(**org_calendar(org)),
                               link_submittals=bool((a.project.settings or {}).get("link_submittals", False)),
                               checklists=bool((a.project.settings or {}).get("checklists", False)),
                               reminders=bool((a.project.settings or {}).get("reminders", True)),
@@ -175,6 +180,20 @@ def _check_kinds(c: Ctx, project_id: UUID, old: list[dict], new: list[SubmittalK
     return out
 
 
+def _check_weekend(days) -> None:
+    if days is not None and (len(set(days)) != len(days) or any(not 0 <= d <= 6 for d in days) or len(days) > 3):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_weekend")
+
+
+def _holidays(items) -> list[dict]:
+    out = []
+    for h in items:
+        if h.to and h.to < h.from_ or h.to and (h.to - h.from_).days > 60:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_holiday")
+        out.append(h.stored())
+    return sorted(out, key=lambda x: x["from"])
+
+
 @router.put("/{project_id}/settings", response_model=ProjectSettingsOut)
 def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx)):
     """Reply periods per record type (contract / QMP). New periods apply to records submitted afterwards."""
@@ -198,6 +217,16 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
         old_r = dict(settings.get("routing", {}))
         settings["routing"] = {**old_r, **body.routing}
         changes.update({f"routing_{k}": v for k, v in diff(old_r, settings["routing"]).items()})
+    if body.calendar is not None:
+        cal = body.calendar
+        _check_weekend(cal.weekend)
+        if (cal.work_start is None) != (cal.work_end is None) or (cal.work_start and cal.work_start >= cal.work_end):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_work_hours")
+        new_cal = {"weekend": cal.weekend, "holidays": _holidays(cal.holidays),
+                   "work_start": cal.work_start, "work_end": cal.work_end}
+        if new_cal != settings.get("calendar"):
+            changes["calendar"] = [settings.get("calendar"), new_cal]
+            settings["calendar"] = new_cal
     if body.reminders is not None and body.reminders != bool(settings.get("reminders", True)):
         changes["reminders"] = [settings.get("reminders", True), body.reminders]
         settings["reminders"] = body.reminders

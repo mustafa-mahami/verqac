@@ -123,7 +123,10 @@
     "invalid_addressee": "This person cannot answer requests of this discipline.",
     "invalid_routing": "Invalid routing.",
     "checklist_incomplete": "Answer every checklist item before replying.",
-    "checklist_nonconforming": "An item is non-conforming: choose \"Accept with comments\" or \"Reject\"."
+    "checklist_nonconforming": "An item is non-conforming: choose \"Accept with comments\" or \"Reject\".",
+    "invalid_weekend": "Invalid days off (three at most).",
+    "invalid_holiday": "Invalid holiday dates (end before start or longer than 60 days).",
+    "invalid_work_hours": "Invalid working hours: start must be before end."
   },
   "common": {
     "cancel": "Cancel",
@@ -207,7 +210,8 @@
     "noProjects": "No projects",
     "tabs": {
       "users": "Users",
-      "types": "Project types"
+      "types": "Project types",
+      "calendar": "Calendar & holidays"
     }
   },
   "project": {
@@ -547,5 +551,37 @@
       "nc": "Non-conforming",
       "na": "N/A"
     }
+  },
+  "cal": {
+    "day": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    },
+    "orgTitle": "Calendar and official holidays",
+    "orgHint": "Weekly days off and official holidays are not counted in reply and resubmission periods in all the organization's projects. Changes apply to requests submitted afterwards.",
+    "weekend": "Weekly days off",
+    "holidays": "Official holidays",
+    "noHolidays": "No holidays yet.",
+    "addHoliday": "Add holiday",
+    "name": "Occasion",
+    "namePh": "e.g. Eid al-Fitr",
+    "from": "From",
+    "to": "To",
+    "days": "Days",
+    "none": "none",
+    "projectTitle": "Working days and hours",
+    "projectHint": "Reply and resubmission periods count working days: weekly days off, official holidays and project holidays are skipped.",
+    "useOrgWeekend": "As in the organization calendar ({{days}})",
+    "workHours": "Working hours",
+    "workHoursOn": "Set working hours",
+    "workHoursHint": "For periods in hours (such as inspections) only working hours count: a request after closing time starts counting the next working morning.",
+    "orgHolidays": "Official holidays (organization calendar)",
+    "noOrgHolidays": "No official holidays in the organization calendar yet (Organization settings → Calendar & holidays).",
+    "projectHolidays": "Project holidays"
   }
 }
