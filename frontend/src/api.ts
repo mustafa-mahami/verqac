@@ -150,7 +150,7 @@ export interface RecordDetail {
 
 export interface ProjectStats { records: number; open: number; overdue: number }
 export interface ProjectSettings {
-  reply_hours: Record<string, number>; resubmit_hours: Record<string, number>; link_submittals: boolean; checklists: boolean; routing: Record<string, Routing>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
+  reply_hours: Record<string, number>; resubmit_hours: Record<string, number>; link_submittals: boolean; checklists: boolean; reminders: boolean; routing: Record<string, Routing>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
   email_available: boolean; mahami_available: boolean; can_edit: boolean; has_header: boolean;
 }
 export interface InboxItem {

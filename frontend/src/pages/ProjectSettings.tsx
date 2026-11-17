@@ -33,16 +33,17 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const [resub, setResub] = useState<Record<string, number>>({});
   const [links, setLinks] = useState(false);
   const [checks, setChecks] = useState(false);
+  const [remind, setRemind] = useState(true);
   const [route, setRoute] = useState<Record<string, Routing>>({});
   const [notify, setNotify] = useState({ email: false, mahami: false });
   const [kinds, setKinds] = useState<SubmittalKind[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
+    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRemind(settings.data.reminders); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (_at: string) =>
-      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, routing: route, notify, submittal_kinds: kinds }) }),
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, reminders: remind, routing: route, notify, submittal_kinds: kinds }) }),
     onSuccess: (s, at) => {
       qc.setQueryData(['settings', projectId], s);
       qc.invalidateQueries({ queryKey: ['recMeta', projectId] });
@@ -97,6 +98,8 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
                 data={(['discipline', 'manager', 'choose'] as const).map((m) => ({ value: m, label: t(`settings.routing.${m}`) }))} />
             </Group>
           ))}
+          <Switch mt="xs" label={t('settings.reminders')} description={t('settings.remindersHint')} checked={remind}
+            disabled={!editable} onChange={(e) => setRemind(e.currentTarget.checked)} />
           <Switch mt="xs" label={t('settings.checklists')} description={t('settings.checklistsHint')} checked={checks}
             disabled={!editable} onChange={(e) => setChecks(e.currentTarget.checked)} />
           <Switch mt="xs" label={t('settings.linkSubmittals')} description={t('settings.linkSubmittalsHint')} checked={links}

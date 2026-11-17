@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="VERQAC_", env_file=".env", extra="ignore")
 
     env: str = "dev"  # dev | staging | prod
+    reminders: bool = True  # background deadline reminders (VERQAC_REMINDERS=0 to switch off)
     # The application connects as a non-owner role so that Row-Level Security applies.
     database_url: str = "postgresql+psycopg://verqac_app:verqac_app@localhost:5432/verqac"
     # Migrations run as the owner role (creates tables, policies, grants).

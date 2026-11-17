@@ -249,3 +249,14 @@ RECORD_TABLES = [
     "workflows", "workflow_states", "workflow_transitions", "record_types", "records", "submittal_details",
     "numbering_counters", "record_events", "record_comments", "files", "attachments",
 ]
+
+
+class RecordReminder(Base):
+    """A deadline reminder already sent, so each goes out once (late ones once per day for submittals)."""
+
+    __tablename__ = "record_reminders"
+
+    record_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("records.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), primary_key=True)  # reply_soon | reply_late | resub_soon | resub_late
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    sent_at: Mapped[datetime] = created()

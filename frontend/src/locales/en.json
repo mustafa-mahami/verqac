@@ -345,7 +345,9 @@
       "choose": "The contractor picks the engineer"
     },
     "checklists": "Inspection checklists",
-    "checklistsHint": "The supervising engineer answers the checklist of the request's topic; it is printed with the reply. Edit the lists under the stage topics."
+    "checklistsHint": "The supervising engineer answers the checklist of the request's topic; it is printed with the reply. Edit the lists under the stage topics.",
+    "reminders": "Deadline reminders",
+    "remindersHint": "Reminds whoever must reply before the deadline (a day for submittals, 30 minutes for inspections) and when it is overdue, and the contractor before and after the resubmission deadline. Overdue submittals are reminded daily."
   },
   "resp": {
     "title": "Consultant's comments",

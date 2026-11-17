@@ -144,6 +144,7 @@ def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     return ProjectSettingsOut(reply_hours=reply, resubmit_hours=resub, routing=route,
                               link_submittals=bool((a.project.settings or {}).get("link_submittals", False)),
                               checklists=bool((a.project.settings or {}).get("checklists", False)),
+                              reminders=bool((a.project.settings or {}).get("reminders", True)),
                               notify=NotifyChannels(**channels(a.project)),
                               submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project)],
                               has_header=bool((a.project.settings or {}).get("header_file_id")),
@@ -197,6 +198,9 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
         old_r = dict(settings.get("routing", {}))
         settings["routing"] = {**old_r, **body.routing}
         changes.update({f"routing_{k}": v for k, v in diff(old_r, settings["routing"]).items()})
+    if body.reminders is not None and body.reminders != bool(settings.get("reminders", True)):
+        changes["reminders"] = [settings.get("reminders", True), body.reminders]
+        settings["reminders"] = body.reminders
     if body.checklists is not None and body.checklists != bool(settings.get("checklists", False)):
         changes["checklists"] = [settings.get("checklists", False), body.checklists]
         settings["checklists"] = body.checklists
