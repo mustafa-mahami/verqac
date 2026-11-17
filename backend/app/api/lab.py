@@ -13,7 +13,7 @@ from app.core.access import project_access, require
 from app.core.audit import audit
 from app.core.db import session_scope
 from app.core.deps import Ctx, ctx
-from app.core.lab import (DECISIONS, MATERIAL_CODES, MATERIALS, ai_call, ai_enabled, ai_prompt, draft_from_ai, evaluate,
+from app.core.lab import (DECISIONS, MATERIAL_CODES, MATERIALS, ai_call, ai_enabled, ai_prompt, drafts_from_ai, evaluate,
                           log)
 from app.models.core import OrgMember, Project
 from app.models.lab import ConcreteClass, LabResult, LabTemplate
@@ -359,8 +359,10 @@ def _ai_job(record_id: uuid.UUID, file_id: uuid.UUID) -> None:
         data, model = ai_call(pdf, prompt)
         with session_scope(bypass=True) as s:
             res, rec = s.get(LabResult, record_id), s.get(Record, record_id)
-            draft = draft_from_ai(data, lab, [k for k in _classes(s, rec.project_id) if k.is_active], rec.topic_id)
-            res.ai_draft, res.ai_state, res.ai_message = {**draft, "model": model}, "ready", None
+            drafts = drafts_from_ai(data, lab, [k for k in _classes(s, rec.project_id) if k.is_active], rec.topic_id)
+            if not drafts or not any(d["lines"] for d in drafts):
+                raise ValueError("no_values_found")
+            res.ai_draft, res.ai_state, res.ai_message = {"certificates": drafts, "model": model}, "ready", None
     except Exception as e:  # noqa: BLE001 - the reason is shown on the test
         log.warning("AI reading failed for %s: %s", record_id, e)
         with session_scope(bypass=True) as s:

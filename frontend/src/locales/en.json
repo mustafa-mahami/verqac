@@ -750,7 +750,17 @@
       "repair": "Repair / remove and replace",
       "rejected": "Material / batch rejected",
       "other": "Other"
-    }
+    },
+    "tab28": "28-day results and other parameters ({{count}})",
+    "tab7": "7-day results ({{count}})",
+    "pct": "% of specified",
+    "specimensManual": "By hand: specimens",
+    "classHint": "Left empty, it is found from the certificate or the request topic when read",
+    "gradeUnknown": "The certificate grade \"{{grade}}\" is not a concrete class of the project — add it in the project settings (or as another name of a class) before applying, or it is judged on another class.",
+    "strengthDiff": "The certificate states {{grade}} = {{cert}} MPa, but the strength used is {{fck}} MPa — check the class.",
+    "certs": "The file holds {{count}} certificates",
+    "page": "Page",
+    "certsHint": "Pick this test's certificate. Read the others into their own tests from the same file."
   },
   "labt": {
     "hint": "Test templates used in all the organization's projects: parameters, units, test methods and acceptance limits. A new test takes its template; limits can be adjusted on the test.",
@@ -798,6 +808,7 @@
     "topics": "Topics (elements)",
     "topicsPh": "e.g. slabs, beams",
     "add": "Add class",
-    "rule_text": "mean ≥ {{mean}}, each ≥ {{each}} MPa"
+    "rule_text": "mean ≥ {{mean}}, each ≥ {{each}} MPa",
+    "aliases": "Other names on certificates"
   }
 }

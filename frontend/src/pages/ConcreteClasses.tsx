@@ -33,7 +33,7 @@ export default function ConcreteClasses({ projectId, editable }: { projectId: st
         <Table withRowBorders={false} verticalSpacing={4} horizontalSpacing={4}>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th w={90}>{t('cc.grade')}</Table.Th><Table.Th w={80}>{t('cc.fck')}</Table.Th><Table.Th w={80}>{t('cc.mean')}</Table.Th>
+              <Table.Th w={90}>{t('cc.grade')}</Table.Th><Table.Th w={130}>{t('cc.aliases')}</Table.Th><Table.Th w={80}>{t('cc.fck')}</Table.Th><Table.Th w={80}>{t('cc.mean')}</Table.Th>
               <Table.Th w={150}>{t('cc.rule')}</Table.Th><Table.Th w={80}>{t('cc.margin')}</Table.Th>
               <Table.Th>{t('cc.topics')}</Table.Th>{editable && <Table.Th w={30} />}
             </Table.Tr>
@@ -42,6 +42,8 @@ export default function ConcreteClasses({ projectId, editable }: { projectId: st
             {rows.map((x, i) => (
               <Table.Tr key={x.id ?? `n${i}`}>
                 <Table.Td><TextInput size="xs" dir="ltr" disabled={!editable} value={x.grade} onChange={(e) => set(i, { grade: e.currentTarget.value })} /></Table.Td>
+                <Table.Td><TextInput size="xs" dir="ltr" disabled={!editable} placeholder="G35, C30/37" value={x.aliases ?? ''}
+                  onChange={(e) => set(i, { aliases: e.currentTarget.value || null })} /></Table.Td>
                 <Table.Td><NumberInput size="xs" hideControls disabled={!editable} value={x.fck} onChange={(v) => set(i, { fck: n(v) })} /></Table.Td>
                 <Table.Td><NumberInput size="xs" hideControls disabled={!editable} value={x.mean_margin} onChange={(v) => set(i, { mean_margin: n(v) })} /></Table.Td>
                 <Table.Td><Select size="xs" disabled={!editable} allowDeselect={false} value={x.individual_rule}

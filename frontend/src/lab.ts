@@ -27,7 +27,8 @@ export interface LabOut extends LabData {
   checked: number; failed: number; decision: string | null; decision_note: string | null; decision_at: string | null;
   conflict: boolean; can_edit: boolean; can_decide: boolean; ai_enabled: boolean;
   ai_state: 'reading' | 'ready' | 'error' | 'applied' | null; ai_message: string | null;
-  ai_draft: (Partial<LabData> & { class_match?: string; cert_grade?: string | null; cert_strength?: number | null; remarks?: string | null; model?: string }) | null;
+  ai_draft: (Partial<LabData> & { class_match?: string; cert_grade?: string | null; cert_strength?: number | null; remarks?: string | null; model?: string;
+    page?: number; certificates?: unknown[] }) | null;
   ai_file_id: string | null;
 }
 

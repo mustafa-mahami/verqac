@@ -1,6 +1,6 @@
 import {
-  ActionIcon, Alert, Badge, Button, Card, Grid, Group, Loader, Modal, NumberInput, ScrollArea, Select, SimpleGrid, Stack, Table,
-  Text, Textarea, TextInput, Title,
+  ActionIcon, Alert, Badge, Button, Card, Grid, Group, Loader, Modal, NumberInput, ScrollArea, SegmentedControl, Select, SimpleGrid, Stack, Table,
+  Tabs, Text, Textarea, TextInput, Title,
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -18,9 +18,11 @@ const resColor = { pass: 'green', fail: 'red', na: 'gray' } as const;
 const num = (v: string | number) => (v === '' || v === null || v === undefined ? null : Number(v));
 
 /** Result lines: sample, parameter, value, limits, and the line's result. */
-export function LinesTable({ lines, onChange, editable, review }: {
-  lines: LabLine[]; onChange: (l: LabLine[]) => void; editable: boolean; review?: boolean;
+function LinesTable({ lines, onChange, editable, review, fck, addRole }: {
+  lines: LabLine[]; onChange: (l: LabLine[]) => void; editable: boolean; review?: boolean; fck?: number | null;
+  addRole?: LabLine['role'];
 }) {
+  const strength = lines.some((x) => x.role);
   const { t } = useTranslation();
   const set = (i: number, p: Partial<LabLine>) => onChange(lines.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
@@ -32,6 +34,7 @@ export function LinesTable({ lines, onChange, editable, review }: {
               <Table.Th w={80}>{t('lab.sample')}</Table.Th><Table.Th>{t('lab.parameter')}</Table.Th>
               <Table.Th w={110}>{t('lab.value')}</Table.Th><Table.Th w={70}>{t('lab.unit')}</Table.Th>
               <Table.Th w={80}>{t('lab.min')}</Table.Th><Table.Th w={80}>{t('lab.max')}</Table.Th>
+              {strength && <Table.Th w={80}>{t('lab.pct')}</Table.Th>}
               <Table.Th w={90}>{t('lab.result')}</Table.Th>{editable && <Table.Th w={30} />}
             </Table.Tr>
           </Table.Thead>
@@ -51,6 +54,7 @@ export function LinesTable({ lines, onChange, editable, review }: {
                 <Table.Td><Text size="sm" dir="ltr">{x.unit}</Text></Table.Td>
                 <Table.Td>{editable && x.kind === 'number' ? <NumberInput size="xs" hideControls value={x.min ?? ''} onChange={(v) => set(i, { min: num(v) })} /> : <Text size="sm">{x.min ?? ''}</Text>}</Table.Td>
                 <Table.Td>{editable && x.kind === 'number' ? <NumberInput size="xs" hideControls value={x.max ?? ''} onChange={(v) => set(i, { max: num(v) })} /> : <Text size="sm">{x.max ?? ''}</Text>}</Table.Td>
+                {strength && <Table.Td><Text size="sm">{x.role && fck && x.value ? `${Math.round((1000 * x.value) / fck) / 10}%` : ''}</Text></Table.Td>}
                 <Table.Td>{x.result && x.result !== 'na' && <Badge size="sm" tt="none" variant="light" color={resColor[x.result]}>{t(`lab.r.${x.result}`)}</Badge>}</Table.Td>
                 {editable && <Table.Td><ActionIcon size="sm" variant="subtle" color="red" aria-label="remove" onClick={() => onChange(lines.filter((_, j) => j !== i))}>×</ActionIcon></Table.Td>}
               </Table.Tr>
@@ -58,8 +62,30 @@ export function LinesTable({ lines, onChange, editable, review }: {
           </Table.Tbody>
         </Table>
       </ScrollArea>
-      {editable && <Group><Button size="compact-xs" variant="subtle" onClick={() => onChange([...lines, blankLine()])}>+ {t('lab.addLine')}</Button></Group>}
+      {editable && <Group><Button size="compact-xs" variant="subtle" onClick={() => onChange([...lines, blankLine(addRole === 'strength7'
+        ? { parameter: 'Compressive strength 7-day', unit: 'MPa', age: 7, role: 'strength7' } : {})])}>+ {t('lab.addLine')}</Button></Group>}
     </Stack>
+  );
+}
+
+/** 28-day results and other parameters, and 7-day results in their own tab (as in the certificate). */
+export function LinesTabs({ lines, onChange, editable, review, fck }: {
+  lines: LabLine[]; onChange: (l: LabLine[]) => void; editable: boolean; review?: boolean; fck?: number | null;
+}) {
+  const { t } = useTranslation();
+  const main = lines.filter((x) => x.role !== 'strength7');
+  const seven = lines.filter((x) => x.role === 'strength7');
+  if (!seven.length) return <LinesTable lines={lines} onChange={onChange} editable={editable} review={review} fck={fck} />;
+  const unsure = (l: LabLine[]) => (review ? l.filter((x) => !x.legible).length : 0);
+  return (
+    <Tabs defaultValue="main" keepMounted={false}>
+      <Tabs.List mb="xs">
+        <Tabs.Tab value="main">{t('lab.tab28', { count: main.length })}{unsure(main) ? ' ⚠' : ''}</Tabs.Tab>
+        <Tabs.Tab value="seven">{t('lab.tab7', { count: seven.length })}{unsure(seven) ? ' ⚠' : ''}</Tabs.Tab>
+      </Tabs.List>
+      <Tabs.Panel value="main"><LinesTable lines={main} onChange={(l) => onChange([...l, ...seven])} editable={editable} review={review} fck={fck} /></Tabs.Panel>
+      <Tabs.Panel value="seven"><LinesTable lines={seven} onChange={(l) => onChange([...main, ...l])} editable={editable} review={review} fck={fck} addRole="strength7" /></Tabs.Panel>
+    </Tabs>
   );
 }
 
@@ -118,8 +144,21 @@ function ResultLine({ lab }: { lab: LabOut }) {
 /** The AI review: the certificate next to the values read; nothing is saved until "Apply". */
 function AiReview({ rec, lab, classes, onDone }: { rec: RecordDetail; lab: LabOut; classes: ConcreteClass[]; onDone: (l: LabOut) => void }) {
   const { t } = useTranslation();
-  const draft = lab.ai_draft!;
-  const [d, setD] = useState<LabData>(() => ({ ...lab, ...draft, template_id: lab.template_id, material: lab.material } as LabData));
+  type Draft = NonNullable<LabOut['ai_draft']>;
+  // one draft per certificate in the PDF (older answers hold a single one)
+  const certs: Draft[] = (lab.ai_draft as { certificates?: Draft[] }).certificates ?? [lab.ai_draft!];
+  const [ci, setCi] = useState(0);
+  const [all, setAll] = useState<LabData[]>(() => certs.map((x) => ({ ...lab, ...x, template_id: lab.template_id, material: lab.material } as LabData)));
+  const draft = certs[ci];
+  const d = all[ci];
+  const setD = (x: LabData) => setAll(all.map((y, j) => (j === ci ? x : y)));
+  // choosing a class in the review fixes fck, the rule and the 28-day minimums, as on the test
+  const setHeader = (p: Partial<LabData>) => {
+    const k = p.class_id ? classes.find((c) => c.id === p.class_id) : null;
+    setD(k ? { ...d, ...p, fck: Number(k.fck), grade: k.grade, mean_margin: Number(k.mean_margin), individual_rule: k.individual_rule,
+      individual_margin: Number(k.individual_margin), lines: d.lines.map((x) => (x.role === 'strength28' ? { ...x, min: Number(k.fck) } : x)) }
+      : { ...d, ...p });
+  };
   const [pdf, setPdf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -138,14 +177,28 @@ function AiReview({ rec, lab, classes, onDone }: { rec: RecordDetail; lab: LabOu
       <Grid.Col span={{ base: 12, md: 7 }}>
         <Stack gap="sm">
           <Alert color="blue" variant="light" py={6}>{t('lab.reviewHint')}</Alert>
+          {certs.length > 1 && (
+            <Stack gap={4}>
+              <Text size="sm" fw={600}>{t('lab.certs', { count: certs.length })}</Text>
+              <SegmentedControl value={String(ci)} onChange={(v) => setCi(Number(v))}
+                data={certs.map((c, i) => ({ value: String(i), label: `${t('lab.page')} ${c.page ?? i + 1} · ${c.lab_report_no ?? '?'}` }))} />
+              <Text size="xs" c="dimmed">{t('lab.certsHint')}</Text>
+            </Stack>
+          )}
           {unsure > 0 && <Alert color="orange" variant="light" py={6}>{t('lab.unsureCount', { count: unsure })}</Alert>}
+          {d.acceptance === 'concrete' && (draft as { grade_unknown?: boolean }).grade_unknown && (
+            <Alert color="red" variant="light" py={6}>{t('lab.gradeUnknown', { grade: draft.cert_grade })}</Alert>
+          )}
+          {d.acceptance === 'concrete' && draft.cert_strength && d.fck && Math.abs(draft.cert_strength - d.fck) > 0.01 && (
+            <Alert color="orange" variant="light" py={6}>{t('lab.strengthDiff', { grade: draft.cert_grade ?? '', cert: draft.cert_strength, fck: d.fck })}</Alert>
+          )}
           {d.acceptance === 'concrete' && (
             <Text size="sm">{draft.class_match ? t(`lab.match.${draft.class_match}`, { grade: d.grade }) : t('lab.match.none')}
               {draft.cert_grade ? ` · ${t('lab.certGrade')}: ${draft.cert_grade}` : ''}</Text>
           )}
           {error && <Alert color="red">{error}</Alert>}
-          <HeaderFields d={d} set={(p) => setD({ ...d, ...p })} editable classes={classes} />
-          <LinesTable lines={d.lines} onChange={(l) => setD({ ...d, lines: l })} editable review />
+          <HeaderFields d={d} set={setHeader} editable classes={classes} />
+          <LinesTabs lines={d.lines} onChange={(l) => setD({ ...d, lines: l })} editable review fck={d.fck} />
           {draft.remarks && <Text size="xs" c="dimmed">{t('lab.aiRemarks')}: {draft.remarks}</Text>}
           <Group justify="flex-end">
             <Button variant="default" loading={discard.isPending} onClick={() => discard.mutate()}>{t('lab.discard')}</Button>
@@ -239,7 +292,7 @@ export default function LabPanel({ rec }: { rec: RecordDetail }) {
             data={(templates.data ?? []).map((x) => ({ value: x.id!, label: pick(x, 'name') }))} onChange={loadTemplate} />
           {tpl?.acceptance === 'concrete' && (
             <>
-              <NumberInput size="xs" w={120} label={t('lab.specimens')} min={1} max={100} value={specimens} onChange={(v) => setSpecimens(v === '' ? '' : Number(v))} />
+              <NumberInput size="xs" w={150} label={t('lab.specimensManual')} min={1} max={100} value={specimens} onChange={(v) => setSpecimens(v === '' ? '' : Number(v))} />
               <Button size="xs" variant="light" onClick={() => loadTemplate(d.template_id)}>{t('lab.generate')}</Button>
             </>
           )}
@@ -248,7 +301,7 @@ export default function LabPanel({ rec }: { rec: RecordDetail }) {
       {!lab.can_edit && tpl && <Text size="sm" mb="xs">{t('lab.template')}: {pick(tpl, 'name')}</Text>}
       <HeaderFields d={d} set={set} editable={lab.can_edit} classes={cls} />
       <Text fw={600} size="sm" mt="md" mb={4}>{t('lab.lines')}</Text>
-      <LinesTable lines={d.lines} onChange={(l) => set({ lines: l })} editable={lab.can_edit} />
+      <LinesTabs lines={d.lines} onChange={(l) => set({ lines: l })} editable={lab.can_edit} fck={d.fck} />
       {lab.can_edit && <Button mt="sm" loading={save.isPending} disabled={!dirty} onClick={() => save.mutate()}>{t('lab.save')}</Button>}
 
       {(lab.can_decide || lab.decision) && (

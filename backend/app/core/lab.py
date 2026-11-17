@@ -193,8 +193,10 @@ Extract the data EXACTLY as printed. Never invent values; use null when a value 
 
 Test type in our system: {name}  (acceptance method: {acceptance})
 
-Return ONLY one JSON object, no comments, with this structure:
-{{
+The PDF may contain SEVERAL certificates (e.g. one per page, each with its own report number).
+Return ALL of them, in page order, as ONLY one JSON object, no comments, with this structure:
+{{"certificates": [ {{
+  "page": int|null,
   "header": {{
     "lab_name": str|null, "lab_report_no": str|null, "report_date": "YYYY-MM-DD"|null,
     "sampling_date": "YYYY-MM-DD"|null, "test_date": "YYYY-MM-DD"|null,
@@ -208,7 +210,7 @@ Return ONLY one JSON object, no comments, with this structure:
       "value_text": str|null, "unit": str|null, "min": number|null, "max": number|null, "legible": true|false}}
   ],
   "remarks": str|null
-}}
+}} ]}}
 
 Rules:
 - Dates: the certificate uses day/month/year (e.g. 10-12-2024 = 2024-12-10).
@@ -252,6 +254,21 @@ def _date(v):
     return v if isinstance(v, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", v) else None
 
 
+def drafts_from_ai(data: dict, lab: dict, classes: list, topic_id) -> list[dict]:
+    """One draft per certificate found in the PDF (older single-certificate answers too)."""
+    certs = data.get("certificates") if isinstance(data.get("certificates"), list) else [data]
+    out = []
+    for i, c in enumerate(certs):
+        d = draft_from_ai(c, lab, classes, topic_id)
+        d["page"] = c.get("page") or i + 1
+        out.append(d)
+    return out
+
+
+def _class_names(c) -> list[str]:
+    return [norm_grade(c.grade)] + [norm_grade(x) for x in (c.aliases or "").split(",") if x.strip()]
+
+
 def draft_from_ai(data: dict, lab: dict, classes: list, topic_id) -> dict:
     """The values read, in our format, ready for review: header, lines with limits and roles, class found."""
     h = data.get("header") or {}
@@ -260,8 +277,17 @@ def draft_from_ai(data: dict, lab: dict, classes: list, topic_id) -> dict:
     acceptance = "concrete" if has_strength else (lab.get("acceptance") or "all")
     cert_fck = _num(h.get("specified_strength")) or grade_strength(h.get("grade"))
     cls, how = (None, "")
+    warnings = []
     if acceptance == "concrete":
         cls, how = match_class(classes, h.get("grade"), cert_fck, h.get("element"), topic_id)
+        g = norm_grade(h.get("grade"))
+        if g and cls and g not in _class_names(cls):
+            # the certificate states a grade the project does not define: the topic must not decide silently
+            cls, how = None, ""
+        if g and not cls and classes:
+            warnings.append("grade_unknown")
+        if cls and cert_fck and abs(float(cls.fck) - cert_fck) > 0.01:
+            warnings.append("strength_mismatch")
     fck = float(cls.fck) if cls else (cert_fck or _num(lab.get("fck")))
     known = {((x.get("sample") or "").strip().lower(), x["parameter"].strip().lower()): x for x in (lab.get("lines") or [])}
     lines = []
@@ -286,14 +312,19 @@ def draft_from_ai(data: dict, lab: dict, classes: list, topic_id) -> dict:
                       "value": _num(x.get("value")), "text": text, "min": mn, "max": mx, "role": role,
                       "legible": x.get("legible", True) is not False})
     concl = (h.get("lab_conclusion") or "").strip().lower()
-    out = {"acceptance": acceptance, "lab_name": h.get("lab_name"), "lab_report_no": h.get("lab_report_no"),
+    # the certificate names a grade the project has no class for: say so instead of judging silently
+    g = norm_grade(h.get("grade"))
+    known_grade = not g or any(g in [norm_grade(c.grade)] + [norm_grade(x) for x in (c.aliases or "").split(",") if x.strip()]
+                               for c in classes)
+    out = {"acceptance": acceptance, "lab_name": h.get("lab_name"), "grade_unknown": not known_grade, "lab_report_no": h.get("lab_report_no"),
            "report_date": _date(h.get("report_date")), "sampling_date": _date(h.get("sampling_date")),
            "test_date": _date(h.get("test_date")), "grade": cls.grade if cls else h.get("grade"),
            "cert_grade": h.get("grade"), "cert_strength": cert_fck, "fck": fck, "element": h.get("element"),
            "quantity": _num(h.get("quantity")), "quantity_uom": h.get("quantity_uom"),
            "specimen_count": int(_num(h.get("specimen_count")) or 0) or None, "specification": h.get("specification"),
            "lab_conclusion": concl if concl in ("pass", "fail") else None,
-           "class_id": str(cls.id) if cls else None, "class_match": how, "lines": lines, "remarks": data.get("remarks")}
+           "class_id": str(cls.id) if cls else None, "class_match": how, "warnings": warnings, "lines": lines,
+           "remarks": data.get("remarks")}
     if cls:
         out.update(mean_margin=float(cls.mean_margin), individual_rule=cls.individual_rule,
                    individual_margin=float(cls.individual_margin))

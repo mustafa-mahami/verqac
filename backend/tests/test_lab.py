@@ -70,19 +70,25 @@ def test_steel_all_rule_and_ai_reading(client, site, monkeypatch):
 
     def fake_call(pdf, prompt):
         seen["pdf"], seen["prompt"] = pdf[:8], prompt
-        return {"header": {"lab_report_no": "CC-24-020288", "grade": "C35/45", "report_date": "2024-12-10",
-                           "lab_conclusion": "PASS"},
-                "lines": [{"sample": "1-1", "parameter": "Compressive strength 28-day", "age_days": 28, "value": 47.5},
-                          {"sample": "2-1", "parameter": "Compressive strength 28-day", "age_days": 28, "value": 39.0, "legible": False},
-                          {"sample": "1-1", "parameter": "Compressive strength 7-day", "age_days": 7, "value": 33.1}],
-                "remarks": None}, "test-model"
+        return {"certificates": [
+            {"page": 1, "header": {"lab_report_no": "CC-24-020288", "grade": "C35/45", "report_date": "2024-12-10",
+                                   "lab_conclusion": "PASS"},
+             "lines": [{"sample": "1-1", "parameter": "Compressive strength 28-day", "age_days": 28, "value": 47.5},
+                       {"sample": "2-1", "parameter": "Compressive strength 28-day", "age_days": 28, "value": 39.0, "legible": False},
+                       {"sample": "1-1", "parameter": "Compressive strength 7-day", "age_days": 7, "value": 33.1}],
+             "remarks": None},
+            {"page": 2, "header": {"lab_report_no": "CC-24-020354", "grade": "B350", "specified_strength": 35},
+             "lines": [{"sample": "1-1", "parameter": "Compressive strength 28-day", "age_days": 28, "value": 36.9}]}]}, "test-model"
     monkeypatch.setattr(lab_api, "ai_call", fake_call)
     r = client.post(f"/api/v1/records/{t['id']}/lab/ai-read", headers=site["hqa"], json={"file_id": file_id}).json()
     assert r["ai_state"] == "reading"
     lab = client.get(f"/api/v1/records/{t['id']}/lab", headers=site["hqa"]).json()  # the job ran after the response
     assert lab["ai_state"] == "ready" and seen["pdf"].startswith(b"%PDF")
-    d = lab["ai_draft"]
-    assert d["acceptance"] == "concrete" and d["class_match"] == "grade" and d["fck"] == 45 and d["grade"] == "B450"
+    assert len(lab["ai_draft"]["certificates"]) == 2
+    d2 = lab["ai_draft"]["certificates"][1]
+    assert d2["lab_report_no"] == "CC-24-020354" and d2["warnings"] == ["grade_unknown"] and d2["class_id"] is None and d2["fck"] == 35 and d2["page"] == 2
+    d = lab["ai_draft"]["certificates"][0]
+    assert d["warnings"] == [] and d["acceptance"] == "concrete" and d["class_match"] == "grade" and d["fck"] == 45 and d["grade"] == "B450"
     s28 = [x for x in d["lines"] if x["role"] == "strength28"]
     assert [x["min"] for x in s28] == [45, 45] and s28[1]["legible"] is False
     # the user reviews and applies
