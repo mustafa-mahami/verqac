@@ -27,6 +27,10 @@ class Settings(BaseSettings):
 
     invitation_days: int = 14
 
+    # reading lab certificates (PDF) with an AI model: Anthropic Messages API
+    ai_api_key: str = ""
+    ai_model: str = "claude-sonnet-5-5"
+
     files_dir: str = "/data/files"
     max_upload_mb: int = 50
 

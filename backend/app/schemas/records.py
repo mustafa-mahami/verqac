@@ -167,6 +167,8 @@ class RecordRow(BaseModel):
     topic_id: UUID | None = None
     all_locations: bool = False
     location_ids: list[UUID] = []
+    lab_result: str | None = None  # lab tests: pass | fail (calculated)
+    lab_decision: str | None = None
 
 
 class EventOut(BaseModel):
@@ -272,6 +274,7 @@ class RecordMeta(BaseModel):
     link_submittals: bool = False
     reply_hours: int = 0
     routing: str = "discipline"
+    enabled: bool = True  # the project uses this type
 
 
 class AssignIn(BaseModel):

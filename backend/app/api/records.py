@@ -307,6 +307,12 @@ def _responders(c: Ctx, rec: Record, rt: RecordType) -> list:
 ROUTING_MODES = ("discipline", "manager", "choose")
 
 
+def type_enabled(project, code: str) -> bool:
+    """Each project shows the request types it uses (settings "types"; absent = all)."""
+    types = (project.settings or {}).get("types")
+    return types is None or code in types
+
+
 def routing(project, rt: RecordType) -> str:
     """Who a request goes to, per project and record type:
     discipline - the consultant engineers of its discipline (the PM still sees and can answer everything);
@@ -374,7 +380,9 @@ def records_meta(project_id: uuid.UUID, type: str = Query("submittal"), c: Ctx =
                              .order_by(Discipline.sort)).all()
         if p.my_codes:
             discs = [d for d in discs if d.code in p.my_codes]
-    return RecordMeta(record_type=RecordTypeOut.model_validate(rt), can_create=a.party is not None and p.can("create"),
+    on = type_enabled(a.project, rt.code)
+    return RecordMeta(record_type=RecordTypeOut.model_validate(rt),
+                      can_create=on and a.party is not None and p.can("create"), enabled=on,
                       disciplines=[DisciplineOut.model_validate(d) for d in discs],
                       party_kind=a.party.kind if a.party else None,
                       submittal_kinds=[SubmittalKind(**k) for k in submittal_kinds(a.project) if k["active"]],
@@ -430,6 +438,10 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
         Discipline.id.in_({r.discipline_id for r in keep if r.discipline_id})))}
     kinds = dict(c.db.execute(select(SubmittalDetails.record_id, SubmittalDetails.submittal_kind)
                               .where(SubmittalDetails.record_id.in_([r.id for r in keep]))).all())
+    labs = {}
+    if rt.code == "test":
+        from app.models.lab import LabResult
+        labs = {x.record_id: x for x in c.db.scalars(select(LabResult).where(LabResult.record_id.in_([r.id for r in keep])))}
     for r in keep:
         if not p.can("view", r) and r.from_party_id != my_party:
             continue
@@ -444,7 +456,9 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
                              submittal_kind=kind_code(a.project, kinds.get(r.id)), submittal_kind_name=kind_name(a.project, kinds.get(r.id)),
                              stage_id=r.stage_id, topic_id=r.topic_id, all_locations=r.all_locations,
                              requested_for=r.requested_for, performed_at=r.performed_at,
-                             location_ids=r.location_ids or []))
+                             location_ids=r.location_ids or [],
+                             lab_result=labs[r.id].result if r.id in labs else None,
+                             lab_decision=labs[r.id].decision if r.id in labs else None))
     return out
 
 
@@ -584,6 +598,7 @@ def create_record(project_id: uuid.UUID, body: RecordIn, c: Ctx = Depends(ctx)):
     rt = _rtype(c, body.record_type)
     p = Perms(c, a, rt)
     require(a.party is not None and p.can("create", discipline_id=body.discipline_id), "cannot_create")
+    require(type_enabled(a.project, rt.code), "type_disabled")
     disc = _check_discipline(c, a, body.discipline_id)
     initial = c.db.scalar(select(WorkflowState).where(WorkflowState.workflow_id == rt.workflow_id,
                                                       WorkflowState.is_initial))
@@ -729,6 +744,11 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
 
     to = c.db.get(WorkflowState, t.to_state_id)
     now = datetime.now(UTC)
+    if t.effect == "submit" and rt.code == "test":
+        from app.models.lab import LabResult
+        lab = c.db.get(LabResult, rec.id)
+        if lab is None or not lab.lines or not any(x.get("value") is not None or x.get("text") for x in lab.lines):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "lab_results_required")
     if t.effect == "submit":
         rec.submitted_by, rec.submitted_at = c.user.id, now
         # the reply clock starts at the later of now and the time the inspection was asked for
@@ -919,6 +939,17 @@ def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
     except IntegrityError:
         raise HTTPException(status.HTTP_409_CONFLICT, "revision_exists") from None
     c.db.add(SubmittalDetails(record_id=new.id, **_details(c, rec).model_dump()))
+    if rt.code == "test":  # a retest: same parameters and limits, no values yet
+        from app.models.lab import LabResult
+        old = c.db.get(LabResult, rec.id)
+        if old is not None:
+            c.db.add(LabResult(record_id=new.id, template_id=old.template_id, material=old.material,
+                               acceptance=old.acceptance, grade=old.grade, class_id=old.class_id, fck=old.fck,
+                               mean_margin=old.mean_margin, individual_rule=old.individual_rule,
+                               individual_margin=old.individual_margin, element=old.element, quantity=old.quantity,
+                               quantity_uom=old.quantity_uom, specimen_count=old.specimen_count,
+                               specification=old.specification,
+                               lines=[{**x, "value": None, "text": None, "legible": True} for x in old.lines]))
     c.db.add(RecordEvent(record_id=new.id, action="new_revision", to_state_id=initial.id, actor_id=c.user.id,
                          comment=f"R{rec.rev_no} → R{new.rev_no}"))
     _audit(c, new, "revise", {"from_record": str(rec.id), "rev": new.rev_no}, a)

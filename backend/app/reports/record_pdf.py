@@ -40,7 +40,62 @@ PARTY = {"ar": {"contractor": "المقاول", "consultant": "الاستشار�
 TYPE_KEYS = {"inspection": ["item", "drawing_ref", "spec_ref", "boq_ref"],
              "material": ["item", "manufacturer", "supplier", "quantity", "spec_ref", "boq_ref"],
              "rfi": ["item", "drawing_ref", "spec_ref"],
-             "ncr": ["item", "drawing_ref", "spec_ref"]}
+             "ncr": ["item", "drawing_ref", "spec_ref"],
+             "test": []}
+LAB_T = {"ar": {"title": "نتائج الفحص المخبري", "lab": "المختبر", "report_no": "رقم تقرير المختبر", "sampling": "تاريخ أخذ العينة",
+                "test_date": "تاريخ الفحص", "report_date": "تاريخ التقرير", "grade": "الدرجة / الفئة", "fck": "المقاومة المطلوبة",
+                "element": "العنصر", "quantity": "الكمية الممثلة", "spec": "المواصفة", "sample": "العينة", "param": "المعامل",
+                "value": "القيمة", "limits": "الحدود", "res": "النتيجة", "result": "النتيجة المحسوبة", "pass": "مطابق",
+                "fail": "غير مطابق", "na": "—", "lab_concl": "استنتاج المختبر", "decision": "القرار على النتيجة الراسبة",
+                "avg": "متوسط مقاومة 28 يوماً", "low": "أضعف عينة",
+                "decisions": {"retest": "إعادة الفحص", "core": "فحص كور / موقعي", "accepted": "قبول من المهندس",
+                              "repair": "إصلاح / إزالة واستبدال", "rejected": "رفض المادة / الدفعة", "other": "أخرى"}},
+         "en": {"title": "Laboratory test results", "lab": "Laboratory", "report_no": "Lab report no.", "sampling": "Sampling date",
+                "test_date": "Test date", "report_date": "Report date", "grade": "Grade / class", "fck": "Specified strength",
+                "element": "Element", "quantity": "Quantity represented", "spec": "Specification", "sample": "Sample",
+                "param": "Parameter", "value": "Value", "limits": "Limits", "res": "Result", "result": "Calculated result",
+                "pass": "Pass", "fail": "Fail", "na": "—", "lab_concl": "Lab conclusion", "decision": "Decision on the failed test",
+                "avg": "Mean 28-day strength", "low": "Lowest specimen",
+                "decisions": {"retest": "Retest", "core": "Core / in-situ test", "accepted": "Accepted by the Engineer",
+                              "repair": "Repair / remove and replace", "rejected": "Material / batch rejected", "other": "Other"}}}
+
+
+def _lab(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
+    if d.record_type.code != "test":
+        return None
+    from app.core.lab import evaluate
+    from app.models.lab import LabResult
+    res = c.db.get(LabResult, d.id)
+    if res is None or not res.lines:
+        return None
+    L = LAB_T[lang]
+    f = lambda v: float(v) if v is not None else None  # noqa: E731
+    ev = evaluate({"acceptance": res.acceptance, "fck": f(res.fck), "mean_margin": f(res.mean_margin),
+                   "individual_rule": res.individual_rule, "individual_margin": f(res.individual_margin), "lines": res.lines})
+    num = lambda v: "" if v is None else f"{v:g}"  # noqa: E731
+
+    def limits(x):
+        mn, mx = x.get("min"), x.get("max")
+        if mn is not None and mx is not None:
+            return f"{num(mn)} – {num(mx)}"
+        return f"≥ {num(mn)}" if mn is not None else (f"≤ {num(mx)}" if mx is not None else "")
+    head = [(L["lab"], res.lab_name), (L["report_no"], res.lab_report_no), (L["sampling"], res.sampling_date),
+            (L["test_date"], res.test_date), (L["report_date"], res.report_date),
+            (L["grade"], res.grade), (L["fck"], f"{float(res.fck):g} MPa" if res.fck else None), (L["element"], res.element),
+            (L["quantity"], f"{float(res.quantity):g} {res.quantity_uom or ''}" if res.quantity else None),
+            (L["spec"], res.specification)]
+    head = [(k, str(v)) for k, v in head if v]
+    rows = [{"sample": x.get("sample") or "", "param": x["parameter"] + (f" ({x['age']} d)" if x.get("age") and "day" not in x["parameter"] else ""),
+             "value": x.get("text") or num(x.get("value")), "unit": x.get("unit") or "", "limits": limits(x),
+             "code": r, "res": L.get(r, "")} for x, r in zip(res.lines, ev["line_results"])]
+    summary = []
+    if ev["strength_avg"] is not None:
+        summary += [(L["avg"], f"{ev['strength_avg']} MPa"), (L["low"], f"{ev['strength_min']} MPa")]
+    if res.lab_conclusion:
+        summary.append((L["lab_concl"], L[res.lab_conclusion]))
+    return {"t": L, "head": [head[i:i + 2] for i in range(0, len(head), 2)], "rows": rows, "result": ev["result"],
+            "result_text": L.get(ev["result"] or "na"), "note": ev["note"], "summary": summary,
+            "decision": L["decisions"].get(res.decision) if res.decision else None, "decision_note": res.decision_note}
 CUSTOM = {"ar": {"proposed": "الحل المقترح من المقاول", "impact": "الأثر المتوقع", "delivery_note": "رقم سند التسليم",
                  "storage": "مكان التخزين", "severity": "درجة عدم المطابقة", "required_action": "الإجراء المطلوب",
                  "none": "لا يوجد", "cost": "على الكلفة", "time": "على المدة", "cost_time": "على الكلفة والمدة",
@@ -205,6 +260,7 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         resubmit_days=(d.resubmit_due_at - d.answered_at).days if d.resubmit_due_at and d.answered_at else None,
         stamp=stamp, stamp_short="-".join(stamp[i:i + 4] for i in range(0, 12, 4)).upper() if stamp else None,
         verify_url=verify_url, qr=_qr(verify_url) if verify_url else None,
+        lab=_lab(c, d, lang),
         photos=[{**p, "who": PARTY[lang].get(p["party"], "")} for p in _photos(c, d)],
         checklist=[{"text": getattr(x, lang), "result": t["results"].get(x.result, ""), "code": x.result,
                     "note": x.note or ""} for x in d.checklist],

@@ -14,6 +14,7 @@ import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../forma
 import i18n, { pick } from '../i18n';
 import BackButton from './BackButton';
 import Photos, { isPhoto, shrinkPhoto } from './Photos';
+import LabPanel from './LabPanel';
 import { PlacePicker, useStructure } from './Structure';
 import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, profile, typeText } from '../recordTypes';
 
@@ -453,6 +454,7 @@ export default function RecordPage() {
             )}
 
             {r.checklist.length > 0 && responses.length === 0 && <ChecklistCard rec={r} />}
+            {r.record_type.code === 'test' && <LabPanel rec={r} />}
             <Card withBorder>
               <Title order={5} mb="sm">{t('rec.details')}</Title>
               <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">

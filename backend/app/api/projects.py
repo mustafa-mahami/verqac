@@ -11,7 +11,7 @@ from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
 from app.core.kinds import new_code, submittal_kinds
 from app.api.structure import apply_type
-from app.api.records import ROUTING_MODES, periods, routing
+from app.api.records import ROUTING_MODES, periods, routing, type_enabled
 from app.models.structure import ProjectType
 from app.core.mailer import mail_enabled
 from app.core.notify import channels, mahami_enabled
@@ -146,6 +146,7 @@ def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     org = c.db.get(Organization, a.project.owner_org_id)
     return ProjectSettingsOut(reply_hours=reply, resubmit_hours=resub, routing=route,
                               calendar=ProjectCalendar(**(a.project.settings or {}).get("calendar", {})),
+                              types=[k for k in reply if type_enabled(a.project, k)],
                               org_calendar=OrgCalendar(**org_calendar(org)),
                               link_submittals=bool((a.project.settings or {}).get("link_submittals", False)),
                               checklists=bool((a.project.settings or {}).get("checklists", False)),
@@ -217,6 +218,13 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
         old_r = dict(settings.get("routing", {}))
         settings["routing"] = {**old_r, **body.routing}
         changes.update({f"routing_{k}": v for k, v in diff(old_r, settings["routing"]).items()})
+    if body.types is not None:
+        if not body.types or any(t not in codes for t in body.types):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_types")
+        new_types = [t for t in sorted(codes) if t in body.types]
+        if set(new_types) != {t for t in codes if type_enabled(a.project, t)}:
+            changes["types"] = new_types
+            settings["types"] = new_types
     if body.calendar is not None:
         cal = body.calendar
         _check_weekend(cal.weekend)

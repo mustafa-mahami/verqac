@@ -63,6 +63,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DELETE FROM numbering_counters WHERE record_type_id IN (SELECT id FROM record_types WHERE org_id IS NULL AND code IN ('material', 'rfi', 'ncr'))")
     op.execute("DELETE FROM record_types WHERE org_id IS NULL AND code IN ('material', 'rfi', 'ncr')")
     for code in ("rfi", "ncr"):
         op.execute(f"DELETE FROM workflow_transitions WHERE workflow_id IN (SELECT id FROM workflows WHERE code = '{code}')")

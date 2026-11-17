@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import account, auth, push, invitations, meta, notifications, orgs, projects, records, structure, team, verify
+from app.api import account, auth, lab, push, invitations, meta, notifications, orgs, projects, records, structure, team, verify
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -33,7 +33,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for r in (auth.router, account.router, push.router, projects.router, team.router, orgs.router, invitations.router, records.router, notifications.router, meta.router, verify.router, structure.router):
+for r in (auth.router, account.router, push.router, projects.router, team.router, orgs.router, invitations.router, records.router, notifications.router, meta.router, verify.router, structure.router, lab.router):
     app.include_router(r, prefix="/api/v1")
 
 

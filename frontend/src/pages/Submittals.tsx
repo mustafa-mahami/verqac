@@ -1,5 +1,5 @@
 import {
-  Alert, Badge, Button, Card, FileInput, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, Textarea,
+  Alert, Badge, Button, Card, FileInput, Group, Modal, MultiSelect, NumberInput, Select, SimpleGrid, Stack, Switch, Table, Text, Textarea,
   TextInput, UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
@@ -12,6 +12,7 @@ import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
 import { PlacePicker, placeText, rowTitle, useStructure } from './Structure';
 import { shrinkPhoto } from './Photos';
+import { linesFromTemplate, saveLab, type ConcreteClass, type LabTemplate } from '../lab';
 import RecordStats, { applyFilter, CATEGORIES, type StatsFilter } from './RecordStats';
 
 import { CustomInput, fieldLabel, LTR_KEYS, profile, typeText, type RegisterType } from '../recordTypes';
@@ -47,6 +48,13 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [custom, setCustom] = useState<Record<string, string>>({});
+  const isTest = type === 'test';
+  const [tplId, setTplId] = useState<string | null>(null);
+  const [classId, setClassId] = useState<string | null>(null);
+  const [specimens, setSpecimens] = useState<number | ''>(3);
+  const templates = useQuery({ queryKey: ['labTemplates', projectId], enabled: isTest, queryFn: () => api<LabTemplate[]>(`/projects/${projectId}/lab-templates`) });
+  const classes = useQuery({ queryKey: ['concreteClasses', projectId], enabled: isTest, queryFn: () => api<ConcreteClass[]>(`/projects/${projectId}/concrete-classes`) });
+  const tpl = templates.data?.find((x) => x.id === tplId);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const structure = useStructure(projectId);
@@ -93,6 +101,12 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
           custom: Object.fromEntries(pf.custom.map((f) => [f.key, blank(custom[f.key] ?? '')])),
         }),
       });
+      if (isTest && tpl) {
+        const k = classes.data?.find((x) => x.id === classId);
+        await saveLab(rec.id, { template_id: tpl.id, material: tpl.material, acceptance: tpl.acceptance, specification: tpl.standard,
+          class_id: tpl.acceptance === 'concrete' ? classId : null, specimen_count: tpl.acceptance === 'concrete' ? Number(specimens) || null : null,
+          lines: linesFromTemplate(tpl, { specimens: Number(specimens) || 0, fck: k?.fck ?? null }) });
+      }
       for (const f of v.files) {
         const fd = new FormData();
         fd.append('file', await shrinkPhoto(f));
@@ -122,6 +136,17 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
           {pf.kind && <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} searchable {...form.getInputProps('submittal_kind')} />}
           <TextInput label={t('rec.number')} placeholder={t('rec.numberHint')} dir="ltr" {...form.getInputProps('number')} />
         </SimpleGrid>
+        {isTest && (
+          <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            <Select label={t('lab.template')} searchable value={tplId} style={{ gridColumn: tpl?.acceptance === 'concrete' ? undefined : 'span 3' }}
+              data={(templates.data ?? []).map((x) => ({ value: x.id!, label: pick(x, 'name') }))} onChange={setTplId} />
+            {tpl?.acceptance === 'concrete' && <>
+              <Select label={t('lab.class')} clearable value={classId} description={(classes.data ?? []).length ? undefined : t('lab.noClasses')}
+                data={(classes.data ?? []).filter((k) => k.is_active).map((k) => ({ value: k.id!, label: `${k.grade} · ${Number(k.fck)} MPa` }))} onChange={setClassId} />
+              <NumberInput label={t('lab.specimens')} min={1} max={100} value={specimens} onChange={(x) => setSpecimens(x === '' ? '' : Number(x))} />
+            </>}
+          </SimpleGrid>
+        )}
         {choose && (
           <Select label={t('rec.addressedTo')} description={t('rec.addressedToHint')} allowDeselect={false} required
             data={(addressees.data ?? []).map((u) => ({ value: u.id, label: pick(u, 'full_name') }))} {...form.getInputProps('addressed_to')} />
@@ -283,7 +308,14 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                       )}
                     </Table.Td>
                     <Table.Td><Text size="sm">{r.discipline ? pick(r.discipline, 'name') : ''}</Text></Table.Td>
-                    <Table.Td><Badge tt="none" variant="light" color={stateColor(r.state.color)}>{pick(r.state, 'name')}</Badge></Table.Td>
+                    <Table.Td>
+                      <Badge tt="none" variant="light" color={stateColor(r.state.color)}>{pick(r.state, 'name')}</Badge>
+                      {r.lab_result && (
+                        <Badge tt="none" size="sm" mt={4} color={r.lab_result === 'pass' ? 'green' : 'red'} style={{ display: 'block' }}>
+                          {t(`lab.r.${r.lab_result}`)}{r.lab_decision ? ` · ${t(`lab.d.${r.lab_decision}`)}` : ''}
+                        </Badge>
+                      )}
+                    </Table.Td>
                     <Table.Td><Text size="sm">{fmtDate(r.submitted_at)}</Text></Table.Td>
                     <Table.Td>
                       <Text size="sm" c={r.overdue ? 'red' : undefined} fw={r.overdue ? 600 : undefined}>{fmtDate(r.due_at, profile(type).timed)}</Text>

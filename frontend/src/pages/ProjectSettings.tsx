@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError, type ProjectSettings as Settings, type ProjectCalendarT, type RecordType, type Routing, type SubmittalKind } from '../api';
 import { pick } from '../i18n';
 import ProjectHeader from './ProjectHeader';
+import ConcreteClasses from './ConcreteClasses';
+import { TYPE_TABS } from '../recordTypes';
 import { cleanHolidays, HolidaysEditor, holidayText, WeekendPicker } from './Calendar';
 import ProjectStructure from './ProjectStructure';
 
@@ -35,22 +37,24 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const [links, setLinks] = useState(false);
   const [checks, setChecks] = useState(false);
   const [remind, setRemind] = useState(true);
+  const [enabled, setEnabled] = useState<string[]>([]);
   const [cal, setCal] = useState<ProjectCalendarT>({ weekend: null, holidays: [], work_start: null, work_end: null });
   const [route, setRoute] = useState<Record<string, Routing>>({});
   const [notify, setNotify] = useState({ email: false, mahami: false });
   const [kinds, setKinds] = useState<SubmittalKind[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRemind(settings.data.reminders); setCal(settings.data.calendar); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
+    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRemind(settings.data.reminders); setEnabled(settings.data.types); setCal(settings.data.calendar); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (_at: string) =>
-      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, reminders: remind, routing: route,
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, reminders: remind, routing: route, types: enabled,
         calendar: { ...cal, holidays: cleanHolidays(cal.holidays) }, notify, submittal_kinds: kinds }) }),
     onSuccess: (s, at) => {
       qc.setQueryData(['settings', projectId], s);
       qc.invalidateQueries({ queryKey: ['recMeta', projectId] });
       qc.invalidateQueries({ queryKey: ['structure', projectId] });
+      qc.invalidateQueries({ queryKey: ['settings', projectId] });
       setMsg({ ok: true, text: t('settings.saved'), at });
     },
     onError: (e, at) => setMsg({ ok: false, text: t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic')), at }),
@@ -68,7 +72,20 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   return (
     <Stack maw={900}>
       <ProjectHeader projectId={projectId} settings={settings.data} />
+      <Card withBorder>
+        <Title order={5}>{t('settings.typesTitle')}</Title>
+        <Text size="sm" c="dimmed" mb="md">{t('settings.typesHint')}</Text>
+        <Group gap="lg">
+          {TYPE_TABS.map(([code, tab]) => (
+            <Switch key={code} label={t(`project.tabs.${tab}`)} disabled={!editable} checked={enabled.includes(code)}
+              onChange={(e) => setEnabled(e.currentTarget.checked ? [...enabled, code] : enabled.filter((x) => x !== code))} />
+          ))}
+        </Group>
+        {note('types')}
+        {editable && <Button mt="md" variant="light" loading={save.isPending} disabled={!enabled.length} onClick={() => save.mutate('types')}>{t('rec.save')}</Button>}
+      </Card>
       <ProjectStructure projectId={projectId} />
+      {enabled.includes('test') && <ConcreteClasses projectId={projectId} editable={editable} />}
       <Card withBorder>
         <Title order={5}>{t('settings.reviewTitle')}</Title>
         <Text size="sm" c="dimmed" mb="md">{t('settings.reviewHint')}</Text>

@@ -160,6 +160,7 @@ class ProjectSettingsOut(BaseModel):
     reminders: bool = True  # reminders before and after reply / resubmission deadlines
     routing: dict[str, str] = {}  # record type code -> discipline | manager | choose
     calendar: ProjectCalendar = ProjectCalendar()
+    types: list[str] = []  # record types the project uses
     org_calendar: OrgCalendar = OrgCalendar()  # the owner organization's, read only here
     notify: NotifyChannels
     submittal_kinds: list[SubmittalKind]
@@ -177,6 +178,7 @@ class ProjectSettingsIn(BaseModel):
     reminders: bool | None = None
     routing: dict[str, str] = {}
     calendar: ProjectCalendar | None = None
+    types: list[str] | None = None
     notify: NotifyChannels | None = None
     submittal_kinds: list[SubmittalKind] | None = None
 

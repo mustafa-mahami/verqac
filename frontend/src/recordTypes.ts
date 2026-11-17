@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import i18n from './i18n';
 
 /** What each request type shows and asks for. The engine is the same; the fields differ. */
-export type RegisterType = 'submittal' | 'inspection' | 'material' | 'rfi' | 'ncr';
+export type RegisterType = 'submittal' | 'inspection' | 'material' | 'test' | 'rfi' | 'ncr';
 export type DetailKey = 'item' | 'manufacturer' | 'supplier' | 'drawing_ref' | 'spec_ref' | 'boq_ref' | 'quantity' | 'unit';
 export interface CustomField { key: string; kind: 'text' | 'long' | 'select'; options?: string[] }
 export interface TypeProfile {
@@ -23,6 +23,7 @@ export const PROFILES: Record<RegisterType, TypeProfile> = {
   material: { keys: ['item', 'manufacturer', 'supplier', 'quantity', 'unit', 'spec_ref', 'boq_ref'],
     custom: [{ key: 'delivery_note', kind: 'text' }, { key: 'storage', kind: 'text' }],
     kind: false, timed: true, requiredBy: false, checklist: false, tab: 'materials' },
+  test: { keys: [], custom: [], kind: false, timed: false, requiredBy: false, checklist: false, tab: 'tests' },
   rfi: { keys: ['item', 'drawing_ref', 'spec_ref'],
     custom: [{ key: 'proposed', kind: 'long' }, { key: 'impact', kind: 'select', options: ['none', 'cost', 'time', 'cost_time'] }],
     kind: false, timed: false, requiredBy: true, checklist: false, tab: 'rfis' },

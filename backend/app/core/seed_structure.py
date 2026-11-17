@@ -105,8 +105,14 @@ def default_types(org_id: uuid.UUID) -> list[ProjectType]:
 
 
 def seed_project_types(db: Session, org_id: uuid.UUID) -> None:
+    """Templates a new organization starts with: project types and laboratory test templates."""
     if db.scalar(select(ProjectType.id).where(ProjectType.org_id == org_id).limit(1)) is None:
         db.add_all(default_types(org_id))
+    from app.core.lab import default_templates
+    from app.models.lab import LabTemplate
+    if db.scalar(select(LabTemplate.id).where(LabTemplate.org_id == org_id).limit(1)) is None:
+        db.add_all([LabTemplate(org_id=org_id, sort=(i + 1) * 10, **{**t, "samples": t["samples"] or None})
+                    for i, t in enumerate(default_templates())])
 
 
 # inspection checklists by topic (English name): what the supervising engineer checks before accepting

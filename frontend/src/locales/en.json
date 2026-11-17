@@ -127,7 +127,19 @@
     "invalid_weekend": "Invalid days off (three at most).",
     "invalid_holiday": "Invalid holiday dates (end before start or longer than 60 days).",
     "invalid_work_hours": "Invalid working hours: start must be before end.",
-    "invalid_field": "Invalid value in a field."
+    "invalid_field": "Invalid value in a field.",
+    "lab_results_required": "Enter the test results before submitting.",
+    "ai_not_configured": "AI PDF reading is not configured on the server.",
+    "ai_busy": "Already reading.",
+    "not_a_pdf": "Pick a PDF attached to the test.",
+    "invalid_template": "Invalid template.",
+    "invalid_class": "Invalid class.",
+    "class_duplicate": "Duplicate or empty grade.",
+    "class_percent": "With the % rule enter the minimum percentage per specimen, e.g. 90.",
+    "not_failed": "The result is not a fail.",
+    "type_disabled": "This type is switched off in the project.",
+    "invalid_types": "Choose at least one type.",
+    "invalid_material": "Invalid material."
   },
   "common": {
     "cancel": "Cancel",
@@ -212,7 +224,8 @@
     "tabs": {
       "users": "Users",
       "types": "Project types",
-      "calendar": "Calendar & holidays"
+      "calendar": "Calendar & holidays",
+      "lab": "Lab test templates"
     }
   },
   "project": {
@@ -223,7 +236,8 @@
       "inspections": "Inspections",
       "materials": "Material inspections",
       "rfis": "RFIs",
-      "ncrs": "NCRs"
+      "ncrs": "NCRs",
+      "tests": "Lab tests"
     }
   },
   "rec": {
@@ -324,7 +338,8 @@
     "inspections": "Inspection register",
     "materials": "Material inspections",
     "rfis": "RFIs",
-    "ncrs": "NCRs"
+    "ncrs": "NCRs",
+    "tests": "Lab tests"
   },
   "settings": {
     "reviewTitle": "Reply and resubmission periods",
@@ -359,7 +374,9 @@
     "checklists": "Inspection checklists",
     "checklistsHint": "The supervising engineer answers the checklist of the request's topic; it is printed with the reply. Edit the lists under the stage topics.",
     "reminders": "Deadline reminders",
-    "remindersHint": "Reminds whoever must reply before the deadline (a day for submittals, 30 minutes for inspections) and when it is overdue, and the contractor before and after the resubmission deadline. Overdue submittals are reminded daily."
+    "remindersHint": "Reminds whoever must reply before the deadline (a day for submittals, 30 minutes for inspections) and when it is overdue, and the contractor before and after the resubmission deadline. Overdue submittals are reminded daily.",
+    "typesTitle": "Request types in this project",
+    "typesHint": "Switch on only what this project uses; only those tabs show. Existing requests are kept when a type is switched off."
   },
   "resp": {
     "title": "Consultant's comments",
@@ -639,6 +656,14 @@
       "respTitle": "Corrective action (Contractor)",
       "response": "Corrective action",
       "empty": "No NCRs yet."
+    },
+    "test": {
+      "new": "New lab test",
+      "back": "Lab tests",
+      "empty": "No lab tests yet.",
+      "description": "Notes",
+      "respTitle": "Supervision review",
+      "response": "Supervision review"
     }
   },
   "custom": {
@@ -656,5 +681,123 @@
       "minor": "Minor",
       "major": "Major"
     }
+  },
+  "lab": {
+    "title": "Laboratory test results",
+    "template": "Test (template)",
+    "specimens": "Specimens",
+    "generate": "Generate specimen lines",
+    "class": "Concrete class",
+    "noClasses": "Define the concrete classes in the project settings",
+    "fck": "Specified strength (MPa)",
+    "grade": "Grade on certificate",
+    "labName": "Laboratory",
+    "reportNo": "Lab report no.",
+    "samplingDate": "Sampling date",
+    "reportDate": "Report date",
+    "element": "Element",
+    "quantity": "Quantity represented",
+    "uom": "Unit",
+    "spec": "Specification",
+    "labConclusion": "Lab conclusion",
+    "lines": "Values",
+    "sample": "Sample",
+    "parameter": "Parameter",
+    "value": "Value",
+    "unit": "Unit",
+    "min": "Min",
+    "max": "Max",
+    "result": "Result",
+    "addLine": "Add line",
+    "save": "Save results",
+    "noResult": "No calculated result yet",
+    "r": {
+      "pass": "Pass",
+      "fail": "Fail",
+      "na": "—"
+    },
+    "avgLow": "28-day mean {{avg}} · lowest {{low}} MPa",
+    "conflict": "The lab conclusion ({{lab}}) differs from the result calculated on the project criteria — check the limits.",
+    "aiTitle": "Read the lab certificate with AI",
+    "aiHint": "Attach the lab report (PDF), then pick it here: the values are read and shown for review next to the file before saving.",
+    "noPdf": "No PDF attached yet.",
+    "choosePdf": "Pick the lab report",
+    "read": "Read values",
+    "reading": "Reading the certificate… (20–60 s)",
+    "aiError": "Reading failed",
+    "reviewTitle": "Review the values read from the lab certificate",
+    "reviewHint": "Compare with the file and correct what is needed. Nothing is saved before \"Apply\".",
+    "unsure": "unsure",
+    "unsureCount": "{{count}} value(s) not clearly legible (highlighted) — check them.",
+    "match": {
+      "grade": "Class {{grade}} found from the certificate grade",
+      "topic": "Class {{grade}} found from the request topic",
+      "strength": "Class {{grade}} found from the specified strength",
+      "element": "Class {{grade}} found from the element",
+      "only": "Class {{grade}} is the only class of the project",
+      "none": "No concrete class found — choose one"
+    },
+    "certGrade": "Grade on certificate",
+    "aiRemarks": "Reading remarks",
+    "apply": "Apply values",
+    "discard": "Discard",
+    "decisionTitle": "Decision on the failed test",
+    "decisionNote": "Details",
+    "d": {
+      "retest": "Retest",
+      "core": "Core / in-situ test",
+      "accepted": "Accepted by the Engineer",
+      "repair": "Repair / remove and replace",
+      "rejected": "Material / batch rejected",
+      "other": "Other"
+    }
+  },
+  "labt": {
+    "hint": "Test templates used in all the organization's projects: parameters, units, test methods and acceptance limits. A new test takes its template; limits can be adjusted on the test.",
+    "new": "New template",
+    "params": "{{count}} parameters",
+    "concrete": "Concrete: mean and lowest specimen",
+    "all": "All parameters within limits",
+    "off": "off",
+    "material": "Material",
+    "standard": "Standard / method",
+    "acceptance": "Acceptance rule",
+    "samples": "Samples",
+    "samplesHint": "e.g. Ø32,Ø25 — parameters repeat per sample",
+    "concreteHint": "Cube lines are generated when the test is created from the number of specimens; the minimum comes from the project concrete class.",
+    "method": "Test method",
+    "kind": "Value",
+    "number": "Number",
+    "active": "Active",
+    "remove": "Remove template",
+    "add": "Add template",
+    "m": {
+      "CON": "Concrete",
+      "STL": "Reinforcement steel",
+      "BC": "Base course / Subbase",
+      "SOIL": "Soil / Backfill",
+      "ASP": "Asphalt",
+      "BLK": "Blocks",
+      "TIL": "Tiles / Stone",
+      "WP": "Waterproofing",
+      "MEP": "MEP",
+      "OTH": "Other"
+    }
+  },
+  "cc": {
+    "title": "Concrete classes of the project",
+    "hint": "Grades used and how their cubes are accepted per the contract specification: mean ≥ fck + margin, each specimen ≥ fck − margin (or a % of fck). Link a class to stage topics so the criteria follow the element tested.",
+    "none": "No classes yet.",
+    "grade": "Grade",
+    "fck": "fck (MPa)",
+    "mean": "Mean margin",
+    "rule": "Specimen rule",
+    "minus": "fck − margin",
+    "percent": "% of fck",
+    "margin": "Margin",
+    "topics": "Topics (elements)",
+    "topicsPh": "e.g. slabs, beams",
+    "add": "Add class",
+    "rule_text": "mean ≥ {{mean}}, each ≥ {{each}} MPa"
   }
 }

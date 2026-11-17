@@ -75,6 +75,22 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
   </table>
   {% endif %}
 
+  {% if lab %}
+  <div class="section">{{ lab.t.title }}</div>
+  {% if lab.head %}<table>
+    {% for pair in lab.head %}<tr>{% for k, v in pair %}<th>{{ k }}</th><td>{{ v }}</td>{% endfor %}{% if pair|length == 1 %}<th></th><td></td>{% endif %}</tr>{% endfor %}
+  </table>{% endif %}
+  <table class="check">
+    <tr><th style="width:12%">{{ lab.t.sample }}</th><th style="width:36%">{{ lab.t.param }}</th><th style="width:14%">{{ lab.t.value }}</th><th style="width:20%">{{ lab.t.limits }}</th><th style="width:18%">{{ lab.t.res }}</th></tr>
+    {% for x in lab.rows %}<tr><td class="ltr">{{ x.sample }}</td><td>{{ x.param }}</td><td class="ltr">{{ x.value }} {{ x.unit }}</td><td class="ltr">{{ x.limits }}</td><td class="r-{{ 'ok' if x.code == 'pass' else ('nc' if x.code == 'fail' else 'na') }}">{{ x.res }}</td></tr>{% endfor %}
+  </table>
+  <table>
+    <tr><th>{{ lab.t.result }}</th><td class="{{ 'r-ok' if lab.result == 'pass' else ('r-nc' if lab.result == 'fail' else '') }}"><b>{{ lab.result_text }}</b> <span class="ltr muted">{{ lab.note or '' }}</span></td></tr>
+    {% for k, v in lab.summary %}<tr><th>{{ k }}</th><td>{{ v }}</td></tr>{% endfor %}
+    {% if lab.decision %}<tr><th>{{ lab.t.decision }}</th><td>{{ lab.decision }}{% if lab.decision_note %} — {{ lab.decision_note }}{% endif %}</td></tr>{% endif %}
+  </table>
+  {% endif %}
+
   {% if photos %}
   <div class="section">{{ t.photos }}</div>
   <div class="photos">

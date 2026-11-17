@@ -2,7 +2,7 @@ import { Stack, Tabs, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { api, type ProjectItem } from '../api';
+import { api, type ProjectItem, type ProjectSettings as SettingsT } from '../api';
 import { pick } from '../i18n';
 import BackButton from './BackButton';
 import ProjectSettings from './ProjectSettings';
@@ -16,6 +16,8 @@ export default function ProjectPage() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') ?? 'submittals';
   const item = useQuery({ queryKey: ['project', id], queryFn: () => api<ProjectItem>(`/projects/${id}`) });
+  const settings = useQuery({ queryKey: ['settings', id], queryFn: () => api<SettingsT>(`/projects/${id}/settings`) });
+  const tabs = TYPE_TABS.filter(([code]) => !settings.data || settings.data.types.includes(code));
 
   return (
     <Stack maw={1200} mx="auto">
@@ -28,11 +30,11 @@ export default function ProjectPage() {
       )}
       <Tabs value={tab} onChange={(v) => setParams({ tab: v ?? 'submittals' }, { replace: true })} keepMounted={false}>
         <Tabs.List>
-          {TYPE_TABS.map(([, tabKey]) => <Tabs.Tab key={tabKey} value={tabKey}>{t(`project.tabs.${tabKey}`)}</Tabs.Tab>)}
+          {tabs.map(([, tabKey]) => <Tabs.Tab key={tabKey} value={tabKey}>{t(`project.tabs.${tabKey}`)}</Tabs.Tab>)}
           <Tabs.Tab value="team">{t('project.tabs.team')}</Tabs.Tab>
           <Tabs.Tab value="settings">{t('project.tabs.settings')}</Tabs.Tab>
         </Tabs.List>
-        {TYPE_TABS.map(([code, tabKey]) => (
+        {tabs.map(([code, tabKey]) => (
           <Tabs.Panel key={tabKey} value={tabKey} pt="md"><Submittals projectId={id} type={code} /></Tabs.Panel>
         ))}
         <Tabs.Panel value="team" pt="md"><ProjectTeam /></Tabs.Panel>

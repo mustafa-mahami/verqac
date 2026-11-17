@@ -82,6 +82,27 @@ NCR_TRANSITIONS = [
     ("open", "cancelled", "cancel", "سحب وإلغاء", "Withdraw", "cancel", "cancel", True, "subtle"),
 ]
 
+# laboratory tests: the contractor submits the certificate, the consultant accepts it or asks for a retest
+# (a retest is the next revision of the same number)
+TEST_STATES = [
+    ("draft", "مسودة", "Draft", "draft", "gray", True),
+    ("submitted", "مقدَّم للمراجعة", "Submitted", "submitted", "blue", False),
+    ("accepted", "معتمدة", "Accepted", "approved", "green", False),
+    ("accepted_with_comments", "معتمدة مع ملاحظات", "Accepted with comments", "approved_as_noted", "teal", False),
+    ("retest", "مرفوضة – إعادة فحص", "Rejected – retest", "rejected", "red", False),
+    ("cancelled", "ملغى", "Cancelled", "cancelled", "dark", False),
+]
+TEST_TRANSITIONS = [
+    ("draft", "submitted", "submit", "تقديم", "Submit", "submit", "submit", False, "primary"),
+    ("submitted", "accepted", "accept", "اعتماد النتيجة", "Accept result", "respond", "respond", False, "green"),
+    ("submitted", "accepted_with_comments", "accept_with_comments", "اعتماد مع ملاحظات", "Accept with comments",
+     "respond", "respond", True, "teal"),
+    ("submitted", "retest", "retest", "رفض – إعادة الفحص", "Reject – retest", "respond", "respond", True, "red"),
+    ("draft", "cancelled", "cancel", "إلغاء", "Cancel", "cancel", "cancel", False, "subtle"),
+    ("submitted", "cancelled", "cancel", "سحب وإلغاء", "Withdraw", "cancel", "cancel", True, "subtle"),
+]
+TEST_TYPE = ("test", "LAB", "فحص مخبري", "Laboratory test", "lab_test", "contractor", "consultant", True, 22)
+
 # code, prefix, ar, en, workflow, creator, responder, has revisions, sort
 MORE_TYPES = [
     ("material", "MIR", "فحص مواد موردة", "Material inspection", "inspection", "contractor", "consultant", True, 25),
@@ -91,7 +112,8 @@ MORE_TYPES = [
 
 # default periods in hours: (reply, resubmission); projects change them in settings
 DEFAULT_PERIODS = {"submittal": (7 * 24, 7 * 24), "inspection": (2, 2), "material": (24, 48),
-                   "rfi": (3 * 24, 3 * 24), "ncr": (3 * 24, 3 * 24)}
+                   "rfi": (3 * 24, 3 * 24), "ncr": (3 * 24, 3 * 24),
+                   "test": (3 * 24, 7 * 24)}
 
 # types with an inspection time (asked for / performed) and that link approved submittals
 TIMED_TYPES = ("inspection", "material")
