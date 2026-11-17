@@ -21,7 +21,7 @@ from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
 from app.models.structure import ProjectLocation, ProjectStage, ProjectStageTopic
-from app.core.seed_records import DEFAULT_PERIODS
+from app.core.seed_records import CUSTOM_FIELDS, DEFAULT_PERIODS, TIMED_TYPES
 from app.core.kinds import active_codes, kind_code, kind_name, submittal_kinds
 from app.core.notify import members_who_can, notify
 from app.core.workcal import add_period, calendar_for
@@ -278,7 +278,8 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         stage=(place := _place_out(c, rec))[0], all_locations=rec.all_locations, locations=place[1], topic=place[2],
         requested_for=rec.requested_for, performed_at=rec.performed_at,
         linked=(links := _linked_out(c, a, rec, rt))[0], link_warning=links[1],
-        checklist=_checklist(c, rec, rt),
+        checklist=_checklist(c, rec, rt), custom={k: v for k, v in (rec.custom or {}).items()
+                                                  if k in CUSTOM_FIELDS.get(rt.code, ())},
         can_edit=is_draft and p.can("edit", rec), can_revise=can_revise, can_attach=attach,
         can_act_on_behalf=bool(a.role and a.role.act_on_behalf and p.can("respond", rec)),
         assigned_to=_user(c, rec.assigned_to), can_assign=can_assign, assign_candidates=candidates,
@@ -542,12 +543,32 @@ def _linked_out(c: Ctx, a: ProjectAccess, rec: Record, rt: RecordType) -> tuple[
         refs.append(LinkedRef(id=r.id, number=r.number, rev_no=r.rev_no, title=r.title, stage_id=r.stage_id,
                               state=StateOut.model_validate(_state(c, r.state_id))))
     warning = None
-    if rt.code == "inspection" and _links_on(a.project):
+    if rt.code in TIMED_TYPES and _links_on(a.project):
         if not refs:
             warning = "no_link"
         elif any(x.state.category not in APPROVED for x in refs):
             warning = "not_approved"
     return refs, warning
+
+
+CHOICES = {"impact": ("none", "cost", "time", "cost_time"), "severity": ("minor", "major")}
+
+
+def _check_custom(rt: RecordType, old: dict, new: dict) -> dict:
+    """The type's extra fields only; text is trimmed, empty removes the field."""
+    allowed = CUSTOM_FIELDS.get(rt.code, ())
+    out = {k: v for k, v in old.items()}
+    for k, v in (new or {}).items():
+        if k not in allowed:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_field")
+        v = (v or "").strip()
+        if len(v) > 4000 or (v and k in CHOICES and v not in CHOICES[k]):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_field")
+        if v:
+            out[k] = v
+        else:
+            out.pop(k, None)
+    return out
 
 
 def _check_kind(a, code: str | None) -> None:
@@ -578,7 +599,8 @@ def create_record(project_id: uuid.UUID, body: RecordIn, c: Ctx = Depends(ctx)):
                  required_by=body.required_by, required_by_note=(body.required_by_note or "").strip() or None,
                  stage_id=stage_id, all_locations=all_locs, location_ids=loc_ids, topic_id=topic_id,
                  requested_for=body.requested_for, linked_ids=_check_links(c, a, body.linked_ids),
-                 assigned_to=_check_addressee(c, a, rt, body.discipline_id, body.addressed_to))
+                 assigned_to=_check_addressee(c, a, rt, body.discipline_id, body.addressed_to),
+                 custom=_check_custom(rt, {}, body.custom))
     c.db.add(rec)
     try:
         c.db.flush()
@@ -627,6 +649,11 @@ def update_record(record_id: uuid.UUID, body: RecordPatch, c: Ctx = Depends(ctx)
     if "addressed_to" in body.model_fields_set and body.addressed_to != rec.assigned_to:
         rec.assigned_to = _check_addressee(c, a, rt, rec.discipline_id, body.addressed_to)
         changes["addressed_to"] = str(body.addressed_to)
+    if body.custom is not None:
+        custom = _check_custom(rt, rec.custom or {}, body.custom)
+        if custom != (rec.custom or {}):
+            changes["custom"] = [rec.custom, custom]
+            rec.custom = custom
     if "requested_for" in body.model_fields_set and body.requested_for != rec.requested_for:
         changes["requested_for"] = [str(rec.requested_for), str(body.requested_for)]
         rec.requested_for = body.requested_for
@@ -714,7 +741,7 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
     elif t.effect == "respond":
         rec.answered_by, rec.answered_at, rec.answered_on_behalf_of = c.user.id, now, on_behalf
         rec.response_comment = comment
-        if rt.code == "inspection":
+        if rt.code in TIMED_TYPES:
             if body.performed_at and body.performed_at > now + timedelta(minutes=5):
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "performed_in_future")
             rec.performed_at = body.performed_at or now
@@ -744,6 +771,12 @@ def _notify_transition(c: Ctx, bg: BackgroundTasks, project: Project, rec: Recor
         en = f"{rt.name_en} {head}: " + ("awaiting your reply" if t.effect == "submit" else "withdrawn")
         notify(c, bg, project=project, rec=rec, event=t.action, user_ids=users, title_ar=ar, title_en=en,
                body=rec.title)
+    elif t.effect == "none":  # e.g. NCR verified and closed: both sides hear of it
+        users = {rec.created_by, rec.submitted_by, rec.answered_by}
+        users |= {m.user_id for m, _ in _responders(c, rec, rt)}
+        notify(c, bg, project=project, rec=rec, event=t.action, user_ids=users,
+               title_ar=f"{rt.name_ar} {head}: {to.name_ar}", title_en=f"{rt.name_en} {head}: {to.name_en}",
+               body=comment or rec.title)
     elif t.effect == "respond":
         users = {rec.created_by, rec.submitted_by}
         users |= {m.user_id for m, r in members_who_can(c, rec.project_id, rec.from_party_id, rt, "create",
@@ -811,8 +844,8 @@ def inbox(c: Ctx = Depends(ctx)):
         if a.party is None:
             continue
         perms = {tid: Perms(c, a, rt) for tid, rt in types.items()}
-        recs = c.db.scalars(select(Record).where(Record.project_id == pid,
-                                                 Record.state_category.in_(("draft", "submitted", "revise_and_resubmit", "rejected"))))
+        recs = c.db.scalars(select(Record).where(Record.project_id == pid, Record.state_category.in_(
+            ("draft", "submitted", "responded", "revise_and_resubmit", "rejected"))))
         latest: dict[uuid.UUID, int] = {}
         recs = list(recs)
         kinds = dict(c.db.execute(select(SubmittalDetails.record_id, SubmittalDetails.submittal_kind)
@@ -832,6 +865,10 @@ def inbox(c: Ctx = Depends(ctx)):
                     reason = "reply"
             elif r.state_category == "draft" and r.created_by == c.user.id:
                 reason = "draft"
+            elif (r.state_category == "responded" and r.from_party_id == a.party.id and p.can("submit", r)
+                  and (r.created_by == c.user.id or r.submitted_by == c.user.id or (a.role and a.role.act_on_behalf)
+                       or (a.role and a.role.manage_project))):
+                reason = "verify"  # e.g. an NCR's corrective action, to check on site and close
             elif (r.state_category in ("revise_and_resubmit", "rejected") and r.rev_no == latest.get(r.revision_group_id, r.rev_no)
                   and r.from_party_id == a.party.id and p.can("create", discipline_id=r.discipline_id)
                   and (r.created_by == c.user.id or r.submitted_by == c.user.id or (a.role and a.role.manage_project))):
@@ -849,7 +886,7 @@ def inbox(c: Ctx = Depends(ctx)):
                                      required_by=r.required_by,
                                      assigned_to_me=r.assigned_to == c.user.id, updated_at=r.updated_at,
                                      submittal_kind_name=kind_name(a.project, kinds.get(r.id))))
-    order = {"reply": 0, "returned": 1, "draft": 2}
+    order = {"reply": 0, "verify": 1, "returned": 2, "draft": 3}
     def soonest(x: InboxItem) -> datetime:
         when = [x.due_at or x.updated_at]
         if x.required_by:

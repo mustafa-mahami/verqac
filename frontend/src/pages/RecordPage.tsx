@@ -14,8 +14,8 @@ import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../forma
 import i18n, { pick } from '../i18n';
 import BackButton from './BackButton';
 import { PlacePicker, useStructure } from './Structure';
+import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, profile, typeText } from '../recordTypes';
 
-const IR_KEYS = ['item', 'drawing_ref', 'spec_ref', 'boq_ref'] as const;
 /** ISO timestamp -> value of an <input type="datetime-local"> in the browser's time zone, and back. */
 const toLocalInput = (iso: string | null) => {
   if (!iso) return '';
@@ -24,7 +24,6 @@ const toLocalInput = (iso: string | null) => {
 };
 const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null);
 const DETAIL_KEYS = ['submittal_kind', 'item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
-const LTR = new Set(['drawing_ref', 'spec_ref', 'boq_ref']);
 const btnColor: Record<string, string> = { primary: 'verqac', green: 'green', teal: 'teal', orange: 'orange', red: 'red', subtle: 'gray' };
 
 const errText = (e: unknown) =>
@@ -106,7 +105,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
       if (tr.requires_comment && !text.trim()) throw new ApiError(422, 'comment_required');
       return api<RecordDetail>(`/records/${rec.id}/transitions`, {
         method: 'POST', body: JSON.stringify({ action: tr.action, comment: text.trim() || null, on_behalf_of: onBehalf,
-          performed_at: rec.record_type.code === 'inspection' ? fromLocalInput(performed) : null,
+          performed_at: profile(rec.record_type.code).timed ? fromLocalInput(performed) : null,
           checklist: rec.checklist.length ? answers.map((x) => ({ result: x.result, note: x.note.trim() || null })) : null }),
       });
     },
@@ -117,7 +116,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
     <Card withBorder style={{ borderColor: 'var(--mantine-color-verqac-3)' }}>
       <Group justify="space-between" align="flex-start" mb="xs">
         <div>
-          <Title order={5}>{t('resp.title')}</Title>
+          <Title order={5}>{typeText(rec.record_type.code, 'respTitle', 'resp.title')}</Title>
           <Text size="xs" c="dimmed">{t('resp.hint')}</Text>
         </div>
         {rec.can_assign && (
@@ -130,7 +129,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
       {rec.checklist.length > 0 && <ChecklistAnswers rec={rec} value={answers} onChange={keepAnswers} />}
       <Textarea mt={rec.checklist.length ? 'md' : undefined} placeholder={t('resp.placeholder')} autosize minRows={6} maxRows={20} value={text}
         onChange={(e) => keep(e.currentTarget.value)} />
-      {rec.record_type.code === 'inspection' && (
+      {profile(rec.record_type.code).timed && (
         <TextInput mt="sm" w={260} type="datetime-local" label={t('ir.performedAt')} description={t('ir.performedHint')}
           value={performed} onChange={(e) => setPerformed(e.currentTarget.value)} />
       )}
@@ -230,10 +229,10 @@ function RequiredBy({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDeta
         <Stack gap="sm">
           {error && <Alert color="red">{error}</Alert>}
           <Group align="flex-end" wrap="wrap">
-            <TextInput type="date" label={t('rec.requiredBy')} value={day} onChange={(e) => setDay(e.currentTarget.value)} />
+            <TextInput type="date" label={typeText(rec.record_type.code, 'requiredBy', 'rec.requiredBy')} value={day} onChange={(e) => setDay(e.currentTarget.value)} />
             <TextInput flex={1} miw={220} label={t('rec.requiredByNote')} maxLength={300} value={note} onChange={(e) => setNote(e.currentTarget.value)} />
           </Group>
-          <Text size="xs" c="dimmed">{t('rec.requiredByHint')}</Text>
+          <Text size="xs" c="dimmed">{typeText(rec.record_type.code, 'requiredByHint', 'rec.requiredByHint')}</Text>
           <Group gap="xs">
             <Button size="xs" disabled={!day} loading={save.isPending} onClick={() => save.mutate(false)}>{t('rec.save')}</Button>
             <Button size="xs" variant="default" onClick={() => setEditing(false)}>{t('common.cancel')}</Button>
@@ -247,7 +246,7 @@ function RequiredBy({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDeta
   const when = n < 0 ? t('rec.daysLate', { count: -n }) : n === 0 ? t('rec.dueToday') : t('rec.daysLeft', { count: n });
   return (
     <Alert color={open ? requiredColor(rec.required_by) : 'gray'} variant="light"
-      title={open ? `${t('rec.requiredBy')}: ${fmtDate(rec.required_by)} — ${when}` : t('rec.requiredByWas', { date: fmtDate(rec.required_by) })}>
+      title={open ? `${typeText(rec.record_type.code, 'requiredBy', 'rec.requiredBy')}: ${fmtDate(rec.required_by)} — ${when}` : t('rec.requiredByWas', { date: fmtDate(rec.required_by) })}>
       <Group justify="space-between" wrap="nowrap" align="flex-start">
         <Text size="sm">{rec.required_by_note || ''}</Text>
         {rec.can_set_required_by && (
@@ -266,7 +265,9 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const type = rec.record_type.code;
-  const isIR = type === 'inspection';
+  const pf = profile(type);
+  const isIR = pf.timed;
+  const [custom, setCustom] = useState<Record<string, string>>(rec.custom as Record<string, string>);
   const meta = useQuery({ queryKey: ['recMeta', rec.project_id, type], queryFn: () => api<RecordMeta>(`/projects/${rec.project_id}/records/meta?type=${type}`) });
   const cands = useQuery({ queryKey: ['linkCandidates', rec.project_id, 'all'], enabled: isIR,
     queryFn: () => api<LinkedRef[]>(`/projects/${rec.project_id}/link-candidates`) });
@@ -293,7 +294,8 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
         method: 'PATCH',
         body: JSON.stringify({
           title: place.topic_id ? null : v.title.trim(), description: blank(v.description), discipline_id: v.discipline_id || null,
-          details: Object.fromEntries((isIR ? IR_KEYS : DETAIL_KEYS).map((k) => [k, blank(v[k])])),
+          details: { ...Object.fromEntries(pf.keys.map((k) => [k, blank(v[k])])), ...(pf.kind ? { submittal_kind: v.submittal_kind || null } : {}) },
+          custom: Object.fromEntries(pf.custom.map((f) => [f.key, blank(custom[f.key] ?? '')])),
           ...place,
           ...(isIR ? { requested_for: fromLocalInput(requested), linked_ids: linked } : {}),
         }),
@@ -320,12 +322,15 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
             data={(cands.data ?? []).map((x) => ({ value: x.id, label: `${x.number} R${x.rev_no} · ${x.title} — ${pick(x.state, 'name')}` }))} />
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          {!isIR && <Select label={t('rec.f.submittal_kind')} allowDeselect={false} data={kindOptions} {...form.getInputProps('submittal_kind')} />}
-          {(isIR ? IR_KEYS : DETAIL_KEYS.filter((k) => k !== 'submittal_kind')).map((k) => (
-            <TextInput key={k} label={t(isIR && k === 'item' ? 'ir.item' : `rec.f.${k}`)} dir={LTR.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />
+          {pf.kind && <Select label={t('rec.f.submittal_kind')} allowDeselect={false} data={kindOptions} {...form.getInputProps('submittal_kind')} />}
+          {pf.keys.map((k) => (
+            <TextInput key={k} label={fieldLabel(type, k)} dir={LTR_KEYS.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />
+          ))}
+          {pf.custom.map((f) => (
+            <CustomInput key={f.key} code={type} f={f} value={custom[f.key] ?? ''} onChange={(x) => setCustom({ ...custom, [f.key]: x })} />
           ))}
         </SimpleGrid>
-        <Textarea label={t('rec.description')} autosize minRows={2} {...form.getInputProps('description')} />
+        <Textarea label={typeText(type, 'description', 'rec.description')} autosize minRows={2} {...form.getInputProps('description')} />
         <Button type="submit" loading={save.isPending}>{t('rec.save')}</Button>
       </Stack>
     </form>
@@ -381,9 +386,8 @@ export default function RecordPage() {
 
   return (
     <Stack maw={1200} mx="auto">
-      {r.record_type.code === 'inspection'
-        ? <BackButton to={`/projects/${r.project_id}?tab=inspections`} label={t('back.inspections')} />
-        : <BackButton to={`/projects/${r.project_id}?tab=submittals`} label={t('back.submittals')} />}
+      <BackButton to={`/projects/${r.project_id}?tab=${profile(r.record_type.code).tab}`}
+        label={typeText(r.record_type.code, 'back', 'back.submittals')} />
       <Group justify="space-between" align="flex-start">
         <div>
           <Group gap="xs">
@@ -415,7 +419,7 @@ export default function RecordPage() {
           </Alert>
         );
       })()}
-      {r.record_type.code !== 'inspection' && <RequiredBy key={`${r.id}-${r.required_by}-${r.required_by_note}`} rec={r} onDone={put} />}
+      {profile(r.record_type.code).requiredBy && <RequiredBy key={`${r.id}-${r.required_by}-${r.required_by_note}`} rec={r} onDone={put} />}
 
       {(others.length > 0 || r.can_edit || r.can_revise) && (
         <Group gap="xs">
@@ -434,7 +438,7 @@ export default function RecordPage() {
             {responses.length > 0 && <ResponsePanel rec={r} transitions={responses} onDone={put} />}
             {r.answered_at && (
               <Card withBorder style={{ borderInlineStartWidth: 4, borderInlineStartColor: `var(--mantine-color-${stateColor(r.state.color)}-6)` }}>
-                <Text fw={600} mb={4}>{t('rec.response')}: {pick(r.state, 'name')}</Text>
+                <Text fw={600} mb={4}>{typeText(r.record_type.code, 'response', 'rec.response')}: {pick(r.state, 'name')}</Text>
                 {r.response_comment && <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>{r.response_comment}</Text>}
                 <Text size="xs" c="dimmed" mt="xs">
                   {t('rec.answeredBy')}: {r.answered_by ? pick(r.answered_by, 'full_name') : ''}
@@ -452,25 +456,38 @@ export default function RecordPage() {
                   <Field label={t('structure.location')}
                     value={r.all_locations ? t('structure.wholeProject') : r.locations.map((x) => pick(x, 'name')).join(i18n.language === 'en' ? ', ' : '، ')} />
                 )}
-                {r.record_type.code === 'inspection' && <>
+                {profile(r.record_type.code).timed && <>
                   <Field label={t('ir.requestedFor')} value={r.requested_for ? fmtDate(r.requested_for, true) : t('ir.asap')} />
                   {r.performed_at && <Field label={t('ir.performedAt')} value={fmtDate(r.performed_at, true)} />}
                 </>}
-                {(r.record_type.code === 'inspection' ? IR_KEYS : DETAIL_KEYS.filter((k) => k !== 'unit')).map((k) => (
-                  <Field key={k} label={t(r.record_type.code === 'inspection' && k === 'item' ? 'ir.item' : `rec.f.${k}`)} ltr={LTR.has(k)}
+                {([...(profile(r.record_type.code).kind ? ['submittal_kind'] as const : []), ...profile(r.record_type.code).keys.filter((k) => k !== 'unit')] as (typeof DETAIL_KEYS[number])[]).map((k) => (
+                  <Field key={k} label={k === 'submittal_kind' ? t('rec.f.submittal_kind') : fieldLabel(r.record_type.code, k)} ltr={LTR_KEYS.has(k)}
                     value={k === 'quantity' && det.quantity != null ? `${Number(det.quantity)} ${det.unit ?? ''}`
                       : k === 'submittal_kind' && r.submittal_kind_name ? pick({ n_ar: r.submittal_kind_name.ar, n_en: r.submittal_kind_name.en }, 'n')
                       : (det[k] as string | null)} />
                 ))}
+                {profile(r.record_type.code).custom.filter((f) => f.kind !== 'long').map((f) => (
+                  <Field key={f.key} label={fieldLabel(r.record_type.code, f.key)} ltr={LTR_KEYS.has(f.key)}
+                    value={r.custom[f.key] ? (f.kind === 'select' ? choiceLabel(r.custom[f.key]!) : r.custom[f.key]) : null} />
+                ))}
                 <Field label={t('rec.submitted')} value={fmtDate(r.submitted_at, true)} />
-                <Field label={t('rec.due')} value={fmtDate(r.due_at, r.record_type.code === 'inspection')} />
+                <Field label={t('rec.due')} value={fmtDate(r.due_at, profile(r.record_type.code).timed)} />
                 {r.answered_at && <Field label={t('rec.answered')} value={fmtDate(r.answered_at, true)} />}
                 {r.answered_by && <Field label={t('rec.answeredBy')} value={`${pick(r.answered_by, 'full_name')}${r.answered_on_behalf_of ? ` (${t('rec.onBehalf')} ${pick(r.answered_on_behalf_of, 'full_name')})` : ''}`} />}
-                {r.resubmit_due_at && <Field label={t('resubmit.byShort')} value={fmtDate(r.resubmit_due_at, r.record_type.code === 'inspection')} />}
+                {r.resubmit_due_at && <Field label={t('resubmit.byShort')} value={fmtDate(r.resubmit_due_at, profile(r.record_type.code).timed)} />}
                 <Field label={t('rec.submittedBy')} value={r.submitted_by ? pick(r.submitted_by, 'full_name') : null} />
                 <Field label={t('rec.addressedTo')} value={r.addressed_to.map((u) => pick(u, 'full_name')).join(i18n.language === 'en' ? ', ' : '، ') || null} />
               </SimpleGrid>
-              {r.description && <Text size="sm" mt="sm" style={{ whiteSpace: 'pre-wrap' }}>{r.description}</Text>}
+              {r.description && <>
+                {profile(r.record_type.code).custom.length > 0 && <Text size="xs" c="dimmed" mt="sm">{typeText(r.record_type.code, 'description', 'rec.description')}</Text>}
+                <Text size="sm" mt={profile(r.record_type.code).custom.length ? 0 : 'sm'} style={{ whiteSpace: 'pre-wrap' }}>{r.description}</Text>
+              </>}
+              {profile(r.record_type.code).custom.filter((f) => f.kind === 'long' && r.custom[f.key]).map((f) => (
+                <div key={f.key}>
+                  <Text size="xs" c="dimmed" mt="sm">{fieldLabel(r.record_type.code, f.key)}</Text>
+                  <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>{r.custom[f.key]}</Text>
+                </div>
+              ))}
               {r.linked.length > 0 && (
                 <Stack gap={4} mt="sm">
                   <Text size="xs" c="dimmed">{t('ir.linked')}</Text>

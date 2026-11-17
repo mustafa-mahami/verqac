@@ -13,9 +13,9 @@ import { pick } from '../i18n';
 import { PlacePicker, placeText, rowTitle, useStructure } from './Structure';
 import RecordStats, { applyFilter, CATEGORIES, type StatsFilter } from './RecordStats';
 
-const DETAIL_KEYS = ['item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'] as const;
-const IR_KEYS = ['item', 'drawing_ref', 'spec_ref', 'boq_ref'] as const;
-export type RegisterType = 'submittal' | 'inspection';
+import { CustomInput, fieldLabel, LTR_KEYS, profile, typeText, type RegisterType } from '../recordTypes';
+
+export type { RegisterType };
 
 /** Approved submittals an inspection can rely on (shown when the project links them). */
 function LinkPicker({ projectId, stageId, value, onChange }: {
@@ -41,9 +41,11 @@ function LinkPicker({ projectId, stageId, value, onChange }: {
 }
 
 function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; meta: RecordMeta; onClose: () => void; type: RegisterType }) {
-  const isIR = type === 'inspection';
+  const pf = profile(type);
+  const isIR = pf.timed;
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [custom, setCustom] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const structure = useStructure(projectId);
@@ -81,15 +83,13 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
           addressed_to: choose ? v.addressed_to || null : null,
           discipline_id: v.discipline_id || null, number: blank(v.number),
           ...place,
-          required_by: !isIR && v.required_by ? v.required_by : null,
-          required_by_note: !isIR && v.required_by ? blank(v.required_by_note) : null,
-          details: isIR
-            ? { item: blank(v.item), drawing_ref: blank(v.drawing_ref), spec_ref: blank(v.spec_ref), boq_ref: blank(v.boq_ref) }
-            : {
-              submittal_kind: v.submittal_kind || null, item: blank(v.item), manufacturer: blank(v.manufacturer),
-              supplier: blank(v.supplier), drawing_ref: blank(v.drawing_ref), spec_ref: blank(v.spec_ref),
-              boq_ref: blank(v.boq_ref), quantity: blank(v.quantity), unit: blank(v.unit),
-            },
+          required_by: pf.requiredBy && v.required_by ? v.required_by : null,
+          required_by_note: pf.requiredBy && v.required_by ? blank(v.required_by_note) : null,
+          details: {
+            ...Object.fromEntries(pf.keys.map((k) => [k, blank(v[k])])),
+            ...(pf.kind ? { submittal_kind: v.submittal_kind || null } : {}),
+          },
+          custom: Object.fromEntries(pf.custom.map((f) => [f.key, blank(custom[f.key] ?? '')])),
         }),
       });
       for (const f of v.files) {
@@ -117,9 +117,8 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
           <Select label={t('rec.discipline')} allowDeselect={false}
             data={meta.disciplines.map((d) => ({ value: d.id, label: pick(d, 'name') }))} {...form.getInputProps('discipline_id')} />
-          {isIR
-            ? <TextInput type="datetime-local" label={t('ir.requestedFor')} description={t('ir.requestedForHint')} {...form.getInputProps('requested_for')} />
-            : <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} searchable {...form.getInputProps('submittal_kind')} />}
+          {isIR && <TextInput type="datetime-local" label={t('ir.requestedFor')} description={t('ir.requestedForHint')} {...form.getInputProps('requested_for')} />}
+          {pf.kind && <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} searchable {...form.getInputProps('submittal_kind')} />}
           <TextInput label={t('rec.number')} placeholder={t('rec.numberHint')} dir="ltr" {...form.getInputProps('number')} />
         </SimpleGrid>
         {choose && (
@@ -130,14 +129,16 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
           <LinkPicker projectId={projectId} stageId={place.stage_id} value={form.values.linked} onChange={(v) => form.setFieldValue('linked', v)} />
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          {(isIR ? IR_KEYS : DETAIL_KEYS).map((k) => (
-            <TextInput key={k} label={t(isIR && k === 'item' ? 'ir.item' : `rec.f.${k}`)} dir={['drawing_ref', 'spec_ref', 'boq_ref', 'quantity'].includes(k) ? 'ltr' : undefined}
-              {...form.getInputProps(k)} />
+          {pf.keys.map((k) => (
+            <TextInput key={k} label={fieldLabel(type, k)} dir={LTR_KEYS.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />
+          ))}
+          {pf.custom.map((f) => (
+            <CustomInput key={f.key} code={type} f={f} value={custom[f.key] ?? ''} onChange={(x) => setCustom({ ...custom, [f.key]: x })} />
           ))}
         </SimpleGrid>
-        <Textarea label={t('rec.description')} autosize minRows={2} {...form.getInputProps('description')} />
-        {!isIR && <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          <TextInput type="date" label={t('rec.requiredBy')} description={t('rec.requiredByHint')} {...form.getInputProps('required_by')} />
+        <Textarea label={typeText(type, 'description', 'rec.description')} autosize minRows={2} {...form.getInputProps('description')} />
+        {pf.requiredBy && <SimpleGrid cols={{ base: 1, sm: 3 }}>
+          <TextInput type="date" label={typeText(type, 'requiredBy', 'rec.requiredBy')} description={typeText(type, 'requiredByHint', 'rec.requiredByHint')} {...form.getInputProps('required_by')} />
           <TextInput style={{ gridColumn: 'span 2' }} label={t('rec.requiredByNote')} disabled={!form.values.required_by}
             description="&nbsp;" maxLength={300} {...form.getInputProps('required_by_note')} />
         </SimpleGrid>}
@@ -249,13 +250,13 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
           )}
           <Switch label={t('rec.allRevisions')} checked={allRevs} onChange={(e) => setAllRevs(e.currentTarget.checked)} />
         </Group>
-        {meta.data?.can_create && <Button onClick={() => setOpen(true)}>{t(type === 'inspection' ? 'ir.new' : 'rec.new')}</Button>}
+        {meta.data?.can_create && <Button onClick={() => setOpen(true)}>{typeText(type, 'new', 'rec.new')}</Button>}
       </Group>
       {rows.data && rows.data.length > 0 && (
         <RecordStats rows={rows.data} filter={filter} onChange={setFilter} showDraft={meta.data?.party_kind === 'contractor'}
           structure={structure.data} states={meta.data?.states} />
       )}
-      {rows.isSuccess && shown.length === 0 ? <Text c="dimmed">{rows.data.length ? t('stats.noneHere') : t('rec.empty')}</Text> : (
+      {rows.isSuccess && shown.length === 0 ? <Text c="dimmed">{rows.data.length ? t('stats.noneHere') : typeText(type, 'empty', 'rec.empty')}</Text> : (
         <Card withBorder p={0}>
           <Table.ScrollContainer minWidth={760}>
             <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
@@ -284,7 +285,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                     <Table.Td><Badge tt="none" variant="light" color={stateColor(r.state.color)}>{pick(r.state, 'name')}</Badge></Table.Td>
                     <Table.Td><Text size="sm">{fmtDate(r.submitted_at)}</Text></Table.Td>
                     <Table.Td>
-                      <Text size="sm" c={r.overdue ? 'red' : undefined} fw={r.overdue ? 600 : undefined}>{fmtDate(r.due_at, type === 'inspection')}</Text>
+                      <Text size="sm" c={r.overdue ? 'red' : undefined} fw={r.overdue ? 600 : undefined}>{fmtDate(r.due_at, profile(type).timed)}</Text>
                       {r.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
                       {r.resubmit_due_at && (
                         <Badge size="xs" tt="none" variant="light" color={r.resubmit_overdue ? 'red' : 'orange'} style={{ display: 'block' }}>
@@ -301,7 +302,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                       {(() => {
                         const late = !!(r.answered_at && r.due_at && new Date(r.answered_at) > new Date(r.due_at));
                         return <Text size="sm" c={late ? 'orange.8' : undefined} title={late ? t('rec.answeredLate') : undefined}>
-                          {fmtDate(r.answered_at, type === 'inspection')}</Text>;
+                          {fmtDate(r.answered_at, profile(type).timed)}</Text>;
                       })()}
                     </Table.Td>
                   </Table.Tr>
@@ -311,7 +312,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
           </Table.ScrollContainer>
         </Card>
       )}
-      <Modal opened={open} onClose={() => setOpen(false)} title={t(type === 'inspection' ? 'ir.new' : 'rec.new')} size="xl">
+      <Modal opened={open} onClose={() => setOpen(false)} title={typeText(type, 'new', 'rec.new')} size="xl">
         {meta.data && <NewSubmittal projectId={projectId} meta={meta.data} type={type} onClose={() => setOpen(false)} />}
       </Modal>
     </Stack>

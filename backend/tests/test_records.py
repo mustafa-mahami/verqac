@@ -413,7 +413,7 @@ def test_inbox_hides_returned_revision_once_a_newer_one_is_answered(client, site
 def test_routing_modes(client, site):
     pid, hc = site["pid"], site["hc"]
     url = f"/api/v1/projects/{pid}/settings"
-    assert client.get(url, headers=hc).json()["routing"] == {"submittal": "discipline", "inspection": "discipline"}
+    assert set(client.get(url, headers=hc).json()["routing"].values()) == {"discipline"}
     # discipline (default): addressed to the civil engineer, who has it in his inbox
     rec = submit(client, site, new_sub(client, site))
     got = client.get(f"/api/v1/records/{rec['id']}", headers=site["hqa"]).json()

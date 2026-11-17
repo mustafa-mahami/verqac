@@ -1,3 +1,4 @@
+import { profile } from '../recordTypes';
 import { Badge, Card, Group, Select, Stack, Table, Text, Title } from '@mantine/core';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -7,7 +8,7 @@ import { api, type InboxItem } from '../api';
 import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
 
-const reasonColor = { reply: 'blue', returned: 'orange', draft: 'gray' } as const;
+const reasonColor = { reply: 'blue', verify: 'grape', returned: 'orange', draft: 'gray' } as const;
 
 export default function Inbox() {
   const { t } = useTranslation();
@@ -67,7 +68,7 @@ export default function Inbox() {
                     <Table.Td><Text size="sm" lineClamp={2}>{i.title}</Text></Table.Td>
                     <Table.Td><Badge tt="none" variant="light" color={stateColor(i.state.color)}>{pick(i.state, 'name')}</Badge></Table.Td>
                     <Table.Td>
-                      <Text size="sm" c={i.overdue ? 'red' : undefined} fw={i.overdue ? 600 : undefined}>{fmtDate(i.due_at, i.record_type.code === 'inspection')}</Text>
+                      <Text size="sm" c={i.overdue ? 'red' : undefined} fw={i.overdue ? 600 : undefined}>{fmtDate(i.due_at, profile(i.record_type.code).timed)}</Text>
                       {i.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
                       {i.required_by && (
                         <Badge size="xs" tt="none" variant="light" color={requiredColor(i.required_by)} style={{ display: 'block' }}>

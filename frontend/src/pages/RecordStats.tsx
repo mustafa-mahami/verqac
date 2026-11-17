@@ -6,7 +6,7 @@ import { pick } from '../i18n';
 
 /** State categories in workflow order, with the colours the states use. Same for every record type. */
 export const CATEGORIES = [
-  ['draft', 'gray'], ['submitted', 'blue'], ['approved', 'green'], ['approved_as_noted', 'teal'],
+  ['draft', 'gray'], ['submitted', 'blue'], ['responded', 'orange'], ['approved', 'green'], ['approved_as_noted', 'teal'],
   ['revise_and_resubmit', 'orange'], ['rejected', 'red'], ['cancelled', 'dark'],
 ] as const;
 

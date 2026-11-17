@@ -126,7 +126,8 @@
     "checklist_nonconforming": "An item is non-conforming: choose \"Accept with comments\" or \"Reject\".",
     "invalid_weekend": "Invalid days off (three at most).",
     "invalid_holiday": "Invalid holiday dates (end before start or longer than 60 days).",
-    "invalid_work_hours": "Invalid working hours: start must be before end."
+    "invalid_work_hours": "Invalid working hours: start must be before end.",
+    "invalid_field": "Invalid value in a field."
   },
   "common": {
     "cancel": "Cancel",
@@ -219,7 +220,10 @@
       "submittals": "Submittals",
       "team": "Team",
       "settings": "Settings",
-      "inspections": "Inspections"
+      "inspections": "Inspections",
+      "materials": "Material inspections",
+      "rfis": "RFIs",
+      "ncrs": "NCRs"
     }
   },
   "rec": {
@@ -316,7 +320,10 @@
   "back": {
     "projects": "All projects",
     "submittals": "Submittals list",
-    "inspections": "Inspection register"
+    "inspections": "Inspection register",
+    "materials": "Material inspections",
+    "rfis": "RFIs",
+    "ncrs": "NCRs"
   },
   "settings": {
     "reviewTitle": "Reply and resubmission periods",
@@ -336,8 +343,8 @@
     "kindActive": "Active",
     "kindInactive": "Off — not offered for new requests",
     "kindAdd": "Add a type",
-    "replyDays": "Consultant reply",
-    "resubmitDays": "Contractor resubmission",
+    "replyDays": "Reply period",
+    "resubmitDays": "Resubmission period",
     "hours": "h",
     "linkSubmittals": "Link inspections to material submittals",
     "linkSubmittalsHint": "The inspection form lists the stage's submittals to pick the ones it relies on, and warns when they are not approved.",
@@ -364,7 +371,8 @@
     "reason": {
       "reply": "Awaiting your reply",
       "returned": "Returned to you",
-      "draft": "Your draft"
+      "draft": "Your draft",
+      "verify": "To verify and close"
     },
     "project": "Project",
     "assignedToMe": "Assigned to you",
@@ -425,7 +433,8 @@
     "to": "to",
     "clear": "Clear filters",
     "kind": "Submittal type:",
-    "resubmit_overdue": "Resubmission overdue"
+    "resubmit_overdue": "Resubmission overdue",
+    "responded": "To verify"
   },
   "structure": {
     "stage": "Stage",
@@ -583,5 +592,68 @@
     "orgHolidays": "Official holidays (organization calendar)",
     "noOrgHolidays": "No official holidays in the organization calendar yet (Organization settings → Calendar & holidays).",
     "projectHolidays": "Project holidays"
+  },
+  "types": {
+    "submittal": {
+      "back": "Submittals"
+    },
+    "inspection": {
+      "new": "New inspection request",
+      "back": "Inspection requests",
+      "f": {
+        "item": "Work to be inspected"
+      },
+      "empty": "No inspection requests yet."
+    },
+    "material": {
+      "new": "New material inspection",
+      "back": "Material inspections",
+      "f": {
+        "item": "Material delivered"
+      },
+      "description": "Delivery notes",
+      "respTitle": "Consultant comments on the material",
+      "empty": "No material inspections yet."
+    },
+    "rfi": {
+      "new": "New RFI",
+      "back": "RFIs",
+      "f": {
+        "item": "Element / location"
+      },
+      "description": "Question / information requested",
+      "respTitle": "Consultant's answer",
+      "response": "Consultant's answer",
+      "empty": "No RFIs yet.",
+      "requiredBy": "Answer needed by",
+      "requiredByHint": "The latest date you need the answer so the work is not held up. The consultant sees it; it is not printed."
+    },
+    "ncr": {
+      "new": "New NCR",
+      "back": "NCRs",
+      "f": {
+        "item": "Element / location"
+      },
+      "description": "Non-conformance description",
+      "respTitle": "Corrective action (Contractor)",
+      "response": "Corrective action",
+      "empty": "No NCRs yet."
+    }
+  },
+  "custom": {
+    "proposed": "Contractor's proposal",
+    "impact": "Expected impact",
+    "delivery_note": "Delivery note no.",
+    "storage": "Storage location",
+    "severity": "Severity",
+    "required_action": "Required action",
+    "choice": {
+      "none": "None",
+      "cost": "Cost",
+      "time": "Time",
+      "cost_time": "Cost and time",
+      "minor": "Minor",
+      "major": "Major"
+    }
   }
 }

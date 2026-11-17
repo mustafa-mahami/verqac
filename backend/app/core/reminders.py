@@ -22,9 +22,9 @@ from app.models.records import Record, RecordReminder, RecordType
 log = logging.getLogger("verqac.reminders")
 
 # how long before a deadline the "soon" reminder goes out, and whether "late" repeats daily
-LEAD = {"inspection": timedelta(minutes=30)}
+LEAD = {"inspection": timedelta(minutes=30), "material": timedelta(hours=2)}
 DEFAULT_LEAD = timedelta(days=1)
-DAILY_LATE = {"submittal"}
+DAILY_LATE = {"submittal", "rfi", "ncr"}
 EVERY = 300  # seconds between runs
 
 

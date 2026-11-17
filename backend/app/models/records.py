@@ -16,7 +16,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.core import Base, created, pk
 
-CATEGORIES = ("draft", "submitted", "approved", "approved_as_noted", "revise_and_resubmit", "rejected", "cancelled")
+CATEGORIES = ("draft", "submitted", "responded", "approved", "approved_as_noted", "revise_and_resubmit", "rejected",
+              "cancelled")
 # categories that close a record (a reply was given or it was withdrawn)
 CLOSED = ("approved", "approved_as_noted", "revise_and_resubmit", "rejected", "cancelled")
 EFFECTS = ("submit", "respond", "cancel", "none")

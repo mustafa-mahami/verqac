@@ -99,6 +99,7 @@ class RecordIn(BaseModel):
     requested_for: datetime | None = None  # inspections: when it should take place (empty = now)
     linked_ids: list[UUID] = []  # inspections: approved submittals of the materials
     addressed_to: UUID | None = None  # "choose" routing: the consultant engineer the request goes to
+    custom: dict[str, str | None] = {}  # extra fields of the type (RFI proposal, NCR severity, delivery note...)
 
 
 class RequiredByIn(BaseModel):
@@ -119,6 +120,7 @@ class RecordPatch(BaseModel):
     requested_for: datetime | None = None
     linked_ids: list[UUID] | None = None
     addressed_to: UUID | None = None
+    custom: dict[str, str | None] | None = None
 
 
 class CheckAnswer(BaseModel):
@@ -239,6 +241,7 @@ class RecordDetail(BaseModel):
     requested_for: datetime | None = None
     performed_at: datetime | None = None
     linked: list["LinkedRef"] = []
+    custom: dict[str, str | None] = {}
     checklist: list[CheckLine] = []  # inspections: fixed at submission (before that: the topic's current list)
     link_warning: str | None = None  # no_link | not_approved (only when the project links inspections)
     all_locations: bool = False
@@ -286,7 +289,7 @@ class InboxItem(BaseModel):
     rev_no: int
     title: str
     state: StateOut
-    reason: Literal["reply", "returned", "draft"]
+    reason: Literal["reply", "verify", "returned", "draft"]
     due_at: datetime | None
     required_by: date | None = None
     submittal_kind_name: KindName | None = None

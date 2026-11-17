@@ -132,7 +132,7 @@ export interface RecordEvent {
 export interface RecordComment { id: string; author: User; party_kind: string; visibility: string; body: string; created_at: string }
 export interface Attachment { id: string; file_id: string; filename: string; content_type: string; size: number; kind: string; party_kind: string; created_at: string }
 export interface RecordDetail {
-  checklist: CheckLine[];
+  checklist: CheckLine[]; custom: Record<string, string | null>;
   id: string; project_id: string; record_type: RecordType; number: string; rev_no: number; title: string;
   description: string | null; discipline: Discipline | null; state: State; from_party_kind: string;
   created_by: User; created_at: string; submitted_by: User | null; submitted_at: string | null; due_at: string | null;
@@ -157,7 +157,7 @@ export interface ProjectSettings {
 export interface InboxItem {
   id: string; project_id: string; project_code: string; project_name_ar: string; project_name_en: string;
   record_type: RecordType; number: string; rev_no: number; title: string; state: State;
-  reason: 'reply' | 'returned' | 'draft'; due_at: string | null; required_by: string | null;
+  reason: 'reply' | 'verify' | 'returned' | 'draft'; due_at: string | null; required_by: string | null;
   submittal_kind_name: { ar: string; en: string } | null; overdue: boolean; assigned_to_me: boolean; updated_at: string;
 }
 export interface NotificationItem { id: number; record_id: string | null; event: string; title_ar: string; title_en: string; body: string | null; created_at: string; read: boolean }

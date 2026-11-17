@@ -34,6 +34,27 @@ T = {
                       "supplier": "Supplier / agent", "drawing_ref": "Drawing no.", "spec_ref": "Spec section",
                       "boq_ref": "BOQ item", "quantity": "Quantity"}},
 }
+PARTY = {"ar": {"contractor": "المقاول", "consultant": "الاستشاري", "owner": "المالك"},
+         "en": {"contractor": "Contractor", "consultant": "Consultant", "owner": "Owner"}}
+# fields printed per type (standard detail columns, then the type's extra fields)
+TYPE_KEYS = {"inspection": ["item", "drawing_ref", "spec_ref", "boq_ref"],
+             "material": ["item", "manufacturer", "supplier", "quantity", "spec_ref", "boq_ref"],
+             "rfi": ["item", "drawing_ref", "spec_ref"],
+             "ncr": ["item", "drawing_ref", "spec_ref"]}
+CUSTOM = {"ar": {"proposed": "الحل المقترح من المقاول", "impact": "الأثر المتوقع", "delivery_note": "رقم سند التسليم",
+                 "storage": "مكان التخزين", "severity": "درجة عدم المطابقة", "required_action": "الإجراء المطلوب",
+                 "none": "لا يوجد", "cost": "على الكلفة", "time": "على المدة", "cost_time": "على الكلفة والمدة",
+                 "minor": "بسيطة", "major": "جسيمة"},
+          "en": {"proposed": "Contractor's proposal", "impact": "Expected impact", "delivery_note": "Delivery note no.",
+                 "storage": "Storage location", "severity": "Severity", "required_action": "Required action",
+                 "none": "None", "cost": "Cost", "time": "Time", "cost_time": "Cost and time",
+                 "minor": "Minor", "major": "Major"}}
+ITEM_LABEL = {"inspection": ("تفاصيل العمل المطلوب فحصه", "Work to be inspected"),
+              "material": ("المادة الموردة", "Material delivered"),
+              "rfi": ("العنصر / الموقع", "Element / location"), "ncr": ("العنصر / الموقع", "Element / location")}
+COMMENT_LABEL = {"rfi": ("إجابة الاستشاري", "Consultant's answer"),
+                 "ncr": ("الإجراء التصحيحي", "Corrective action")}
+
 DECISIONS = {
     "ar": [("approved", "معتمد"), ("approved_as_noted", "معتمد مع ملاحظات"),
            ("revise_and_resubmit", "تعديل وإعادة تقديم"), ("rejected", "مرفوض")],
@@ -78,7 +99,8 @@ def _decisions(c: Ctx, d: RecordDetail, lang: str) -> list[tuple[str, str]]:
     from app.models.records import RecordType, WorkflowState, WorkflowTransition
     rt = c.db.get(RecordType, d.record_type.id)
     rows = c.db.execute(select(WorkflowState).join(WorkflowTransition, WorkflowTransition.to_state_id == WorkflowState.id)
-                        .where(WorkflowTransition.workflow_id == rt.workflow_id, WorkflowTransition.effect == "respond")
+                        .where(WorkflowTransition.workflow_id == rt.workflow_id,
+                               WorkflowTransition.effect.in_(("respond", "none")))
                         .order_by(WorkflowState.sort)).scalars().unique().all()
     return [(x.category, _n(x, lang)) for x in rows]
 
@@ -93,7 +115,18 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
     for p, o in c.db.execute(select(ProjectParty, Organization).outerjoin(Organization, Organization.id == ProjectParty.org_id)
                              .where(ProjectParty.project_id == d.project_id, ProjectParty.status != "removed")):
         parties[p.kind] = _n(o, lang) if o else (p.placeholder_name or "")
-    t = T[lang]
+    from app.models.records import RecordType
+    rtm = c.db.get(RecordType, d.record_type.id)
+    by, to_ = PARTY[lang].get(rtm.creator_party, ""), PARTY[lang].get(rtm.responder_party, "")
+    t = dict(T[lang])
+    if lang == "ar":
+        t.update(decision=f"قرار {to_}" if rtm.creator_party == "contractor" else "الحالة",
+                 comments=COMMENT_LABEL.get(rtm.code, ("ملاحظات " + to_, ""))[0],
+                 submitted_by=f"قدّمه ({by})", answered_by=f"ردّ عليه ({to_})")
+    else:
+        t.update(decision=f"{to_} decision" if rtm.creator_party == "contractor" else "Status",
+                 comments=COMMENT_LABEL.get(rtm.code, ("", f"{to_} comments"))[1],
+                 submitted_by=f"Submitted by ({by})", answered_by=f"Answered by ({to_})")
     stamp = next((e.stamp for e in reversed(d.events) if e.stamp), None)
     verify_url = f"{get_settings().app_url.rstrip('/')}/v/{stamp}" if stamp else None
     det = d.details.model_dump()
@@ -101,9 +134,15 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         det["submittal_kind"] = getattr(d.submittal_kind_name, lang)
     if det.get("quantity") is not None:
         det["quantity"] = f"{float(det['quantity']):g} {det.get('unit') or ''}".strip()
-    inspection = d.record_type.code == "inspection"
-    keys = ["item", "drawing_ref", "spec_ref", "boq_ref"] if inspection else list(t["fields"])
-    pairs = [(t["fields"][k], det.get(k) or "", k in LTR_FIELDS) for k in keys]
+    code = d.record_type.code
+    inspection = code in ("inspection", "material")
+    keys = TYPE_KEYS.get(code, list(t["fields"]))
+    labels = dict(t["fields"])
+    if code in ITEM_LABEL:
+        labels["item"] = ITEM_LABEL[code][0 if lang == "ar" else 1]
+    pairs = [(labels[k], det.get(k) or "", k in LTR_FIELDS) for k in keys]
+    cl = CUSTOM[lang]
+    pairs += [(cl[k], cl.get(v, v), False) for k, v in d.custom.items() if v]
     if inspection:
         pairs += [(t["requested_for"], dt(d.requested_for) or t["asap"], True),
                   (t["performed_at"], dt(d.performed_at), True)]

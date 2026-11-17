@@ -3,7 +3,7 @@
 Roles follow design doc section 3. Record type codes are the ones of section 4.
 """
 
-RECORD_TYPES = ("submittal", "inspection", "rfi", "test", "ncr", "daily_report", "document")
+RECORD_TYPES = ("submittal", "inspection", "material", "rfi", "test", "ncr", "daily_report", "document")
 
 VIEW_ONLY = ("view", "export")
 AUTHOR = ("view", "create", "edit", "submit", "cancel", "export")
@@ -12,15 +12,18 @@ AUTHOR = ("view", "create", "edit", "submit", "cancel", "export")
 PLATFORM_ROLES = [
     ("contractor_pm", "contractor", "مدير المشروع", "Project Manager",
      {"manage_project": True, "manage_team": True},
-     [("*", ("view", "create", "edit", "submit", "cancel", "delete", "export"), "project")]),
+     [("*", ("view", "create", "edit", "submit", "cancel", "delete", "export"), "project"),
+      ("ncr", ("view", "respond", "export"), "project")]),
     ("qa_engineer", "contractor", "مهندس الجودة", "QA/QC Engineer", {},
-     [("*", AUTHOR, "disciplines")]),
+     [("*", AUTHOR, "disciplines"), ("ncr", ("view", "respond", "export"), "disciplines")]),
     ("site_engineer", "contractor", "مهندس الموقع", "Site Engineer", {},
      [("*", ("view",), "disciplines"),
       ("daily_report", AUTHOR, "disciplines"),
-      ("inspection", ("view", "create", "edit", "submit"), "disciplines")]),
+      ("inspection", ("view", "create", "edit", "submit"), "disciplines"),
+      ("material", ("view", "create", "edit", "submit"), "disciplines"),
+      ("ncr", ("view", "respond"), "disciplines")]),
     ("document_controller", "contractor", "مراقب الوثائق", "Document Controller", {},
-     [("*", AUTHOR, "project")]),
+     [("*", AUTHOR, "project"), ("ncr", ("view", "respond", "export"), "project")]),
     ("contractor_readonly", "contractor", "قراءة فقط", "Read Only", {},
      [("*", VIEW_ONLY, "project")]),
     ("consultant_pm", "consultant", "مدير مشروع الاستشاري", "Consultant Project Manager",
