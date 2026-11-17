@@ -315,7 +315,8 @@
     "notPrinted": "ظاهر للمقاول والاستشاري فقط، ولا يُطبع في PDF.",
     "addressedTo": "موجّه إلى",
     "addressedToHint": "مهندس الاستشاري الذي يوجَّه إليه الطلب",
-    "answeredLate": "رُدّ عليه بعد الموعد"
+    "answeredLate": "رُدّ عليه بعد الموعد",
+    "addPhotos": "إضافة صور"
   },
   "back": {
     "projects": "كل المشاريع",

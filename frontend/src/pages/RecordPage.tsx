@@ -13,6 +13,7 @@ import {
 import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../format';
 import i18n, { pick } from '../i18n';
 import BackButton from './BackButton';
+import Photos, { isPhoto, shrinkPhoto } from './Photos';
 import { PlacePicker, useStructure } from './Structure';
 import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, profile, typeText } from '../recordTypes';
 
@@ -353,11 +354,15 @@ export default function RecordPage() {
     qc.invalidateQueries({ queryKey: ['records', r.project_id] });
   };
   const upload = useMutation({
-    mutationFn: ({ file, kind }: { file: File; kind: string }) => {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('kind', kind);
-      return api<RecordDetail>(`/records/${id}/attachments`, { method: 'POST', body: fd });
+    mutationFn: async ({ files, kind }: { files: File[]; kind: string }) => {
+      let last: RecordDetail | null = null;
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('file', await shrinkPhoto(file));
+        fd.append('kind', kind);
+        last = await api<RecordDetail>(`/records/${id}/attachments`, { method: 'POST', body: fd });
+      }
+      return last!;
     },
     onSuccess: put, onError: (e) => setError(errText(e)),
   });
@@ -510,15 +515,21 @@ export default function RecordPage() {
                 <Title order={5}>{t('rec.files')}</Title>
                 <Group gap="xs">
                   {r.can_attach.map((kind) => (
-                    <FileButton key={kind} onChange={(f) => f && upload.mutate({ file: f, kind })}>
-                      {(props) => <Button {...props} size="xs" variant="light" loading={upload.isPending}>{t('rec.upload')} ({t(`rec.kind.${kind}`)})</Button>}
-                    </FileButton>
+                    <Group key={kind} gap={4}>
+                      <FileButton multiple accept="image/*" onChange={(f) => f.length && upload.mutate({ files: f, kind })}>
+                        {(props) => <Button {...props} size="xs" variant="light" color="teal" loading={upload.isPending}>{t('rec.addPhotos')} ({t(`rec.kind.${kind}`)})</Button>}
+                      </FileButton>
+                      <FileButton multiple onChange={(f) => f.length && upload.mutate({ files: f, kind })}>
+                        {(props) => <Button {...props} size="xs" variant="light" loading={upload.isPending}>{t('rec.upload')} ({t(`rec.kind.${kind}`)})</Button>}
+                      </FileButton>
+                    </Group>
                   ))}
                 </Group>
               </Group>
-              {r.attachments.length === 0 ? <Text size="sm" c="dimmed">{t('rec.noFiles')}</Text> : (
+              <Photos items={r.attachments.filter(isPhoto)} canRemove={(a) => r.can_attach.includes(a.kind)} onRemove={(a) => detach.mutate(a.id)} />
+              {r.attachments.length === 0 ? <Text size="sm" c="dimmed">{t('rec.noFiles')}</Text> : r.attachments.some((a) => !isPhoto(a)) && (
                 <Stack gap={6}>
-                  {r.attachments.map((a) => (
+                  {r.attachments.filter((a) => !isPhoto(a)).map((a) => (
                     <Group key={a.id} justify="space-between" wrap="nowrap">
                       <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
                         <Badge size="sm" tt="none" variant="outline" color={a.kind === 'response' ? 'teal' : 'gray'}>{t(`rec.kind.${a.kind}`)}</Badge>

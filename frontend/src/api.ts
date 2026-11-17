@@ -88,12 +88,16 @@ export async function blobUrl(path: string): Promise<string | null> {
   return r.ok ? URL.createObjectURL(await r.blob()) : null;
 }
 
-export async function openProtected(path: string, filename: string, inline = false) {
+export async function fetchBlob(path: string): Promise<Blob> {
   const go = () => fetch(`/api/v1${path}`, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}, credentials: 'include' });
   let r = await go();
   if (r.status === 401 && (await refreshSession())) r = await go();
   if (!r.ok) throw new ApiError(r.status, 'generic');
-  const url = URL.createObjectURL(await r.blob());
+  return r.blob();
+}
+
+export async function openProtected(path: string, filename: string, inline = false) {
+  const url = URL.createObjectURL(await fetchBlob(path));
   if (inline) {
     window.open(url, '_blank');
   } else {

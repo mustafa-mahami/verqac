@@ -11,6 +11,7 @@ import { api, ApiError, type LinkedRef, type Place, type RecordDetail, type Reco
 import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
 import { PlacePicker, placeText, rowTitle, useStructure } from './Structure';
+import { shrinkPhoto } from './Photos';
 import RecordStats, { applyFilter, CATEGORIES, type StatsFilter } from './RecordStats';
 
 import { CustomInput, fieldLabel, LTR_KEYS, profile, typeText, type RegisterType } from '../recordTypes';
@@ -94,7 +95,7 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
       });
       for (const f of v.files) {
         const fd = new FormData();
-        fd.append('file', f);
+        fd.append('file', await shrinkPhoto(f));
         fd.append('kind', 'submission');
         await api(`/records/${rec.id}/attachments`, { method: 'POST', body: fd });
       }

@@ -315,7 +315,8 @@
     "notPrinted": "Seen by the contractor and consultant only; not printed.",
     "addressedTo": "Submitted to",
     "addressedToHint": "The consultant engineer this request goes to",
-    "answeredLate": "Answered after the deadline"
+    "answeredLate": "Answered after the deadline",
+    "addPhotos": "Add photos"
   },
   "back": {
     "projects": "All projects",

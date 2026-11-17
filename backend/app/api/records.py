@@ -253,6 +253,8 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         attach.append("submission")
     if rec.state_category == "submitted" and p.can("respond", rec):
         attach.append("response")
+    if rec.state_category == "responded" and p.can("submit", rec):
+        attach.append("photo")  # the issuer's photos when verifying (an NCR's corrective action on site)
     can_assign = bool(rec.state_category == "submitted" and a.role and a.role.act_on_behalf and p.can("respond", rec))
     candidates = []
     if can_assign:

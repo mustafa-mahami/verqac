@@ -19,7 +19,7 @@ T = {
            "discipline": "التخصص", "submitted_on": "تاريخ التقديم", "subject": "الموضوع", "description": "الوصف",
            "due": "موعد الرد", "answered_on": "تاريخ الرد", "details": "التفاصيل", "attachments": "المرفقات",
            "decision": "قرار الاستشاري", "comments": "ملاحظات الاستشاري", "submitted_by": "قدّمه (المقاول)",
-           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "requested_for": "موعد الفحص المطلوب", "asap": "فوراً", "performed_at": "وقت الفحص الفعلي", "linked": "الاعتمادات المرتبطة", "resubmit": "إعادة التقديم", "resubmit_text": "يُعاد التقديم خلال {days} يوماً، قبل", "submitted_by_row": "مقدّم الطلب", "addressed_to": "موجّه إلى", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "checklist": "قائمة الفحص", "item_col": "البند", "result_col": "النتيجة", "note_col": "ملاحظة", "results": {"ok": "مطابق", "nc": "غير مطابق", "na": "لا ينطبق"}, "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
+           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "requested_for": "موعد الفحص المطلوب", "asap": "فوراً", "performed_at": "وقت الفحص الفعلي", "linked": "الاعتمادات المرتبطة", "resubmit": "إعادة التقديم", "resubmit_text": "يُعاد التقديم خلال {days} يوماً، قبل", "submitted_by_row": "مقدّم الطلب", "addressed_to": "موجّه إلى", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "photos": "الصور", "checklist": "قائمة الفحص", "item_col": "البند", "result_col": "النتيجة", "note_col": "ملاحظة", "results": {"ok": "مطابق", "nc": "غير مطابق", "na": "لا ينطبق"}, "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
            "kind": {"submission": "مرفق التقديم", "response": "مرفق الرد", "photo": "صورة", "other": "أخرى"},
            "fields": {"submittal_kind": "نوع الاعتماد", "item": "البند / المادة", "manufacturer": "المصنّع",
                       "supplier": "المورّد / الوكيل", "drawing_ref": "رقم المخطط", "spec_ref": "بند المواصفات",
@@ -28,7 +28,7 @@ T = {
            "discipline": "Discipline", "submitted_on": "Submitted on", "subject": "Subject", "description": "Description",
            "due": "Reply due", "answered_on": "Answered on", "details": "Details", "attachments": "Attachments",
            "decision": "Consultant decision", "comments": "Consultant comments", "submitted_by": "Submitted by (Contractor)",
-           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "requested_for": "Inspection requested for", "asap": "As soon as possible", "performed_at": "Inspected at", "linked": "Linked submittals", "resubmit": "Resubmission", "resubmit_text": "Resubmit within {days} days, by", "submitted_by_row": "Submitted by", "addressed_to": "Submitted to", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "checklist": "Inspection checklist", "item_col": "Item", "result_col": "Result", "note_col": "Note", "results": {"ok": "Conforming", "nc": "Non-conforming", "na": "N/A"}, "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
+           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "requested_for": "Inspection requested for", "asap": "As soon as possible", "performed_at": "Inspected at", "linked": "Linked submittals", "resubmit": "Resubmission", "resubmit_text": "Resubmit within {days} days, by", "submitted_by_row": "Submitted by", "addressed_to": "Submitted to", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "photos": "Photos", "checklist": "Inspection checklist", "item_col": "Item", "result_col": "Result", "note_col": "Note", "results": {"ok": "Conforming", "nc": "Non-conforming", "na": "N/A"}, "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
            "kind": {"submission": "Submission", "response": "Response", "photo": "Photo", "other": "Other"},
            "fields": {"submittal_kind": "Submittal type", "item": "Item / material", "manufacturer": "Manufacturer",
                       "supplier": "Supplier / agent", "drawing_ref": "Drawing no.", "spec_ref": "Spec section",
@@ -105,6 +105,37 @@ def _decisions(c: Ctx, d: RecordDetail, lang: str) -> list[tuple[str, str]]:
     return [(x.category, _n(x, lang)) for x in rows]
 
 
+IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+MAX_PHOTOS = 24
+
+
+def _photos(c: Ctx, d: RecordDetail) -> list[dict]:
+    """Photo attachments, shrunk for print (the originals stay as they are)."""
+    import base64
+    import io
+
+    from PIL import Image, ImageOps
+
+    from app.core import storage
+    from app.models.records import StoredFile
+    out = []
+    for x in d.attachments:
+        if x.content_type not in IMAGE_TYPES or len(out) >= MAX_PHOTOS:
+            continue
+        f = c.db.get(StoredFile, x.file_id)
+        try:
+            with Image.open(storage.path_of(f.storage_key)) as im:
+                im = ImageOps.exif_transpose(im).convert("RGB")  # phone photos carry their rotation in EXIF
+                im.thumbnail((1000, 1000))
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=78, optimize=True)
+        except Exception:  # noqa: BLE001 - an unreadable image is listed, not printed
+            continue
+        out.append({"src": "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode(),
+                    "name": x.filename, "kind": x.kind, "party": x.party_kind})
+    return out
+
+
 def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> bytes:
     tz = ZoneInfo("Asia/Hebron")
 
@@ -162,7 +193,8 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         discipline=_n(d.discipline, lang), title=d.title, description=d.description,
         submitted_at=dt(d.submitted_at), due_at=dt(d.due_at), answered_at=dt(d.answered_at),
         detail_rows=rows, decisions=_decisions(c, d, lang), response_comment=d.response_comment,
-        attachments=[{"filename": x.filename, "kind": t["kind"].get(x.kind, x.kind)} for x in d.attachments],
+        attachments=[{"filename": x.filename, "kind": t["kind"].get(x.kind, x.kind)} for x in d.attachments
+                     if x.content_type not in IMAGE_TYPES],  # photos print in their own section
         submitted_by=_n(d.submitted_by, lang, "full_name"), answered_by=_n(d.answered_by, lang, "full_name"),
         on_behalf=_n(d.answered_on_behalf_of, lang, "full_name"),
         title_text=getattr(d.topic, f"name_{lang}") if d.topic else d.title,
@@ -173,6 +205,7 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         resubmit_days=(d.resubmit_due_at - d.answered_at).days if d.resubmit_due_at and d.answered_at else None,
         stamp=stamp, stamp_short="-".join(stamp[i:i + 4] for i in range(0, 12, 4)).upper() if stamp else None,
         verify_url=verify_url, qr=_qr(verify_url) if verify_url else None,
+        photos=[{**p, "who": PARTY[lang].get(p["party"], "")} for p in _photos(c, d)],
         checklist=[{"text": getattr(x, lang), "result": t["results"].get(x.result, ""), "code": x.result,
                     "note": x.note or ""} for x in d.checklist],
     )

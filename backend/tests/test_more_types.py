@@ -56,6 +56,15 @@ def test_ncr_cycle(client, site):
     r = act(client, site["hce"], ncr["id"], "reopen", comment="الترميم غير مكتمل").json()
     assert r["state"]["code"] == "open" and r["due_at"]
     act(client, site["hqa"], ncr["id"], "propose_action", comment="أُكمل الترميم")
+    # a photo of the repair while verifying: printed in the report
+    import io
+
+    from PIL import Image
+    buf = io.BytesIO(); Image.new("RGB", (1600, 1200), (180, 170, 160)).save(buf, "JPEG")
+    up = client.post(f"/api/v1/records/{ncr['id']}/attachments", headers=site["hce"], data={"kind": "photo"},
+                     files={"file": ("repair.jpg", buf.getvalue(), "image/jpeg")})
+    assert up.status_code == 201, up.text
+    from app.reports.record_pdf import _photos  # noqa: F401 - printed section is covered by the PDF call below
     r = act(client, site["hce"], ncr["id"], "close").json()
     assert r["state"]["code"] == "closed"
     pdf = client.get(f"/api/v1/records/{ncr['id']}/pdf?lang=ar", headers=site["hqa"])

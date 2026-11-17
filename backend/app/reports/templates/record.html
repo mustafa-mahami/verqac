@@ -35,6 +35,10 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
 .check td { padding: 3px 6px; }
 .r-nc { color: #b42318; font-weight: 600; }
 .r-ok { color: #1f6f43; }
+.photos { display: flex; flex-wrap: wrap; gap: 3%; margin-top: 8px; }
+.photos figure { width: 48.5%; margin: 0 0 10px; break-inside: avoid; page-break-inside: avoid; }
+.photos img { width: 100%; max-height: 85mm; object-fit: contain; border: 1px solid #c9ced6; background: #f6f7f9; }
+.photos figcaption { font-size: 8pt; color: #666; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -69,6 +73,13 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
   <table>
     {% for a in attachments %}<tr><td style="width:6%">{{ loop.index }}</td><td class="ltr">{{ a.filename }}</td><td style="width:22%">{{ a.kind }}</td></tr>{% endfor %}
   </table>
+  {% endif %}
+
+  {% if photos %}
+  <div class="section">{{ t.photos }}</div>
+  <div class="photos">
+    {% for p in photos %}<figure><img src="{{ p.src }}" alt=""><figcaption>{{ loop.index }} · {{ p.who }} · <span class="ltr">{{ p.name }}</span></figcaption></figure>{% endfor %}
+  </div>
   {% endif %}
 
   {% if checklist %}
