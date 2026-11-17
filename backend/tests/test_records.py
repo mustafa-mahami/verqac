@@ -58,6 +58,14 @@ def site(client):
     return dict(pid=pid, code=code, hc=hc, hqa=hqa, hk=hk, hce=hce, ce=ce, hee=hee, cdisc=cdisc)
 
 
+def _working(start: str, hours: int):
+    """Where a period ends on the default calendar (Friday off, no holidays)."""
+    from datetime import datetime as dt
+
+    from app.core.workcal import Calendar, add_period
+    return add_period(dt.fromisoformat(start), hours, Calendar())
+
+
 def new_sub(client, s, h=None, disc="C", **kw):
     r = client.post(f"/api/v1/projects/{s['pid']}/records", headers=h or s["hqa"], json={
         "title": "حديد تسليح", "discipline_id": s["cdisc"][disc], "details": {"manufacturer": "Steel Co"}, **kw})
@@ -104,8 +112,8 @@ def test_submit_without_attachment_and_due_date(client, site):
     rec = new_sub(client, site)
     done = act(client, site["hqa"], rec["id"], "submit").json()  # a file is optional
     assert done["state"]["category"] == "submitted"
-    days = (datetime.fromisoformat(done["due_at"]) - datetime.fromisoformat(done["submitted_at"])).days
-    assert days == 7  # default reply period for submittals
+    # default reply period for submittals: 7 working days (Friday off by default)
+    assert datetime.fromisoformat(done["due_at"]) == _working(done["submitted_at"], 7 * 24)
     # locked after submit
     assert client.patch(f"/api/v1/records/{rec['id']}", headers=site["hqa"], json={"title": "x y"}).status_code == 403
 
@@ -202,8 +210,7 @@ def test_project_settings_review_days(client, site):
     r = client.put(f"/api/v1/projects/{site['pid']}/settings", headers=site["hc"], json={"reply_hours": {"submittal": 3 * 24 + 5}})
     assert r.status_code == 200 and r.json()["reply_hours"]["submittal"] == 77
     done = act(client, site["hqa"], new_sub(client, site)["id"], "submit").json()
-    delta = datetime.fromisoformat(done["due_at"]) - datetime.fromisoformat(done["submitted_at"])
-    assert round(delta.total_seconds() / 3600) == 77
+    assert datetime.fromisoformat(done["due_at"]) == _working(done["submitted_at"], 77)
 
 
 def test_project_list_stats(client, site):
@@ -373,7 +380,7 @@ def test_resubmission_period(client, site):
     r = act(client, site["hce"], rec["id"], "revise", comment="عدّل الكميات").json()
     assert r["resubmit_due_at"] and r["resubmit_overdue"] is False and r["resubmitted_at"] is None
     from datetime import datetime
-    assert (datetime.fromisoformat(r["resubmit_due_at"]) - datetime.fromisoformat(r["answered_at"])).days == 5
+    assert datetime.fromisoformat(r["resubmit_due_at"]) == _working(r["answered_at"], 5 * 24)
     # the contractor's inbox shows the resubmission date for the returned request
     item = next(i for i in client.get("/api/v1/inbox", headers=site["hqa"]).json() if i["id"] == rec["id"])
     assert item["reason"] == "returned" and datetime.fromisoformat(item["due_at"]) == datetime.fromisoformat(r["resubmit_due_at"])
