@@ -82,7 +82,8 @@ def save_types(org_id: uuid.UUID, body: list[ProjectTypeIO], c: Ctx = Depends(ct
         t.group_label_ar, t.group_label_en, t.unit_label_ar, t.unit_label_en = labels
         t.stages = [{**s.model_dump(mode="json"), "name_ar": s.name_ar.strip(), "name_en": s.name_en.strip(),
                      "weight": float(s.weight),
-                     "topics": [{"name_ar": tp.name_ar.strip(), "name_en": tp.name_en.strip()} for tp in s.topics]}
+                     "topics": [{"name_ar": tp.name_ar.strip(), "name_en": tp.name_en.strip(),
+                                 "checklist": _items(tp.checklist)} for tp in s.topics]}
                     for s in x.stages]
         t.units = [{"name_ar": u.name_ar.strip(), "name_en": u.name_en.strip()} for u in x.units]
         t.is_active, t.sort = x.is_active, (i + 1) * 10
@@ -96,6 +97,16 @@ def save_types(org_id: uuid.UUID, body: list[ProjectTypeIO], c: Ctx = Depends(ct
           changes={"types": [x.name_ar for x in body]}, ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
     return list_types(org_id, c)
+
+
+def _items(items) -> list[dict]:
+    """Checklist lines, trimmed; the English text falls back to the Arabic one."""
+    out = []
+    for x in items:
+        ar, en = x.ar.strip(), x.en.strip()
+        if ar or en:
+            out.append({"ar": ar or en, "en": en or ar})
+    return out
 
 
 # ----------------------------------------------------------------------------- project structure
@@ -123,7 +134,8 @@ def structure_of(c: Ctx, project: Project, can_edit: bool) -> StructureOut:
     for tp in c.db.scalars(select(ProjectStageTopic).where(ProjectStageTopic.project_id == project.id)
                            .order_by(ProjectStageTopic.sort)):
         topics.setdefault(tp.stage_id, []).append(
-            TopicIO(id=tp.id, name_ar=tp.name_ar, name_en=tp.name_en, is_active=tp.is_active, used=tp.id in used_topics))
+            TopicIO(id=tp.id, name_ar=tp.name_ar, name_en=tp.name_en, is_active=tp.is_active, used=tp.id in used_topics,
+                    checklist=tp.checklist or []))
     stages = [StageIO(id=s.id, name_ar=s.name_ar, name_en=s.name_en, scope=s.scope, weight=s.weight,
                       is_active=s.is_active, used=s.id in used_stages or any(t.used for t in topics.get(s.id, [])),
                       topics=topics.get(s.id, []))
@@ -166,7 +178,8 @@ def apply_type(c: Ctx, project: Project, t: ProjectType) -> None:
             c.db.flush()
             for j, tp in enumerate(s.get("topics", [])):
                 c.db.add(ProjectStageTopic(project_id=project.id, stage_id=st.id, name_ar=tp["name_ar"],
-                                           name_en=tp["name_en"], sort=(j + 1) * 10))
+                                           name_en=tp["name_en"], sort=(j + 1) * 10,
+                                           checklist=tp.get("checklist", [])))
     if not c.db.scalar(select(ProjectLocation.id).where(ProjectLocation.project_id == project.id).limit(1)):
         g = ProjectLocation(id=uuid.uuid4(), project_id=project.id, kind="group", sort=10,
                             name_ar=f"{t.group_label_ar} 1", name_en=f"{t.group_label_en} 1")
@@ -240,6 +253,7 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
             r.stage_id = s.id
             r.name_ar, r.name_en = _names(tp)
             r.is_active, r.sort = tp.is_active, (j + 1) * 10
+            r.checklist = _items(tp.checklist)
     if removed_topics:
         c.db.execute(delete(ProjectStageTopic).where(ProjectStageTopic.id.in_(removed_topics)))
     if removed:

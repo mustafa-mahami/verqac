@@ -121,11 +121,22 @@ class RecordPatch(BaseModel):
     addressed_to: UUID | None = None
 
 
+class CheckAnswer(BaseModel):
+    result: Literal["ok", "nc", "na"] | None = None  # conforming / non-conforming / not applicable
+    note: str | None = Field(default=None, max_length=500)
+
+
+class CheckLine(CheckAnswer):
+    ar: str
+    en: str
+
+
 class TransitionIn(BaseModel):
     action: str
     comment: str | None = Field(default=None, max_length=10000)
     on_behalf_of: UUID | None = None
     performed_at: datetime | None = None  # inspections: when it was actually done (default: now)
+    checklist: list[CheckAnswer] | None = None  # inspections: one answer per checklist line, in order
 
 
 class CommentIn(BaseModel):
@@ -228,6 +239,7 @@ class RecordDetail(BaseModel):
     requested_for: datetime | None = None
     performed_at: datetime | None = None
     linked: list["LinkedRef"] = []
+    checklist: list[CheckLine] = []  # inspections: fixed at submission (before that: the topic's current list)
     link_warning: str | None = None  # no_link | not_approved (only when the project links inspections)
     all_locations: bool = False
     locations: list[LocationRef] = []

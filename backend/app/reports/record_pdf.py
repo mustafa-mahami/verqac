@@ -19,7 +19,7 @@ T = {
            "discipline": "التخصص", "submitted_on": "تاريخ التقديم", "subject": "الموضوع", "description": "الوصف",
            "due": "موعد الرد", "answered_on": "تاريخ الرد", "details": "التفاصيل", "attachments": "المرفقات",
            "decision": "قرار الاستشاري", "comments": "ملاحظات الاستشاري", "submitted_by": "قدّمه (المقاول)",
-           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "requested_for": "موعد الفحص المطلوب", "asap": "فوراً", "performed_at": "وقت الفحص الفعلي", "linked": "الاعتمادات المرتبطة", "resubmit": "إعادة التقديم", "resubmit_text": "يُعاد التقديم خلال {days} يوماً، قبل", "submitted_by_row": "مقدّم الطلب", "addressed_to": "موجّه إلى", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
+           "answered_by": "ردّ عليه (الاستشاري)", "on_behalf": "نيابةً عن", "stamp": "بصمة الاعتماد", "requested_for": "موعد الفحص المطلوب", "asap": "فوراً", "performed_at": "وقت الفحص الفعلي", "linked": "الاعتمادات المرتبطة", "resubmit": "إعادة التقديم", "resubmit_text": "يُعاد التقديم خلال {days} يوماً، قبل", "submitted_by_row": "مقدّم الطلب", "addressed_to": "موجّه إلى", "stage": "المرحلة", "locations": "الموقع", "all_locations": "كل المشروع", "checklist": "قائمة الفحص", "item_col": "البند", "result_col": "النتيجة", "note_col": "ملاحظة", "results": {"ok": "مطابق", "nc": "غير مطابق", "na": "لا ينطبق"}, "scan": "امسح الرمز للتحقق من صحة هذا الرد ومطابقته للنسخة المحفوظة في المنصة.",
            "kind": {"submission": "مرفق التقديم", "response": "مرفق الرد", "photo": "صورة", "other": "أخرى"},
            "fields": {"submittal_kind": "نوع الاعتماد", "item": "البند / المادة", "manufacturer": "المصنّع",
                       "supplier": "المورّد / الوكيل", "drawing_ref": "رقم المخطط", "spec_ref": "بند المواصفات",
@@ -28,7 +28,7 @@ T = {
            "discipline": "Discipline", "submitted_on": "Submitted on", "subject": "Subject", "description": "Description",
            "due": "Reply due", "answered_on": "Answered on", "details": "Details", "attachments": "Attachments",
            "decision": "Consultant decision", "comments": "Consultant comments", "submitted_by": "Submitted by (Contractor)",
-           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "requested_for": "Inspection requested for", "asap": "As soon as possible", "performed_at": "Inspected at", "linked": "Linked submittals", "resubmit": "Resubmission", "resubmit_text": "Resubmit within {days} days, by", "submitted_by_row": "Submitted by", "addressed_to": "Submitted to", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
+           "answered_by": "Answered by (Consultant)", "on_behalf": "on behalf of", "stamp": "Approval stamp", "requested_for": "Inspection requested for", "asap": "As soon as possible", "performed_at": "Inspected at", "linked": "Linked submittals", "resubmit": "Resubmission", "resubmit_text": "Resubmit within {days} days, by", "submitted_by_row": "Submitted by", "addressed_to": "Submitted to", "stage": "Stage", "locations": "Location", "all_locations": "Whole project", "checklist": "Inspection checklist", "item_col": "Item", "result_col": "Result", "note_col": "Note", "results": {"ok": "Conforming", "nc": "Non-conforming", "na": "N/A"}, "scan": "Scan to verify that this reply is genuine and matches the copy kept on the platform.",
            "kind": {"submission": "Submission", "response": "Response", "photo": "Photo", "other": "Other"},
            "fields": {"submittal_kind": "Submittal type", "item": "Item / material", "manufacturer": "Manufacturer",
                       "supplier": "Supplier / agent", "drawing_ref": "Drawing no.", "spec_ref": "Spec section",
@@ -134,5 +134,7 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         resubmit_days=(d.resubmit_due_at - d.answered_at).days if d.resubmit_due_at and d.answered_at else None,
         stamp=stamp, stamp_short="-".join(stamp[i:i + 4] for i in range(0, 12, 4)).upper() if stamp else None,
         verify_url=verify_url, qr=_qr(verify_url) if verify_url else None,
+        checklist=[{"text": getattr(x, lang), "result": t["results"].get(x.result, ""), "code": x.result,
+                    "note": x.note or ""} for x in d.checklist],
     )
     return html_to_pdf(render_html("record.html", **ctx), footer_text=f"Verqac · {d.number} · Rev. {d.rev_no}")

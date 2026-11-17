@@ -65,6 +65,8 @@ class ProjectStageTopic(Base):
     name_en: Mapped[str] = mapped_column(String(150), nullable=False)
     sort: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # inspection checklist [{ar, en}], copied into an inspection request when it is submitted
+    checklist: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
 
 
 class ProjectLocation(Base):

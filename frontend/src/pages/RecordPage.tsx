@@ -1,5 +1,5 @@
 import {
-  ActionIcon, Alert, Anchor, Badge, Button, Card, FileButton, Grid, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch,
+  ActionIcon, Alert, Anchor, Badge, Button, Card, FileButton, Grid, Group, Modal, MultiSelect, SegmentedControl, Select, SimpleGrid, Stack, Switch,
   Text, Textarea, TextInput, Timeline, Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  api, ApiError, openProtected, type LinkedRef, type Place, type RecordDetail, type RecordMeta, type Team, type Transition,
+  api, ApiError, openProtected, type CheckLine, type LinkedRef, type Place, type RecordDetail, type RecordMeta, type Team, type Transition,
 } from '../api';
 import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../format';
 import i18n, { pick } from '../i18n';
@@ -82,6 +82,15 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
   const [onBehalf, setOnBehalf] = useState<string | null>(null);
   const [performed, setPerformed] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const ckey = `verqac.check.${rec.id}`;
+  const [answers, setAnswers] = useState<Answer[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(ckey) ?? 'null') as Answer[] | null;
+      if (saved && saved.length === rec.checklist.length) return saved;
+    } catch { /* storage unavailable */ }
+    return rec.checklist.map(() => ({ result: null, note: '' }));
+  });
+  const keepAnswers = (v: Answer[]) => { setAnswers(v); try { localStorage.setItem(ckey, JSON.stringify(v)); } catch { /* ignore */ } };
   const team = useQuery({
     queryKey: ['team', rec.project_id], enabled: rec.can_act_on_behalf,
     queryFn: () => api<Team>(`/projects/${rec.project_id}/team`),
@@ -97,10 +106,11 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
       if (tr.requires_comment && !text.trim()) throw new ApiError(422, 'comment_required');
       return api<RecordDetail>(`/records/${rec.id}/transitions`, {
         method: 'POST', body: JSON.stringify({ action: tr.action, comment: text.trim() || null, on_behalf_of: onBehalf,
-          performed_at: rec.record_type.code === 'inspection' ? fromLocalInput(performed) : null }),
+          performed_at: rec.record_type.code === 'inspection' ? fromLocalInput(performed) : null,
+          checklist: rec.checklist.length ? answers.map((x) => ({ result: x.result, note: x.note.trim() || null })) : null }),
       });
     },
-    onSuccess: (r) => { try { localStorage.removeItem(key); } catch { /* ignore */ } onDone(r); },
+    onSuccess: (r) => { try { localStorage.removeItem(key); localStorage.removeItem(ckey); } catch { /* ignore */ } onDone(r); },
     onError: (e) => setError(errText(e)),
   });
   return (
@@ -117,8 +127,8 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
             onChange={(v) => assign.mutate(v)} />
         )}
       </Group>
-      {error && <Alert color="red" mb="sm" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
-      <Textarea placeholder={t('resp.placeholder')} autosize minRows={6} maxRows={20} value={text}
+      {rec.checklist.length > 0 && <ChecklistAnswers rec={rec} value={answers} onChange={keepAnswers} />}
+      <Textarea mt={rec.checklist.length ? 'md' : undefined} placeholder={t('resp.placeholder')} autosize minRows={6} maxRows={20} value={text}
         onChange={(e) => keep(e.currentTarget.value)} />
       {rec.record_type.code === 'inspection' && (
         <TextInput mt="sm" w={260} type="datetime-local" label={t('ir.performedAt')} description={t('ir.performedHint')}
@@ -128,6 +138,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
         <Select mt="sm" label={t('rec.onBehalfOf')} clearable placeholder={t('rec.myself')} value={onBehalf} onChange={setOnBehalf}
           data={colleagues.map((m) => ({ value: m.user.id, label: `${pick(m.user, 'full_name')} · ${pick(m.role, 'name')}` }))} />
       )}
+      {error && <Alert color="red" mt="md" withCloseButton onClose={() => setError(null)}>{error}</Alert>}
       <Group gap="xs" mt="md">
         {transitions.map((tr) => (
           <Button key={tr.action} color={btnColor[tr.style] ?? 'verqac'} loading={go.isPending && go.variables?.action === tr.action}
@@ -135,6 +146,65 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
         ))}
       </Group>
     </Card>
+  );
+}
+
+type Answer = { result: CheckLine['result']; note: string };
+const RESULT_COLOR = { ok: 'green', nc: 'red', na: 'gray' } as const;
+const lineText = (x: CheckLine) => (i18n.language === 'en' ? x.en : x.ar);
+
+/** The inspection checklist, read only: before the answer (what will be checked) or with its results. */
+function ChecklistCard({ rec }: { rec: RecordDetail }) {
+  const { t } = useTranslation();
+  const answered = rec.checklist.some((x) => x.result);
+  return (
+    <Card withBorder>
+      <Title order={5}>{t('checklist.title')}</Title>
+      {!answered && <Text size="xs" c="dimmed" mb="xs">{t('checklist.preview')}</Text>}
+      <Stack gap={4} mt="xs">
+        {rec.checklist.map((x, i) => (
+          <Group key={i} gap="xs" wrap="nowrap" align="flex-start">
+            <Text size="sm" c="dimmed" w={20}>{i + 1}</Text>
+            <Text size="sm" flex={1}>{lineText(x)}{x.note && <Text span size="xs" c="dimmed"> — {x.note}</Text>}</Text>
+            {x.result && <Badge size="sm" tt="none" variant="light" color={RESULT_COLOR[x.result]}>{t(`checklist.r.${x.result}`)}</Badge>}
+          </Group>
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
+/** Answering the checklist line by line (kept on this device until the reply is sent). */
+function ChecklistAnswers({ rec, value, onChange }: { rec: RecordDetail; value: Answer[]; onChange: (v: Answer[]) => void }) {
+  const { t } = useTranslation();
+  const set = (i: number, patch: Partial<Answer>) => onChange(value.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const done = value.filter((x) => x.result).length;
+  return (
+    <Stack gap={6} mt="sm">
+      <Group justify="space-between">
+        <Text fw={600} size="sm">{t('checklist.title')}</Text>
+        <Group gap="xs">
+          <Text size="xs" c={done === value.length ? 'green.8' : 'dimmed'}>{t('checklist.progress', { done, total: value.length })}</Text>
+          <Button size="compact-xs" variant="subtle" onClick={() => onChange(value.map((x) => (x.result ? x : { ...x, result: 'ok' })))}>
+            {t('checklist.restOk')}
+          </Button>
+        </Group>
+      </Group>
+      {rec.checklist.map((x, i) => (
+        <Stack key={i} gap={4} py={6} style={{ borderTop: '1px solid var(--mantine-color-gray-2)' }}>
+          <Group gap="xs" wrap="nowrap" justify="space-between">
+            <Text size="sm">{i + 1}. {lineText(x)}</Text>
+            <SegmentedControl size="xs" value={value[i]?.result ?? ''} onChange={(v) => set(i, { result: v as Answer['result'] })}
+              color={value[i]?.result ? RESULT_COLOR[value[i].result!] : undefined}
+              data={(['ok', 'nc', 'na'] as const).map((r) => ({ value: r, label: t(`checklist.r.${r}`) }))} />
+          </Group>
+          {(value[i]?.result === 'nc' || value[i]?.note) && (
+            <TextInput size="xs" placeholder={t('checklist.note')} value={value[i]?.note ?? ''}
+              onChange={(e) => set(i, { note: e.currentTarget.value })} />
+          )}
+        </Stack>
+      ))}
+    </Stack>
   );
 }
 
@@ -373,6 +443,7 @@ export default function RecordPage() {
               </Card>
             )}
 
+            {r.checklist.length > 0 && responses.length === 0 && <ChecklistCard rec={r} />}
             <Card withBorder>
               <Title order={5} mb="sm">{t('rec.details')}</Title>
               <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">

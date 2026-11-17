@@ -1,10 +1,10 @@
 import {
-  ActionIcon, Alert, Badge, Button, Checkbox, Group, MultiSelect, NumberInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip,
+  ActionIcon, Alert, Badge, Button, Checkbox, Group, Modal, MultiSelect, NumberInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, type Place, type RecordRow, type StageScope, type StageT, type Structure, type TemplateStage, type TopicT } from '../api';
+import { api, type Place, type RecordRow, type StageScope, type StageT, type Structure, type CheckItem, type TemplateStage, type TopicT } from '../api';
 import i18n, { pick } from '../i18n';
 
 export const useStructure = (projectId: string) =>
@@ -23,20 +23,62 @@ export function move<T>(list: T[], i: number, d: number): T[] {
 export const weightTotal = (stages: (TemplateStage & { is_active?: boolean })[]) =>
   Math.round(stages.filter((s) => s.is_active !== false).reduce((a, s) => a + (Number(s.weight) || 0), 0) * 100) / 100;
 
+/** The inspection checklist of one topic: lines in Arabic and English, in order. */
+function ChecklistEditor({ items, onChange, editable }: { items: CheckItem[]; onChange: (x: CheckItem[]) => void; editable: boolean }) {
+  const { t } = useTranslation();
+  const set = (i: number, patch: Partial<CheckItem>) => onChange(items.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  return (
+    <Stack gap={6}>
+      {items.length === 0 && <Text size="sm" c="dimmed">{t('checklist.empty')}</Text>}
+      {items.map((x, i) => (
+        <Group key={i} gap={6} wrap="nowrap" align="flex-start">
+          <Text size="xs" c="dimmed" w={18} pt={6}>{i + 1}</Text>
+          <TextInput size="xs" flex={1} placeholder={t('structure.nameAr')} disabled={!editable} value={x.ar}
+            onChange={(e) => set(i, { ar: e.currentTarget.value })} />
+          <TextInput size="xs" flex={1} dir="ltr" placeholder={t('structure.nameEn')} disabled={!editable} value={x.en}
+            onChange={(e) => set(i, { en: e.currentTarget.value })} />
+          {editable && (
+            <Group gap={2} wrap="nowrap">
+              <ActionIcon size="sm" variant="subtle" color="gray" disabled={i === 0} aria-label="up" onClick={() => onChange(move(items, i, -1))}>↑</ActionIcon>
+              <ActionIcon size="sm" variant="subtle" color="gray" disabled={i === items.length - 1} aria-label="down" onClick={() => onChange(move(items, i, 1))}>↓</ActionIcon>
+              <ActionIcon size="sm" variant="subtle" color="red" aria-label="remove" onClick={() => onChange(items.filter((_, j) => j !== i))}>×</ActionIcon>
+            </Group>
+          )}
+        </Group>
+      ))}
+      {editable && (
+        <Group><Button size="compact-xs" variant="subtle" onClick={() => onChange([...items, { ar: '', en: '' }])}>+ {t('checklist.add')}</Button></Group>
+      )}
+      <Text size="xs" c="dimmed">{t('checklist.hint')}</Text>
+    </Stack>
+  );
+}
+
 /** Subjects under one stage: names, order, on/off (project stages), delete unless used. */
 function TopicsEditor({ topics, onChange, editable, withActive }: {
   topics: TopicT[]; onChange: (t: TopicT[]) => void; editable: boolean; withActive: boolean;
 }) {
   const { t } = useTranslation();
   const set = (i: number, patch: Partial<TopicT>) => onChange(topics.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const [open, setOpen] = useState<number | null>(null);
+  const cur = open !== null ? topics[open] : null;
   return (
     <Stack gap={4} ps="lg" py={4}>
+      <Modal opened={cur !== null} onClose={() => setOpen(null)} size="xl"
+        title={cur ? `${t('checklist.title')} · ${pick(cur, 'name')}` : ''}>
+        {cur && open !== null && <ChecklistEditor items={cur.checklist ?? []} editable={editable}
+          onChange={(c) => set(open, { checklist: c })} />}
+        <Group justify="flex-end" mt="md"><Button size="xs" onClick={() => setOpen(null)}>{t('checklist.done')}</Button></Group>
+      </Modal>
       {topics.map((x, i) => (
         <Group key={x.id ?? `n-${i}`} gap={6} wrap="nowrap" opacity={x.is_active === false ? 0.55 : 1}>
           <TextInput size="xs" flex={1} aria-label={t('structure.nameAr')} placeholder={t('structure.nameAr')} disabled={!editable}
             value={x.name_ar} onChange={(e) => set(i, { name_ar: e.currentTarget.value })} />
           <TextInput size="xs" flex={1} dir="ltr" aria-label={t('structure.nameEn')} placeholder={t('structure.nameEn')} disabled={!editable}
             value={x.name_en} onChange={(e) => set(i, { name_en: e.currentTarget.value })} />
+          <Button size="compact-xs" variant={(x.checklist ?? []).length ? 'light' : 'subtle'} color="gray" onClick={() => setOpen(i)}>
+            {t('checklist.button', { count: (x.checklist ?? []).length })}
+          </Button>
           {withActive && <Switch size="xs" disabled={!editable} checked={x.is_active !== false} aria-label={t('settings.kindActive')}
             onChange={(e) => set(i, { is_active: e.currentTarget.checked })} />}
           {editable && (
@@ -54,7 +96,7 @@ function TopicsEditor({ topics, onChange, editable, withActive }: {
       {editable && (
         <Group>
           <Button size="compact-xs" variant="subtle"
-            onClick={() => onChange([...topics, { id: null, name_ar: '', name_en: '', ...(withActive ? { is_active: true, used: false } : {}) }])}>
+            onClick={() => onChange([...topics, { id: null, name_ar: '', name_en: '', checklist: [], ...(withActive ? { is_active: true, used: false } : {}) }])}>
             + {t('structure.addTopic')}
           </Button>
         </Group>

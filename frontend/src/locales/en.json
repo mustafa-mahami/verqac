@@ -121,7 +121,9 @@
     "performed_in_future": "The inspection time cannot be in the future.",
     "invalid_link": "Only this project's submittals can be linked.",
     "invalid_addressee": "This person cannot answer requests of this discipline.",
-    "invalid_routing": "Invalid routing."
+    "invalid_routing": "Invalid routing.",
+    "checklist_incomplete": "Answer every checklist item before replying.",
+    "checklist_nonconforming": "An item is non-conforming: choose \"Accept with comments\" or \"Reject\"."
   },
   "common": {
     "cancel": "Cancel",
@@ -524,5 +526,22 @@
     "performedAt": "Inspected at",
     "performedHint": "Leave empty for now",
     "asap": "As soon as possible"
+  },
+  "checklist": {
+    "title": "Inspection checklist",
+    "button": "Checklist ({{count}})",
+    "empty": "No items yet.",
+    "add": "Add item",
+    "done": "Done",
+    "hint": "The list is fixed into an inspection request when it is submitted, so later edits do not change submitted requests. Save the stages after editing.",
+    "preview": "The items the supervising engineer will check.",
+    "progress": "{{done}} of {{total}}",
+    "restOk": "Rest conforming",
+    "note": "Note on this item",
+    "r": {
+      "ok": "Conforming",
+      "nc": "Non-conforming",
+      "na": "N/A"
+    }
   }
 }

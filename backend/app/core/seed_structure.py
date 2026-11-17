@@ -90,7 +90,7 @@ TOPICS = {
 
 
 def topics_for(name_en: str) -> list[dict]:
-    return [{"name_ar": a, "name_en": e} for a, e in TOPICS.get(name_en, [])]
+    return [{"name_ar": a, "name_en": e, "checklist": checklist_for(e)} for a, e in TOPICS.get(name_en, [])]
 
 
 def default_types(org_id: uuid.UUID) -> list[ProjectType]:
@@ -107,3 +107,97 @@ def default_types(org_id: uuid.UUID) -> list[ProjectType]:
 def seed_project_types(db: Session, org_id: uuid.UUID) -> None:
     if db.scalar(select(ProjectType.id).where(ProjectType.org_id == org_id).limit(1)) is None:
         db.add_all(default_types(org_id))
+
+
+# inspection checklists by topic (English name): what the supervising engineer checks before accepting
+_FORM = [("نظافة الشدّات ودهانها بالزيت", "Formwork clean and oiled"),
+         ("الأبعاد والمناسيب حسب المخططات", "Dimensions and levels as per drawings"),
+         ("استقامة الشدّات وثباتها ودعماتها", "Formwork aligned, rigid and propped")]
+_REBAR = [("أقطار الحديد وأعداده حسب المخططات", "Bar sizes and numbers as per drawings"),
+          ("المسافات بين القضبان", "Bar spacing"),
+          ("أطوال التراكب والتثبيت", "Lap and anchorage lengths"),
+          ("الكانات: القطر والمسافات والأكتاف", "Stirrups: size, spacing and hooks"),
+          ("الغطاء الخرساني والكراسي (البسكوت)", "Concrete cover and spacers"),
+          ("ربط الحديد ونظافته من الصدأ والزيوت", "Bars tied and free of rust and oil")]
+_POUR = [("التمديدات والفتحات والجلب (sleeves) قبل الصب", "Sleeves, openings and embedded MEP before casting"),
+         ("نظافة المكان من الأتربة والمخلفات", "Area clean of debris"),
+         ("جاهزية الهزاز ومعدات الصب", "Vibrator and casting equipment ready")]
+CHECKLISTS = {
+    "Excavation": [("مناسيب الحفر حسب المخططات", "Excavation levels as per drawings"),
+                   ("أبعاد الحفر والميول الجانبية", "Excavation dimensions and side slopes"),
+                   ("طبيعة التربة وصلاحيتها للتأسيس", "Soil bearing stratum suitable"),
+                   ("تسوية القاع ودكّه وخلوّه من المياه", "Bottom levelled, compacted and dry")],
+    "Footings": [("صبّة النظافة: السماكة والمنسوب", "Blinding: thickness and level"),
+                 ("محاور القواعد وتوقيعها", "Footing axes and setting out"), *_FORM, *_REBAR,
+                 ("أشاير الأعمدة: العدد والمواقع والطول", "Column starter bars: number, position and length"),
+                 ("العزل أسفل وجوانب القواعد", "Waterproofing under and around footings")],
+    "Grade beams": [*_FORM, *_REBAR, ("العزل حسب المواصفات", "Waterproofing as specified")],
+    "Basement walls": [*_FORM, *_REBAR, ("مانع تسرب المياه (water stop) في الفواصل", "Water stops at joints"),
+                       ("براغي الشدّات والجلب", "Form ties and sleeves")],
+    "Ready-mix concrete": [("مطابقة درجة الخرسانة لسند التوريد", "Concrete grade matches delivery note"),
+                           ("فحص الهبوط (slump)", "Slump test"),
+                           ("أخذ المكعبات وترقيمها", "Cubes taken and labelled"),
+                           ("زمن النقل والصب ضمن الحدود", "Transit and placing time within limits"),
+                           ("درجة الحرارة وإجراءات الطقس", "Temperature and weather precautions"),
+                           ("طريقة الصب والدمك بالهزاز", "Placing method and vibration"),
+                           ("خطة المعالجة بعد الصب", "Curing arrangements")],
+    "Reinforcement steel": _REBAR,
+    "Concrete walls": [*_FORM, *_REBAR, ("براغي الشدّات والجلب", "Form ties and sleeves")],
+    "Columns": [("محاور الأعمدة وتوقيعها", "Column axes and setting out"),
+                ("الشاقولية وأبعاد المقطع", "Plumb and section dimensions"), *_REBAR[:2], *_REBAR[3:],
+                ("التراكب مع الأشاير", "Lap with starter bars"), ("نظافة القاعدة من الأسفل قبل الصب", "Base cleaned before casting")],
+    "Slabs": [*_FORM, ("الطوبار الخشبي/المعدني والدعامات حسب التصميم", "Shoring and props as designed"),
+              ("الطوب الهوردي: المواقع والاتجاه", "Hollow blocks: layout and direction"), *_REBAR, *_POUR,
+              ("منسوب السقف وميوله", "Slab level and falls")],
+    "Beams": [*_FORM, *_REBAR, *_POUR[:2]],
+    "Ground slabs": [("دكّ الردم وفحص الكثافة", "Fill compaction and density test"),
+                     ("البولي إيثيلين / العزل أسفل البلاطة", "Polythene / membrane under slab"),
+                     ("شبك الحديد والغطاء", "Mesh and cover"), ("المناسيب والفواصل", "Levels and joints")],
+    "Concrete blocks": [("نوع الطوب وأبعاده حسب المعتمد", "Block type and size as approved"),
+                        ("الاستقامة والشاقولية", "Line and plumb"), ("تعاشق الصفوف وسماكة المونة", "Bond and mortar joints"),
+                        ("الربط مع الأعمدة (شبك/أشاير)", "Ties to columns"), ("الأعتاب فوق الفتحات", "Lintels over openings"),
+                        ("أبعاد الفتحات ومواقعها", "Opening sizes and positions")],
+    "Electrical conduits": [("أقطار المواسير ونوعها حسب المعتمد", "Conduit size and type as approved"),
+                            ("مسارات التمديد حسب المخططات", "Routes as per drawings"),
+                            ("العلب ومناسيبها", "Boxes and their heights"), ("التثبيت والحماية قبل الصب/القصارة", "Fixing and protection before casting/plaster"),
+                            ("سحب السلك الدليل", "Draw wire installed")],
+    "Plumbing pipes": [("نوع الأنابيب وأقطارها حسب المعتمد", "Pipe type and size as approved"),
+                       ("الميول للصرف", "Drainage falls"), ("التثبيت والدعامات", "Fixing and supports"),
+                       ("فحص الضغط/الامتلاء", "Pressure / water test"), ("مواقع المخارج ومناسيبها", "Outlet positions and heights")],
+    "HVAC ducts": [("أبعاد المجاري ومساراتها", "Duct sizes and routes"), ("العزل وإحكام الوصلات", "Insulation and sealed joints"),
+                   ("التعليقات والدعامات", "Hangers and supports")],
+    "Plaster base coat": [("استلام التمديدات قبل القصارة", "MEP signed off before plaster"),
+                          ("ترطيب الجدران وتنظيفها", "Walls cleaned and wetted"),
+                          ("الزوايا والشبك عند تلاقي المواد", "Beads and mesh at material joints"),
+                          ("الأوتار والقِدّات (المسطرة)", "Screeds and guides")],
+    "Finish coat": [("الاستقامة والشاقولية (القدة 2م)", "Flatness and plumb (2 m straightedge)"),
+                    ("الزوايا حادة ومستقيمة", "Sharp straight corners"), ("خلو السطح من الشروخ", "Free of cracks"),
+                    ("المعالجة بالرش", "Curing")],
+    "Waterproofing": [("تنظيف السطح وجفافه", "Surface clean and dry"), ("البرايمر", "Primer applied"),
+                      ("التراكبات وعدد الطبقات", "Overlaps and number of layers"),
+                      ("الوزرات والقلبات عند الجدران", "Upturns at walls"), ("حول المصارف والفتحات", "Around drains and penetrations"),
+                      ("فحص الغمر بالماء 48 ساعة", "48-hour flood test")],
+    "Thermal insulation": [("نوع العازل وسماكته حسب المعتمد", "Insulation type and thickness as approved"),
+                           ("التغطية الكاملة دون فراغات", "Full coverage without gaps"), ("التثبيت", "Fixing")],
+    "Porcelain tiles": [("نوع البلاط ولونه حسب العينة المعتمدة", "Tile type and colour as approved sample"),
+                        ("المناسيب والميول", "Levels and falls"), ("الاستواء وعدم وجود فراغات (طرق)", "Flatness and no hollows (tap test)"),
+                        ("عرض الفواصل واستقامتها", "Joint width and alignment"), ("القص عند الأطراف والزوايا", "Cuts at edges and corners"),
+                        ("الوزرة", "Skirting")],
+    "Ceramic tiles": [("نوع البلاط ولونه حسب العينة المعتمدة", "Tile type and colour as approved sample"),
+                      ("الشاقولية والاستواء", "Plumb and flatness"), ("عرض الفواصل واستقامتها", "Joint width and alignment"),
+                      ("القص حول الأدوات الصحية والمخارج", "Cuts around fixtures and outlets")],
+    "Gypsum board": [("الهيكل المعدني: المسافات والتعليقات", "Framing: spacing and hangers"),
+                     ("استلام التمديدات فوق السقف", "Above-ceiling MEP signed off"),
+                     ("المنسوب والاستواء", "Level and flatness"), ("فتحات الصيانة والإنارة", "Access panels and light openings"),
+                     ("معالجة الفواصل والبراغي", "Joint and screw finishing")],
+    "Aluminum windows": [("مطابقة القطاعات والزجاج للمعتمد", "Profiles and glass as approved"),
+                         ("الأبعاد والشاقولية", "Dimensions and plumb"), ("التثبيت والمسافات بين البراغي", "Fixing and anchor spacing"),
+                         ("السيليكون والإحكام", "Sealant and weather-tightness"), ("الحركة والإكسسوارات", "Operation and hardware")],
+    "Interior paint": [("تجهيز السطح والمعجون والصنفرة", "Surface prep, putty and sanding"),
+                       ("نوع الدهان ولونه حسب المعتمد", "Paint type and colour as approved"),
+                       ("عدد الطبقات", "Number of coats"), ("خلو السطح من العيوب والتموجات", "Free of defects and waviness")],
+}
+
+
+def checklist_for(name_en: str) -> list[dict]:
+    return [{"ar": a, "en": e} for a, e in CHECKLISTS.get(name_en, [])]

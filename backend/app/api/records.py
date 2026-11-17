@@ -181,6 +181,31 @@ def _latest_rev(c: Ctx, rec: Record) -> int:
     return c.db.scalar(select(func.max(Record.rev_no)).where(Record.revision_group_id == rec.revision_group_id))
 
 
+def _topic_checklist(c: Ctx, rec: Record, rt: RecordType) -> list[dict]:
+    if rt.code != "inspection" or not rec.topic_id:
+        return []
+    topic = c.db.get(ProjectStageTopic, rec.topic_id)
+    return [{"ar": x["ar"], "en": x["en"], "result": None, "note": None} for x in (topic.checklist if topic else [])]
+
+
+def _checklist(c: Ctx, rec: Record, rt: RecordType) -> list[dict]:
+    """Fixed into the request at submission; a draft shows what its topic will be checked against."""
+    return rec.checklist if rec.checklist is not None else _topic_checklist(c, rec, rt)
+
+
+def _answer_checklist(rec: Record, answers, to: WorkflowState) -> None:
+    """Every line needs a result to answer; a plain acceptance cannot carry a non-conforming line."""
+    if not rec.checklist:
+        return
+    answers = answers or []
+    if len(answers) != len(rec.checklist) or any(x.result is None for x in answers):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "checklist_incomplete")
+    if to.category == "approved" and any(x.result == "nc" for x in answers):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "checklist_nonconforming")
+    rec.checklist = [{"ar": line["ar"], "en": line["en"], "result": x.result, "note": (x.note or "").strip() or None}
+                     for line, x in zip(rec.checklist, answers)]
+
+
 def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> RecordDetail:
     state = _state(c, rec.state_id)
     trans = []
@@ -240,6 +265,7 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         stage=(place := _place_out(c, rec))[0], all_locations=rec.all_locations, locations=place[1], topic=place[2],
         requested_for=rec.requested_for, performed_at=rec.performed_at,
         linked=(links := _linked_out(c, a, rec, rt))[0], link_warning=links[1],
+        checklist=_checklist(c, rec, rt),
         can_edit=is_draft and p.can("edit", rec), can_revise=can_revise, can_attach=attach,
         can_act_on_behalf=bool(a.role and a.role.act_on_behalf and p.can("respond", rec)),
         assigned_to=_user(c, rec.assigned_to), can_assign=can_assign, assign_candidates=candidates,
@@ -627,6 +653,8 @@ def _stamp(c: Ctx, rec: Record, state: WorkflowState) -> str:
         payload["topic"] = str(rec.topic_id)
     if rec.performed_at:
         payload["performed_at"] = rec.performed_at.astimezone(UTC).isoformat()
+    if rec.checklist:
+        payload["checklist"] = [[x["ar"], x["result"], x["note"]] for x in rec.checklist]
     if rec.linked_ids:
         payload["linked"] = sorted(str(i) for i in rec.linked_ids)
     if rec.all_locations or rec.location_ids:
@@ -669,6 +697,7 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
                                                     Record.rev_no == rec.rev_no - 1))
             if prev is not None and prev.resubmitted_at is None:
                 prev.resubmitted_at = now
+        rec.checklist = _topic_checklist(c, rec, rt) or None
     elif t.effect == "respond":
         rec.answered_by, rec.answered_at, rec.answered_on_behalf_of = c.user.id, now, on_behalf
         rec.response_comment = comment
@@ -676,6 +705,7 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
             if body.performed_at and body.performed_at > now + timedelta(minutes=5):
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "performed_in_future")
             rec.performed_at = body.performed_at or now
+            _answer_checklist(rec, body.checklist, to)
         if to.category in RESUBMIT_STATES:
             rec.resubmit_due_at = now + timedelta(hours=periods(a.project, rt)[1])
     rec.state_id, rec.state_category, rec.updated_at = to.id, to.category, now

@@ -132,6 +132,7 @@ export interface RecordEvent {
 export interface RecordComment { id: string; author: User; party_kind: string; visibility: string; body: string; created_at: string }
 export interface Attachment { id: string; file_id: string; filename: string; content_type: string; size: number; kind: string; party_kind: string; created_at: string }
 export interface RecordDetail {
+  checklist: CheckLine[];
   id: string; project_id: string; record_type: RecordType; number: string; rev_no: number; title: string;
   description: string | null; discipline: Discipline | null; state: State; from_party_kind: string;
   created_by: User; created_at: string; submitted_by: User | null; submitted_at: string | null; due_at: string | null;
@@ -163,7 +164,9 @@ export interface Notifications { unread: number; items: NotificationItem[] }
 
 // ---- project structure (mirror app/schemas/structure.py)
 export type StageScope = 'per_location' | 'whole';
-export interface TopicT { id?: string | null; name_ar: string; name_en: string; is_active?: boolean; used?: boolean }
+export interface CheckItem { ar: string; en: string }
+export interface CheckLine extends CheckItem { result: 'ok' | 'nc' | 'na' | null; note: string | null }
+export interface TopicT { id?: string | null; name_ar: string; name_en: string; is_active?: boolean; used?: boolean; checklist?: CheckItem[] }
 export interface TemplateStage { name_ar: string; name_en: string; scope: StageScope; weight: number | string; topics: TopicT[] }
 export interface ProjectTypeT {
   id: string | null; name_ar: string; name_en: string; group_label_ar: string; group_label_en: string;

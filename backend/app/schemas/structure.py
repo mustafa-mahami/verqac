@@ -12,12 +12,22 @@ class TemplateUnit(BaseModel):
     name_en: str = Field(max_length=150)
 
 
+class CheckItem(BaseModel):
+    """One line of an inspection checklist."""
+    ar: str = Field(max_length=300)
+    en: str = Field(default="", max_length=300)
+
+
+class TemplateTopic(TemplateUnit):
+    checklist: list[CheckItem] = Field(default=[], max_length=60)
+
+
 class TemplateStage(BaseModel):
     name_ar: str = Field(max_length=150)
     name_en: str = Field(max_length=150)
     scope: Scope = "per_location"
     weight: Decimal = Field(default=Decimal(0), ge=0, le=100)
-    topics: list[TemplateUnit] = []
+    topics: list[TemplateTopic] = []
 
 
 class ProjectTypeIO(BaseModel):
@@ -46,6 +56,7 @@ class TopicIO(BaseModel):
     name_en: str = Field(max_length=150)
     is_active: bool = True
     used: bool = False
+    checklist: list[CheckItem] = Field(default=[], max_length=60)
 
 
 class StageIO(BaseModel):

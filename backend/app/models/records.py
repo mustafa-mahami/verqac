@@ -129,6 +129,8 @@ class Record(Base):
     requested_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     performed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     linked_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)))
+    # inspections: the topic's checklist fixed at submission, with the answers [{ar, en, result, note}]
+    checklist: Mapped[list | None] = mapped_column(JSONB)
     # work stage and locations the record covers (FK added by migration 0008); all_locations = the whole project
     stage_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     topic_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))  # FK added by migration 0009

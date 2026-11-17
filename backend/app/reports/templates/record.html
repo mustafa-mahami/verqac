@@ -32,6 +32,9 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
 .multi { white-space: pre-line; }
 .banner { display: block; width: 100%; max-height: 32mm; object-fit: contain; margin-bottom: 8px; }
 .draft { color: #b00; font-weight: 700; }
+.check td { padding: 3px 6px; }
+.r-nc { color: #b42318; font-weight: 600; }
+.r-ok { color: #1f6f43; }
 </style>
 </head>
 <body>
@@ -65,6 +68,14 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
   <div class="section">{{ t.attachments }}</div>
   <table>
     {% for a in attachments %}<tr><td style="width:6%">{{ loop.index }}</td><td class="ltr">{{ a.filename }}</td><td style="width:22%">{{ a.kind }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+
+  {% if checklist %}
+  <div class="section">{{ t.checklist }}</div>
+  <table class="check">
+    <tr><th style="width:5%">#</th><th style="width:47%">{{ t.item_col }}</th><th style="width:16%">{{ t.result_col }}</th><th style="width:32%">{{ t.note_col }}</th></tr>
+    {% for x in checklist %}<tr><td>{{ loop.index }}</td><td>{{ x.text }}</td><td class="r-{{ x.code }}">{{ x.result }}</td><td>{{ x.note }}</td></tr>{% endfor %}
   </table>
   {% endif %}
 

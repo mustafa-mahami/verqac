@@ -63,3 +63,38 @@ def test_inspection_links_to_submittals(client, site):
     bad = client.post(f"/api/v1/projects/{pid}/records", headers=site["hqa"], json={
         "record_type": "inspection", "title": "xyz", "discipline_id": site["cdisc"]["C"], "linked_ids": [ir["id"]]})
     assert bad.json()["detail"] == "invalid_link"
+
+
+def test_inspection_checklist(client, site):
+    pid, hc, org = site["pid"], site["hc"], site["org"] if "org" in site else None
+    types = client.get(f"/api/v1/projects/{pid}/structure", headers=hc).json()["types"]
+    btype = next(t for t in types if t["name_en"] == "Buildings")
+    st = client.post(f"/api/v1/projects/{pid}/apply-type", headers=hc, json={"project_type_id": btype["id"]}).json()
+    structure = st["stages"][0]
+    slabs = next(tp for tp in structure["topics"] if tp["name_en"] == "Slabs")
+    assert any(x["ar"].startswith("الغطاء الخرساني") for x in slabs["checklist"])
+    # the project edits its own copy: keep three lines (English falls back to Arabic)
+    slabs["checklist"] = [{"ar": "الشدّات", "en": "Formwork"}, {"ar": "الحديد", "en": ""}, {"ar": "التمديدات", "en": "MEP"}]
+    st = client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=st["stages"]).json()
+    assert next(tp for tp in st["stages"][0]["topics"] if tp["name_en"] == "Slabs")["checklist"][1] == {"ar": "الحديد", "en": "الحديد"}
+    ir = _ir(client, site, stage_id=structure["id"], topic_id=slabs["id"], all_locations=True)
+    assert [x["ar"] for x in ir["checklist"]] == ["الشدّات", "الحديد", "التمديدات"] and ir["checklist"][0]["result"] is None
+    act(client, site["hqa"], ir["id"], "submit")
+    url = f"/api/v1/records/{ir['id']}/transitions"
+    # every line needs an answer
+    r = client.post(url, headers=site["hce"], json={"action": "accept", "checklist": [{"result": "ok"}]})
+    assert r.json()["detail"] == "checklist_incomplete"
+    answers = [{"result": "ok"}, {"result": "nc", "note": "الغطاء 2 سم"}, {"result": "na"}]
+    # a plain acceptance cannot carry a non-conforming line
+    assert client.post(url, headers=site["hce"], json={"action": "accept", "checklist": answers}).json()["detail"] == "checklist_nonconforming"
+    r = client.post(url, headers=site["hce"], json={"action": "accept_with_comments", "comment": "يُعدّل الغطاء قبل الصب",
+                                                    "checklist": answers}).json()
+    assert r["state"]["code"] == "accepted_with_comments"
+    assert [x["result"] for x in r["checklist"]] == ["ok", "nc", "na"] and r["checklist"][1]["note"] == "الغطاء 2 سم"
+    assert client.get(f"/api/v1/verify/{r['events'][-1]['stamp']}").json()["intact"] is True
+    assert client.get(f"/api/v1/records/{ir['id']}/pdf?lang=ar", headers=site["hqa"]).status_code == 200
+    # the checklist was fixed at submission: editing the topic later does not change the answered request
+    slabs2 = next(tp for tp in st["stages"][0]["topics"] if tp["name_en"] == "Slabs")
+    slabs2["checklist"] = [{"ar": "بند جديد", "en": "New"}]
+    client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=st["stages"])
+    assert len(client.get(f"/api/v1/records/{ir['id']}", headers=site["hqa"]).json()["checklist"]) == 3
