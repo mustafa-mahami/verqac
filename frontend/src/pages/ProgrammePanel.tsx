@@ -40,8 +40,8 @@ function Gantt({ rows, from, to }: { rows: { label: string; start: string; finis
 }
 
 /** Floor cycle: per stage a start, days per floor and days until the next floor starts. */
-function CycleModal({ opened, onClose, cycles, onApply, stages, units, existing }: {
-  opened: boolean; onClose: () => void; cycles: PCycle[]; onApply: (c: PCycle[]) => void;
+function CycleModal({ opened, onClose, cycles, onApply, stages, units, existing, storeKey }: {
+  storeKey: string; opened: boolean; onClose: () => void; cycles: PCycle[]; onApply: (c: PCycle[]) => void;
   stages: { id: string; name: string; whole: boolean }[]; units: { id: string; name: string }[]; existing: PLine[];
 }) {
   const unitCount = units.length;
@@ -49,11 +49,17 @@ function CycleModal({ opened, onClose, cycles, onApply, stages, units, existing 
   const [rows, setRows] = useState<(PCycle & { on: boolean })[]>([]);
   useEffect(() => {
     if (!opened) return;
-    const by = Object.fromEntries(cycles.map((c) => [c.stage_id, c]));
+    let kept: PCycle[] | null = null;  // what was typed here last time, even if never generated
+    try { kept = JSON.parse(localStorage.getItem(storeKey) ?? 'null'); } catch { kept = null; }
+    const by = Object.fromEntries((kept ?? cycles).map((c) => [c.stage_id, c]));
     setRows(stages.map((s) => ({ stage_id: s.id, start: by[s.id]?.start ?? null, duration: by[s.id]?.duration ?? 0, lag: by[s.id]?.lag ?? 0,
       link: by[s.id]?.link ?? 'fs', pred: by[s.id]?.pred ?? null, rel: by[s.id]?.rel ?? 'after_end', pred_days: by[s.id]?.pred_days ?? 0, on: !!by[s.id] })));
-  }, [opened, cycles, stages]);
-  const set = (i: number, p: Partial<PCycle & { on: boolean }>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...p, on: p.on ?? true } : r)));
+  }, [opened, cycles, stages, storeKey]);
+  const set = (i: number, p: Partial<PCycle & { on: boolean }>) => {
+    const next = rows.map((r, j) => (j === i ? { ...r, ...p, on: p.on ?? true } : r));
+    setRows(next);
+    try { localStorage.setItem(storeKey, JSON.stringify(next.filter((r) => r.on).map(({ on: _on, ...c }) => c))); } catch { /* ignore */ }
+  };
   const whole = useMemo(() => new Set(stages.filter((s) => s.whole).map((s) => s.id)), [stages]);
   const ok = rows.filter((r) => r.on && r.duration > 0 && (r.pred || r.start));
   const plan = useMemo(() => schedule(ok.map(({ on: _on, ...c }) => c), units.map((u) => u.id), whole, existing), [ok, units, whole, existing]);
@@ -210,6 +216,20 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const [rows, setRows] = useState<ImportRow[] | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   useEffect(() => { if (q.data) { setLines(q.data.lines); setCycles(q.data.cycles); setSource(q.data.source); setDirty(false); } }, [q.data]);
+  // unsaved work is kept in this browser until it is saved, and leaving the page asks first
+  const draftKey = `verqac:prg-draft:${rec.id}`;
+  const [draft, setDraft] = useState<{ lines: PLine[]; cycles: PCycle[]; source: ProgrammeOut['source']; at: string } | null>(null);
+  useEffect(() => {
+    try { const raw = localStorage.getItem(draftKey); setDraft(raw ? JSON.parse(raw) : null); } catch { setDraft(null); }
+  }, [draftKey]);
+  useEffect(() => {
+    if (!dirty) return;
+    try { localStorage.setItem(draftKey, JSON.stringify({ lines, cycles, source, at: new Date().toISOString() })); } catch { /* storage full or blocked */ }
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty, lines, cycles, source, draftKey]);
+  const dropDraft = () => { try { localStorage.removeItem(draftKey); } catch { /* ignore */ } setDraft(null); };
   const stages = useMemo(() => (s?.stages ?? []).filter((x) => x.is_active && x.id), [s]);
   const units = useMemo(() => (s?.locations ?? []).filter((g) => g.is_active).flatMap((g) => g.units.filter((u) => u.is_active && u.id)), [s]);
   const whole = useMemo(() => new Set(stages.filter((x) => x.scope === 'whole' || !units.length).map((x) => x.id!)), [stages, units]);
@@ -223,7 +243,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
       const cs = cycles.filter((c) => sids.has(c.stage_id)).map((c) => ({ ...c, pred: c.pred && sids.has(c.pred) ? c.pred : null }));
       return api<ProgrammeOut>(`/records/${rec.id}/programme`, { method: 'PUT', body: JSON.stringify({ lines: kept, cycles: cs, source }) });
     },
-    onSuccess: (d) => { qc.setQueryData(['programme', rec.id], d); setMsg({ ok: true, text: t('settings.saved') }); },
+    onSuccess: (d) => { qc.setQueryData(['programme', rec.id], d); dropDraft(); try { localStorage.removeItem(`verqac:prg-cycle:${rec.id}`); } catch { /* ignore */ } setMsg({ ok: true, text: t('settings.saved') }); },
     onError: (e) => setMsg({ ok: false, text: errText(e) }),
   });
   const upload = useMutation({
@@ -287,13 +307,22 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
               {(props) => <Button size="xs" variant="light" loading={upload.isPending} {...props}>{t('prg.import')}</Button>}
             </FileButton>
             <Button size="xs" variant="light" onClick={() => setCycleOpen(true)}>{t('prg.cycle')}</Button>
-            {dirty && <Button size="xs" variant="subtle" color="gray" onClick={() => { setLines(q.data!.lines); setCycles(q.data!.cycles); setSource(q.data!.source); setDirty(false); setMsg(null); }}>{t('prg.undo')}</Button>}
+            {dirty && <Button size="xs" variant="subtle" color="gray" onClick={() => { setLines(q.data!.lines); setCycles(q.data!.cycles); setSource(q.data!.source); setDirty(false); setMsg(null); dropDraft(); }}>{t('prg.undo')}</Button>}
             <Button size="xs" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button>
           </>}
         </Group>
       </Group>
       {edit && <Text size="xs" c="dimmed">{t('prg.formats')}</Text>}
       {msg && <Alert color={msg.ok ? 'green' : 'red'} withCloseButton onClose={() => setMsg(null)}>{msg.text}</Alert>}
+      {edit && draft && !dirty && (
+        <Alert color="orange" title={t('prg.draftTitle')}>
+          <Text size="sm">{t('prg.draftHint', { at: new Date(draft.at).toLocaleString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB') })}</Text>
+          <Group mt="xs" gap="xs">
+            <Button size="xs" onClick={() => { setLines(draft.lines); setCycles(draft.cycles); setSource(draft.source); setDirty(true); setDraft(null); }}>{t('prg.draftRestore')}</Button>
+            <Button size="xs" variant="subtle" color="gray" onClick={dropDraft}>{t('prg.draftDrop')}</Button>
+          </Group>
+        </Alert>
+      )}
       {from && to && <Card withBorder p="xs"><Gantt rows={bars} from={from} to={to} /></Card>}
       <Card withBorder p={0}>
         <Table verticalSpacing={4} fz="sm">
@@ -336,7 +365,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
         </Table>
       </Card>
       {edit && dirty && <Tooltip label={t('prg.unsaved')}><Button onClick={() => save.mutate()} loading={save.isPending}>{t('rec.save')}</Button></Tooltip>}
-      <CycleModal opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} existing={lines}
+      <CycleModal storeKey={`verqac:prg-cycle:${rec.id}`} opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} existing={lines}
         units={units.map((u) => ({ id: u.id!, name: pick(u, 'name') }))}
         stages={stages.map((x) => ({ id: x.id!, name: pick(x, 'name'), whole: whole.has(x.id!) }))} />
       <ImportModal rows={rows} onClose={() => setRows(null)} onApply={imported} whole={whole}

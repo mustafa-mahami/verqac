@@ -1108,6 +1108,10 @@
     "predMissing": "Computed once the earlier stage has dates",
     "predMissingList": "Stages linked to a stage without dates yet: {{list}}. Generate or enter the earlier stage first.",
     "span2": "From → to",
-    "undo": "Undo changes"
+    "undo": "Undo changes",
+    "draftTitle": "Unsaved changes",
+    "draftHint": "Changes to this programme from {{at}} were not saved. Restore them?",
+    "draftRestore": "Restore",
+    "draftDrop": "Discard"
   }
 }
