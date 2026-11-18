@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError, openProtected, type RecordDetail } from '../api';
 import { fmtDate } from '../format';
 import i18n, { pick } from '../i18n';
-import { addDays, cellKey, daysBetween, floorStart, type ImportRow, type PCycle, type PLine, type ProgrammeOut } from '../programme';
+import { addDays, cellKey, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
 import { useStructure } from './Structure';
 
 const errText = (e: unknown) => i18n.t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, { defaultValue: i18n.t('errors.generic') });
@@ -40,9 +40,9 @@ function Gantt({ rows, from, to }: { rows: { label: string; start: string; finis
 }
 
 /** Floor cycle: per stage a start, days per floor and days until the next floor starts. */
-function CycleModal({ opened, onClose, cycles, onApply, stages, units }: {
+function CycleModal({ opened, onClose, cycles, onApply, stages, units, existing }: {
   opened: boolean; onClose: () => void; cycles: PCycle[]; onApply: (c: PCycle[]) => void;
-  stages: { id: string; name: string; whole: boolean }[]; units: string[];
+  stages: { id: string; name: string; whole: boolean }[]; units: { id: string; name: string }[]; existing: PLine[];
 }) {
   const unitCount = units.length;
   const { t } = useTranslation();
@@ -50,53 +50,86 @@ function CycleModal({ opened, onClose, cycles, onApply, stages, units }: {
   useEffect(() => {
     if (!opened) return;
     const by = Object.fromEntries(cycles.map((c) => [c.stage_id, c]));
-    setRows(stages.map((s) => ({ stage_id: s.id, start: by[s.id]?.start ?? null, duration: by[s.id]?.duration ?? 0, lag: by[s.id]?.lag ?? 0, link: by[s.id]?.link ?? 'fs', on: !!by[s.id] })));
+    setRows(stages.map((s) => ({ stage_id: s.id, start: by[s.id]?.start ?? null, duration: by[s.id]?.duration ?? 0, lag: by[s.id]?.lag ?? 0,
+      link: by[s.id]?.link ?? 'fs', pred: by[s.id]?.pred ?? null, rel: by[s.id]?.rel ?? 'after_end', pred_days: by[s.id]?.pred_days ?? 0, on: !!by[s.id] })));
   }, [opened, cycles, stages]);
   const set = (i: number, p: Partial<PCycle & { on: boolean }>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...p, on: p.on ?? true } : r)));
-  const ok = rows.filter((r) => r.on && r.start && r.duration > 0);
+  const whole = useMemo(() => new Set(stages.filter((s) => s.whole).map((s) => s.id)), [stages]);
+  const ok = rows.filter((r) => r.on && r.duration > 0 && (r.pred || r.start));
+  const plan = useMemo(() => schedule(ok.map(({ on: _on, ...c }) => c), units.map((u) => u.id), whole, existing), [ok, units, whole, existing]);
+  const byStage = useMemo(() => {
+    const m = new Map<string, PLine[]>();
+    for (const l of plan.lines) m.set(l.stage_id, [...(m.get(l.stage_id) ?? []), l]);
+    return m;
+  }, [plan]);
+  const uname = Object.fromEntries(units.map((u) => [u.id, u.name]));
+  const names = Object.fromEntries(stages.map((s) => [s.id, s.name]));
+  const RELS: Rel[] = ['after_end', 'after_start', 'before_end', 'before_start'];
   return (
-    <Modal opened={opened} onClose={onClose} title={t('prg.cycleTitle')} size="xl">
+    <Modal opened={opened} onClose={onClose} title={t('prg.cycleTitle')} size="95%">
       <Alert variant="light" mb="sm" title={t('prg.cycleHowTitle')}>
-        <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{t('prg.cycleHow', { n: unitCount, first: units[0] ?? '', second: units[1] ?? '' })}</Text>
+        <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{t('prg.cycleHow', { n: unitCount, first: units[0]?.name ?? '', second: units[1]?.name ?? '' })}</Text>
       </Alert>
-      <Table verticalSpacing={4} fz="sm">
-        <Table.Thead><Table.Tr>
-          <Table.Th w={30} /><Table.Th>{t('structure.stage')}</Table.Th><Table.Th w={150}>{t('prg.start')}</Table.Th>
-          <Table.Th w={110}>{t('prg.duration')}</Table.Th><Table.Th w={220}>{t('prg.lag')}</Table.Th><Table.Th w={110}>{t('prg.finish')}</Table.Th>
-        </Table.Tr></Table.Thead>
-        <Table.Tbody>
-          {rows.map((r, i) => {
-            const s = stages[i];
-            const end = r.start && r.duration > 0 ? addDays(s.whole ? r.start : floorStart(r, Math.max(0, unitCount - 1)), r.duration - 1) : null;
-            return (
-              <Table.Tr key={r.stage_id}>
-                <Table.Td><Checkbox checked={r.on} onChange={(e) => set(i, { on: e.currentTarget.checked })} /></Table.Td>
-                <Table.Td>{s.name} {s.whole && <Badge size="xs" variant="light">{t('structure.whole')}</Badge>}</Table.Td>
-                <Table.Td><TextInput size="xs" type="date" value={r.start ?? ''} onChange={(e) => set(i, { start: e.currentTarget.value || null })} /></Table.Td>
-                <Table.Td><NumberInput size="xs" min={0} value={r.duration} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { duration: Number(v) || 0 })} /></Table.Td>
-                <Table.Td>{!s.whole && (
-                  <Group gap={4} wrap="nowrap">
-                    <NumberInput size="xs" w={80} min={0} value={r.lag} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { lag: Number(v) || 0 })} />
-                    <Select size="xs" w={130} allowDeselect={false} value={r.link ?? 'fs'} onChange={(v) => set(i, { link: (v ?? 'fs') as 'fs' | 'ss' })}
-                      data={[{ value: 'fs', label: t('prg.linkFs') }, { value: 'ss', label: t('prg.linkSs') }]} />
-                  </Group>
-                )}</Table.Td>
-                <Table.Td>
-                  {end ? (
-                    <Tooltip multiline w={260} disabled={s.whole || unitCount < 2} label={units.map((u, k) => `${u}: ${fmtDate(floorStart(r, k))} → ${fmtDate(addDays(floorStart(r, k), r.duration - 1))}`).join('\n')}
-                      style={{ whiteSpace: 'pre-line' }}>
-                      <Text size="xs" c="dimmed" style={{ cursor: 'help' }}>{fmtDate(end)}</Text>
-                    </Tooltip>
-                  ) : ''}
-                </Table.Td>
-              </Table.Tr>
-            );
-          })}
-        </Table.Tbody>
-      </Table>
+      {plan.error && <Alert color="red" mb="sm">{t(`errors.${plan.error}`)}</Alert>}
+      <ScrollArea>
+        <Table verticalSpacing={4} fz="sm" miw={1050}>
+          <Table.Thead><Table.Tr>
+            <Table.Th w={30} /><Table.Th miw={150}>{t('structure.stage')}</Table.Th>
+            <Table.Th w={330}>{t('prg.pred')}</Table.Th><Table.Th w={140}>{t('prg.start')}</Table.Th>
+            <Table.Th w={100}>{t('prg.duration')}</Table.Th><Table.Th w={210}>{t('prg.lag')}</Table.Th><Table.Th w={130}>{t('prg.span2')}</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {rows.map((r, i) => {
+              const s = stages[i];
+              const ls = byStage.get(r.stage_id) ?? [];
+              const first = ls.length ? ls.map((l) => l.start).reduce((a, b) => (a < b ? a : b)) : null;
+              const last = ls.length ? ls.map((l) => l.finish).reduce((a, b) => (a > b ? a : b)) : null;
+              const linked = !!r.pred;
+              return (
+                <Table.Tr key={r.stage_id} opacity={r.on ? 1 : 0.6}>
+                  <Table.Td><Checkbox checked={r.on} onChange={(e) => set(i, { on: e.currentTarget.checked })} /></Table.Td>
+                  <Table.Td>{s.name} {s.whole && <Badge size="xs" variant="light">{t('structure.whole')}</Badge>}</Table.Td>
+                  <Table.Td>
+                    <Group gap={4} wrap="nowrap">
+                      <Select size="xs" w={140} clearable placeholder={t('prg.noPred')} value={r.pred ?? null}
+                        data={stages.filter((x) => x.id !== r.stage_id).map((x) => ({ value: x.id, label: x.name }))}
+                        onChange={(v) => set(i, { pred: v })} />
+                      {linked && <>
+                        <Select size="xs" w={110} allowDeselect={false} value={r.rel ?? 'after_end'}
+                          data={RELS.map((x) => ({ value: x, label: t(`prg.rel.${x}`) }))} onChange={(v) => set(i, { rel: (v ?? 'after_end') as Rel })} />
+                        <NumberInput size="xs" w={72} min={0} value={r.pred_days ?? 0} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { pred_days: Number(v) || 0 })} />
+                      </>}
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>{linked
+                    ? <Text size="xs" c="dimmed">{first ? fmtDate(first) : t('prg.predMissing')}</Text>
+                    : <TextInput size="xs" type="date" value={r.start ?? ''} onChange={(e) => set(i, { start: e.currentTarget.value || null })} />}</Table.Td>
+                  <Table.Td><NumberInput size="xs" min={0} value={r.duration} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { duration: Number(v) || 0 })} /></Table.Td>
+                  <Table.Td>{!s.whole && (
+                    <Group gap={4} wrap="nowrap">
+                      <NumberInput size="xs" w={70} min={0} value={r.lag} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { lag: Number(v) || 0 })} />
+                      <Select size="xs" w={130} allowDeselect={false} value={r.link ?? 'fs'} onChange={(v) => set(i, { link: (v ?? 'fs') as 'fs' | 'ss' })}
+                        data={[{ value: 'fs', label: t('prg.linkFs') }, { value: 'ss', label: t('prg.linkSs') }]} />
+                    </Group>
+                  )}</Table.Td>
+                  <Table.Td>
+                    {first && last ? (
+                      <Tooltip multiline w={280} disabled={ls.length < 2} style={{ whiteSpace: 'pre-line' }}
+                        label={ls.map((l) => `${uname[l.location_id ?? ''] ?? ''}: ${fmtDate(l.start)} → ${fmtDate(l.finish)}`).join('\n')}>
+                        <Text size="xs" c="dimmed" style={{ cursor: 'help' }}>{fmtDate(first)} → {fmtDate(last)}</Text>
+                      </Tooltip>
+                    ) : ''}
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </ScrollArea>
+      {plan.missing.length > 0 && <Text size="xs" c="orange" mt="xs">{t('prg.predMissingList', { list: plan.missing.map((x) => names[x]).join('، ') })}</Text>}
       <Group justify="flex-end" mt="md">
         <Text size="xs" c="dimmed">{t('prg.cycleReplace')}</Text>
-        <Button disabled={!ok.length} onClick={() => onApply(ok.map(({ on: _on, ...c }) => c))}>{t('prg.generate')}</Button>
+        <Button disabled={!ok.length || !!plan.error} onClick={() => onApply(ok.map(({ on: _on, ...c }) => c))}>{t('prg.generate')}</Button>
       </Group>
     </Modal>
   );
@@ -202,11 +235,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   };
   const generate = (cs: PCycle[]) => {
     const ids = new Set(cs.map((c) => c.stage_id));
-    const gen: PLine[] = [];
-    for (const c of cs) {
-      if (whole.has(c.stage_id)) gen.push({ stage_id: c.stage_id, location_id: null, start: c.start!, finish: addDays(c.start!, c.duration - 1) });
-      else units.forEach((u, i) => { const st = floorStart(c, i); gen.push({ stage_id: c.stage_id, location_id: u.id!, start: st, finish: addDays(st, c.duration - 1) }); });
-    }
+    const gen = schedule(cs, units.map((u) => u.id!), whole, lines).lines;
     setCycles([...cycles.filter((c) => !ids.has(c.stage_id)), ...cs]);
     change([...lines.filter((l) => !ids.has(l.stage_id)), ...gen], 'cycle');
     setCycleOpen(false);
@@ -299,7 +328,8 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
         </Table>
       </Card>
       {edit && dirty && <Tooltip label={t('prg.unsaved')}><Button onClick={() => save.mutate()} loading={save.isPending}>{t('rec.save')}</Button></Tooltip>}
-      <CycleModal opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} units={units.map((u) => pick(u, 'name'))}
+      <CycleModal opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} existing={lines}
+        units={units.map((u) => ({ id: u.id!, name: pick(u, 'name') }))}
         stages={stages.map((x) => ({ id: x.id!, name: pick(x, 'name'), whole: whole.has(x.id!) }))} />
       <ImportModal rows={rows} onClose={() => setRows(null)} onApply={imported} whole={whole}
         stageData={stages.map((x) => ({ value: x.id!, label: pick(x, 'name') }))} unitData={units.map((u) => ({ value: u.id!, label: pick(u, 'name') }))} />

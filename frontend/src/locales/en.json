@@ -155,7 +155,8 @@
     "programme_finish_before_start": "A finish date is before its start.",
     "programme_file_type": "Unsupported file: xlsx, csv, xml or xer.",
     "programme_file_unreadable": "The file could not be read.",
-    "programme_file_empty": "No tasks with names and dates found in the file."
+    "programme_file_empty": "No tasks with names and dates found in the file.",
+    "programme_cycle_loop": "Circular link between stages (A after B and B after A)."
   },
   "common": {
     "cancel": "Cancel",
@@ -1093,8 +1094,19 @@
     "openCurrent": "View approved",
     "create": "Create the time programme",
     "cycleHowTitle": "How to use it",
-    "cycleHow": "1. Tick the stage to generate (it is ticked as soon as you fill a field).\n2. Start: when the stage starts on the first floor ({{first}}).\n3. Duration: how many days the stage takes on one floor, e.g. up to casting the slab.\n4. Idle days between floors: empty days between a floor ending and the next one starting. 0 = the next day, 2 = a two-day stop as supervision may ask. For overlapping trades (plaster, tiles) choose \"from its start\": the next floor starts that many days after the one below starts.\nExample: structure starts 1/12, 21 days, 2 idle days → {{first}} 1/12 to 21/12, {{second}} 24/12 to 13/1, and so on for all {{n}} floors.\nDays are calendar days. For a stop on one floor only, edit its dates in the table after generating.\n5. Press Generate, check and adjust the dates, then Save. Hover the finish date to see every floor.",
+    "cycleHow": "1. Tick the stage (it is ticked as soon as you fill a field).\n2. Either its start on the first floor ({{first}}), or a link to an earlier stage: e.g. block walls 7 days \"after its end\" of the structure. When linked, the start of every floor is computed from the same floor of the earlier stage.\n3. Duration: the days the stage takes on one floor.\n4. Idle days between floors: empty days between a floor ending and the next starting (0 = the next day). For overlapping trades choose \"from its start\". With a link the crew still never starts a floor before finishing the one below: the later of the two wins.\nExample: structure starts 1/12, 21 days, 2 idle days → {{first}} 1/12 to 21/12, {{second}} 24/12 to 13/1, and so on for all {{n}} floors.\n5. Press Generate, check and adjust by hand, then Save. Calendar days. Hover the \"from → to\" column to see every floor.",
     "linkFs": "after the one below ends",
-    "linkSs": "from its start"
+    "linkSs": "from its start",
+    "pred": "Linked to an earlier stage (optional)",
+    "noPred": "Not linked",
+    "rel": {
+      "after_end": "after its end",
+      "after_start": "after its start",
+      "before_end": "before its end",
+      "before_start": "before its start"
+    },
+    "predMissing": "Computed once the earlier stage has dates",
+    "predMissingList": "Stages linked to a stage without dates yet: {{list}}. Generate or enter the earlier stage first.",
+    "span2": "From → to"
   }
 }
