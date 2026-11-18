@@ -184,7 +184,8 @@
     "partyKind": "Party",
     "edit": "Edit role and disciplines",
     "inviteNew": "Invite new colleague",
-    "inviteNewHint": "Joins your organization and this project with the chosen role and disciplines in one step."
+    "inviteNewHint": "Joins your organization and this project with the chosen role and disciplines in one step.",
+    "roleHint": "Pick a role to see what it can do"
   },
   "invite": {
     "linkTitle": "Invitation link",
@@ -984,5 +985,15 @@
     "position": "Position",
     "positions": "Positions (chosen above, and used in the count mode)",
     "noPositions": "Add positions below first"
+  },
+  "roleHint": {
+    "contractor_pm": "Everything in all disciplines: create, submit, cancel and delete all requests, manage the project and team, answer NCRs.",
+    "qa_engineer": "In his disciplines: create, edit, submit, cancel and resubmit all types, answer NCRs with the corrective action, export.",
+    "site_engineer": "In his disciplines: sees all, submits inspections, materials and the daily report, answers NCRs. No submittals, no cancelling.",
+    "document_controller": "Create, submit and cancel all requests in all disciplines and answer NCRs, without managing the project or team.",
+    "contractor_readonly": "View and export only, all project requests.",
+    "consultant_pm": "Answers all requests in all disciplines and on behalf of engineers, issues NCRs, manages the consultant team.",
+    "consultant_engineer": "In his disciplines: reviews and answers contractor requests (approve, notes, revise, reject), issues and closes NCRs, approves daily reports.",
+    "owner_rep": "View and export only, all project requests."
   }
 }

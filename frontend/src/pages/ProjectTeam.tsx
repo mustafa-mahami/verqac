@@ -1,6 +1,6 @@
 import {
   ActionIcon, Alert, Badge, Button, Card, Group, Menu, Modal, MultiSelect, Select, SimpleGrid, Stack, Table,
-  Text, TextInput, Title,
+  Text, TextInput, Title, Tooltip,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,28 @@ import { useAuth } from '../auth';
 import i18n, { pick } from '../i18n';
 import InviteLink from './InviteLink';
 
+
+/** What a role can do: a fixed line under each role, from its code (platform roles and their copies). */
+export const roleHint = (code: string) => i18n.t(`roleHint.${code}`, { defaultValue: '' });
+
+/** Role picker that lists each role with what it can do, and shows it again under the chosen role. */
+function RoleSelect({ roles, value, ...rest }: { roles: Role[]; value?: string | null } & Record<string, unknown>) {
+  const { t } = useTranslation();
+  const byId = Object.fromEntries(roles.map((r) => [r.id, r]));
+  const chosen = value ? byId[value] : undefined;
+  return (
+    <Select label={t('team.role')} required value={value} {...rest}
+      data={roles.map((r) => ({ value: r.id, label: pick(r, 'name') }))}
+      description={chosen ? roleHint(chosen.code) : t('team.roleHint')}
+      inputWrapperOrder={['label', 'input', 'description', 'error']}
+      renderOption={({ option }) => (
+        <div>
+          <Text size="sm">{option.label}</Text>
+          <Text size="xs" c="dimmed">{roleHint(byId[option.value]?.code ?? '')}</Text>
+        </div>
+      )} />
+  );
+}
 
 const errText = (_t: unknown, e: unknown) =>
   i18n.t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, { defaultValue: i18n.t('errors.generic') });
@@ -87,9 +109,7 @@ function MemberForm({ projectId, party, team, onDone }: { projectId: string; par
         <Select label={t('team.user')} required searchable
           data={candidates.map((m) => ({ value: m.user.id, label: `${pick(m.user, 'full_name')} · ${m.user.email}` }))}
           {...form.getInputProps('user_id')} />
-        <Select label={t('team.role')} required
-          data={(roles.data ?? []).filter((r) => r.party_kind === party.kind).map((r) => ({ value: r.id, label: pick(r, 'name') }))}
-          {...form.getInputProps('role_id')} />
+        <RoleSelect roles={(roles.data ?? []).filter((r) => r.party_kind === party.kind)} {...form.getInputProps('role_id')} />
         <MultiSelect label={t('team.disciplines')} placeholder={t('team.allDisciplines')}
           data={(discs.data ?? []).map((d) => ({ value: d.id, label: pick(d, 'name') }))}
           {...form.getInputProps('discipline_ids')} />
@@ -105,7 +125,7 @@ function useRolesAndDisciplines(party: TeamParty) {
   const roles = useQuery({ queryKey: ['roles'], queryFn: () => api<Role[]>('/roles') });
   const discs = useQuery({ queryKey: ['disciplines', orgId], queryFn: () => api<Discipline[]>(`/orgs/${orgId}/disciplines`) });
   return {
-    roleData: (roles.data ?? []).filter((r) => r.party_kind === party.kind).map((r) => ({ value: r.id, label: pick(r, 'name') })),
+    partyRoles: (roles.data ?? []).filter((r) => r.party_kind === party.kind),
     discData: (discs.data ?? []).map((d) => ({ value: d.id, label: pick(d, 'name') })),
   };
 }
@@ -114,7 +134,7 @@ function MemberEditForm({ projectId, member, party, onDone }: { projectId: strin
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const { roleData, discData } = useRolesAndDisciplines(party);
+  const { partyRoles, discData } = useRolesAndDisciplines(party);
   const form = useForm({ initialValues: { role_id: member.role.id, discipline_ids: member.discipline_ids } });
   const save = useMutation({
     mutationFn: (v: typeof form.values) => api(`/projects/${projectId}/members/${member.id}`, { method: 'PATCH', body: JSON.stringify(v) }),
@@ -126,7 +146,7 @@ function MemberEditForm({ projectId, member, party, onDone }: { projectId: strin
       <Stack>
         {error && <Alert color="red">{error}</Alert>}
         <Text fw={500}>{pick(member.user, 'full_name')}</Text>
-        <Select label={t('team.role')} required data={roleData} allowDeselect={false} {...form.getInputProps('role_id')} />
+        <RoleSelect roles={partyRoles} allowDeselect={false} {...form.getInputProps('role_id')} />
         <MultiSelect label={t('team.disciplines')} placeholder={t('team.allDisciplines')} data={discData} {...form.getInputProps('discipline_ids')} />
         <Button type="submit" loading={save.isPending}>{t('rec.save')}</Button>
       </Stack>
@@ -137,7 +157,7 @@ function MemberEditForm({ projectId, member, party, onDone }: { projectId: strin
 function InviteNewForm({ projectId, party, onInvite }: { projectId: string; party: TeamParty; onInvite: (i: InviteOut) => void }) {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
-  const { roleData, discData } = useRolesAndDisciplines(party);
+  const { partyRoles, discData } = useRolesAndDisciplines(party);
   const form = useForm({ initialValues: { email: '', role_id: '', discipline_ids: [] as string[] } });
   const send = useMutation({
     mutationFn: (v: typeof form.values) =>
@@ -150,7 +170,7 @@ function InviteNewForm({ projectId, party, onInvite }: { projectId: string; part
         <Text size="sm" c="dimmed">{t('team.inviteNewHint')}</Text>
         {error && <Alert color="red">{error}</Alert>}
         <TextInput label={t('auth.email')} type="email" dir="ltr" required {...form.getInputProps('email')} />
-        <Select label={t('team.role')} required data={roleData} {...form.getInputProps('role_id')} />
+        <RoleSelect roles={partyRoles} {...form.getInputProps('role_id')} />
         <MultiSelect label={t('team.disciplines')} placeholder={t('team.allDisciplines')} data={discData} {...form.getInputProps('discipline_ids')} />
         <Button type="submit" loading={send.isPending}>{t('team.invite')}</Button>
       </Stack>
@@ -263,7 +283,7 @@ export default function ProjectTeam() {
                       <Text size="xs" c="dimmed" dir="ltr" ta="start">{m.user.email}</Text>
                     </Table.Td>
                     <Table.Td><Text size="sm">{party ? t(`party.${party.kind}`) : ''}</Text></Table.Td>
-                    <Table.Td><Text size="sm">{pick(m.role, 'name')}</Text></Table.Td>
+                    <Table.Td><Tooltip label={roleHint(m.role.code)} multiline w={320} disabled={!roleHint(m.role.code)}><Text size="sm" style={{ cursor: 'help' }}>{pick(m.role, 'name')}</Text></Tooltip></Table.Td>
                     <Table.Td>
                       <Text size="sm">
                         {m.discipline_ids.length === 0
