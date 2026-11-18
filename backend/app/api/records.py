@@ -760,6 +760,9 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
 
     to = c.db.get(WorkflowState, t.to_state_id)
     now = datetime.now(UTC)
+    if t.effect == "submit" and rt.code == "daily_report":
+        from app.api.daily import check_works
+        check_works(c.db, rec)
     if t.effect == "submit" and rt.code == "test":
         from app.models.lab import LabResult
         lab = c.db.get(LabResult, rec.id)

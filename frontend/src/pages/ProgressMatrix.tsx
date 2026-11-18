@@ -1,7 +1,7 @@
-import { Card, Group, RingProgress, ScrollArea, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { Button, Card, Group, RingProgress, ScrollArea, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { api } from '../api';
+import { api, type ProjectSettings } from '../api';
 import type { ProgressOut } from '../daily';
 import { fmtDate } from '../format';
 import { pick } from '../i18n';
@@ -31,6 +31,12 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const q = useQuery({ queryKey: ['progress', projectId], queryFn: () => api<ProgressOut>(`/projects/${projectId}/progress`) });
   const s = useStructure(projectId).data;
+  const qc = useQueryClient();
+  const settings = useQuery({ queryKey: ['settings', projectId], queryFn: () => api<ProjectSettings>(`/projects/${projectId}/settings`) });
+  const rebuild = useMutation({
+    mutationFn: () => api<ProgressOut>(`/projects/${projectId}/progress/rebuild`, { method: 'POST' }),
+    onSuccess: (d) => qc.setQueryData(['progress', projectId], d),
+  });
   if (!q.data || !s) return null;
   const p = q.data;
   const stages = s.stages.filter((x) => x.is_active);
@@ -51,6 +57,14 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
           </div>
           <div style={{ flex: 1, minWidth: 260 }}><Curve points={p.snapshots} /></div>
         </Group>
+        {settings.data?.can_edit && (
+          <Group justify="flex-end" mt="xs">
+            <Tooltip label={t('progress.rebuildHint')} multiline w={300}>
+              <Button size="xs" variant="subtle" loading={rebuild.isPending}
+                onClick={() => window.confirm(t('progress.rebuildConfirm')) && rebuild.mutate()}>{t('progress.rebuild')}</Button>
+            </Tooltip>
+          </Group>
+        )}
       </Card>
       <Card withBorder p={0}>
         <ScrollArea>

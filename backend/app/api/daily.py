@@ -8,10 +8,11 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.core.access import project_access, require
+from app.core.audit import audit
 from app.core.deps import Ctx, ctx
 from app.models.core import Project
 from app.models.daily import DailyReport, ProgressCell, ProgressSnapshot
@@ -255,6 +256,30 @@ def project_progress(db, project_id) -> ProgressOut:
                                    started_on=c.started_on, finished_on=c.finished_on) for c in cells])
 
 
+def check_works(db, rec: Record) -> None:
+    """Before submitting: a % on a per-location stage needs its locations, or it would count nowhere."""
+    d = db.get(DailyReport, rec.id)
+    if d is None:
+        return
+    stages = {str(s.id): s for s in db.scalars(select(ProjectStage).where(ProjectStage.project_id == d.project_id))}
+    for line in d.works:
+        st = stages.get(str(line.get("stage_id")))
+        if st is not None and line.get("progress") is not None and not _cells_of(db, d.project_id, line, stages):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "dr_location_required")
+
+
+def rebuild_progress(db, project_id) -> None:
+    """Start again from the approved reports, oldest first: after the stages or locations changed."""
+    db.execute(delete(ProgressCell).where(ProgressCell.project_id == project_id))
+    db.execute(delete(ProgressSnapshot).where(ProgressSnapshot.project_id == project_id))
+    db.flush()
+    recs = db.scalars(select(Record).join(DailyReport, DailyReport.record_id == Record.id)
+                      .where(Record.project_id == project_id, Record.state_category == "approved")
+                      .order_by(DailyReport.report_date))
+    for rec in recs:
+        apply_progress(db, rec)
+
+
 def apply_progress(db, rec: Record) -> None:
     """Supervision approved the report: its work lines set their cells (the latest report date wins)."""
     d = db.get(DailyReport, rec.id)
@@ -286,6 +311,18 @@ def apply_progress(db, rec: Record) -> None:
 @router.get("/projects/{project_id}/progress", response_model=ProgressOut)
 def get_progress(project_id: uuid.UUID, c: Ctx = Depends(ctx)):
     project_access(c, project_id)
+    return project_progress(c.db, project_id)
+
+
+@router.post("/projects/{project_id}/progress/rebuild", response_model=ProgressOut)
+def rebuild(project_id: uuid.UUID, c: Ctx = Depends(ctx)):
+    """Recount the matrix and the curve from the approved daily reports (the project manager)."""
+    a = project_access(c, project_id)
+    require(a.can_manage_project, "manage_project_required")
+    rebuild_progress(c.db, project_id)
+    audit(c.db, entity="project", action="progress_rebuild", entity_id=project_id, actor=c.user.id,
+          org_id=a.project.owner_org_id, project_id=project_id, changes={}, ip=c.meta.ip, user_agent=c.meta.user_agent)
+    c.db.flush()
     return project_progress(c.db, project_id)
 
 

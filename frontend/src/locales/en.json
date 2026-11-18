@@ -148,7 +148,8 @@
     "role_in_use": "The role is held by members or invitations and cannot be deleted. You can hide it.",
     "role_hidden": "This role is hidden in the project.",
     "role_is_base": "Base roles are not deleted; they can be hidden.",
-    "not_same_org": "You cannot edit the name of a person from another organization."
+    "not_same_org": "You cannot edit the name of a person from another organization.",
+    "dr_location_required": "A work line with a progress % needs its location or \"whole project\", or the % would count nowhere."
   },
   "common": {
     "cancel": "Cancel",
@@ -949,7 +950,10 @@
     "weight": "Weight",
     "stage": "Stage %",
     "updated": "Updated",
-    "noStages": "Define the project stages in the settings first."
+    "noStages": "Define the project stages in the settings first.",
+    "rebuild": "Recount from approved reports",
+    "rebuildHint": "Refills the matrix and the curve from every approved daily report, oldest first. Useful after changing stages or locations.",
+    "rebuildConfirm": "Recount progress from the approved reports?"
   },
   "dset": {
     "title": "Daily report",
