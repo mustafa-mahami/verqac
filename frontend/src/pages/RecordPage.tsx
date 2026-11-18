@@ -392,8 +392,9 @@ export default function RecordPage() {
   const responses = r.transitions.filter((x) => x.effect === 'respond');
   const others = r.transitions.filter((x) => x.effect !== 'respond');
 
+  const wide = r.record_type.code === 'programme'; // the programme and its Gantt take the full width
   return (
-    <Stack maw={1200} mx="auto">
+    <Stack maw={wide ? '100%' : 1200} mx="auto">
       <BackButton to={`/projects/${r.project_id}?tab=${profile(r.record_type.code).tab}`}
         label={typeText(r.record_type.code, 'back', 'back.submittals')} />
       <Group justify="space-between" align="flex-start">
@@ -441,7 +442,7 @@ export default function RecordPage() {
       )}
 
       <Grid gutter="md">
-        <Grid.Col span={{ base: 12, md: 8 }}>
+        <Grid.Col span={{ base: 12, md: wide ? 12 : 8 }}>
           <Stack>
             {responses.length > 0 && <ResponsePanel rec={r} transitions={responses} onDone={put} />}
             {r.answered_at && (
@@ -576,7 +577,7 @@ export default function RecordPage() {
           </Stack>
         </Grid.Col>
 
-        <Grid.Col span={{ base: 12, md: 4 }}>
+        <Grid.Col span={{ base: 12, md: wide ? 12 : 4 }}>
           <Stack>
             {r.revisions.length > 1 && (
               <Card withBorder>

@@ -21,7 +21,7 @@ export default function ProjectPage() {
   const tabs = TYPE_TABS.filter(([code]) => !settings.data || settings.data.types.includes(code));
 
   return (
-    <Stack maw={1200} mx="auto">
+    <Stack maw={tab === 'progress' ? '100%' : 1200} mx="auto">
       <BackButton to="/projects" label={t('back.projects')} />
       {item.data && (
         <div>

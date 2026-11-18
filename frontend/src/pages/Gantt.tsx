@@ -30,7 +30,7 @@ const monthStarts = (from: string, to: string) => {
 export default function Gantt({ items, showActual, toolbar }: { items: GanttItem[]; showActual: boolean; toolbar?: ReactNode }) {
   const { t, i18n } = useTranslation();
   const [by, setBy] = useState<'floor' | 'stage'>('floor');
-  const [zoom, setZoom] = useState<Zoom>('month');
+  const [zoom, setZoom] = useState<Zoom>('fit'); // the whole programme on screen; month / week to look closer
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [onlyLate, setOnlyLate] = useState(false);
