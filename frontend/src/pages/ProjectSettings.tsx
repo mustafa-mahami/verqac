@@ -1,4 +1,7 @@
-import { ActionIcon, Alert, Button, Card, Group, NumberInput, Select, Stack, Switch, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Button, Card, Group, NumberInput, Select, Stack, Switch, Tabs, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { useSearchParams } from 'react-router-dom';
+
+const SECTIONS = ['general', 'structure', 'roles', 'requests', 'calendar', 'daily', 'lab'] as const;
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -70,161 +73,176 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
     [next[i], next[i + d]] = [next[i + d], next[i]];
     setKinds(next);
   };
+  const [params, setParams] = useSearchParams();
+  const section = params.get('s') ?? 'general';
+  const setSection = (v: string) => { const n = new URLSearchParams(params); n.set('s', v); setParams(n, { replace: true }); };
   if (!settings.data || !types.data) return null;
   const editable = settings.data.can_edit;
 
+  const panel = (v: string, children: React.ReactNode) => <Tabs.Panel value={v} pt="md"><Stack maw={900}>{children}</Stack></Tabs.Panel>;
   return (
-    <Stack maw={900}>
-      <ProjectHeader projectId={projectId} settings={settings.data} />
-      <Card withBorder>
-        <Title order={5}>{t('settings.datesTitle')}</Title>
-        <Text size="sm" c="dimmed" mb="md">{t('settings.datesHint')}</Text>
-        <Group>
-          <TextInput type="date" w={200} label={t('projects.startDate')} disabled={!editable} value={dates.start_date ?? ''}
-            onChange={(e) => setDates({ ...dates, start_date: e.currentTarget.value || null })} />
-          <TextInput type="date" w={200} label={t('projects.endDate')} disabled={!editable} value={dates.end_date ?? ''}
-            onChange={(e) => setDates({ ...dates, end_date: e.currentTarget.value || null })} />
-        </Group>
-        {note('dates')}
-        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('dates')}>{t('rec.save')}</Button>}
-      </Card>
-      <Card withBorder>
-        <Title order={5}>{t('settings.typesTitle')}</Title>
-        <Text size="sm" c="dimmed" mb="md">{t('settings.typesHint')}</Text>
-        <Group gap="lg">
-          {TYPE_TABS.map(([code, tab]) => (
-            <Switch key={code} label={t(`project.tabs.${tab}`)} disabled={!editable} checked={enabled.includes(code)}
-              onChange={(e) => setEnabled(e.currentTarget.checked ? [...enabled, code] : enabled.filter((x) => x !== code))} />
-          ))}
-        </Group>
-        {note('types')}
-        {editable && <Button mt="md" variant="light" loading={save.isPending} disabled={!enabled.length} onClick={() => save.mutate('types')}>{t('rec.save')}</Button>}
-      </Card>
-      <ProjectStructure projectId={projectId} />
-      <ProjectRoles projectId={projectId} />
-      {enabled.includes('daily_report') && <DailySettingsCard projectId={projectId} editable={editable} />}
-      {enabled.includes('test') && <ConcreteClasses projectId={projectId} editable={editable} />}
-      <Card withBorder>
-        <Title order={5}>{t('settings.reviewTitle')}</Title>
-        <Text size="sm" c="dimmed" mb="md">{t('settings.reviewHint')}</Text>
-        <Stack gap="sm">
-          <Group justify="space-between" wrap="nowrap">
-            <span />
-            <Group gap="lg" wrap="nowrap">
-              <Text size="xs" c="dimmed" w={190} ta="center">{t('settings.replyDays')}</Text>
-              <Text size="xs" c="dimmed" w={190} ta="center">{t('settings.resubmitDays')}</Text>
+    <Tabs value={section} onChange={(v) => v && setSection(v)} keepMounted={false}>
+      <Tabs.List>
+        {SECTIONS.filter((k) => (k !== 'daily' || enabled.includes('daily_report')) && (k !== 'lab' || enabled.includes('test'))).map((k) => (
+          <Tabs.Tab key={k} value={k}>{t(`settings.sections.${k}`)}</Tabs.Tab>
+        ))}
+      </Tabs.List>
+      {panel('general', <>
+          <ProjectHeader projectId={projectId} settings={settings.data} />
+          <Card withBorder>
+            <Title order={5}>{t('settings.datesTitle')}</Title>
+            <Text size="sm" c="dimmed" mb="md">{t('settings.datesHint')}</Text>
+            <Group>
+              <TextInput type="date" w={200} label={t('projects.startDate')} disabled={!editable} value={dates.start_date ?? ''}
+                onChange={(e) => setDates({ ...dates, start_date: e.currentTarget.value || null })} />
+              <TextInput type="date" w={200} label={t('projects.endDate')} disabled={!editable} value={dates.end_date ?? ''}
+                onChange={(e) => setDates({ ...dates, end_date: e.currentTarget.value || null })} />
             </Group>
-          </Group>
-          {types.data.map((rt) => (
-            <Group key={rt.code} justify="space-between" wrap="nowrap">
-              <Text size="sm">{pick(rt, 'name')}</Text>
-              <Group gap="lg" wrap="nowrap">
-                <Period hours={reply[rt.code] ?? 0} disabled={!editable} label={t('settings.replyDays')}
-                  onChange={(h) => setReply({ ...reply, [rt.code]: h })} />
-                <Period hours={resub[rt.code] ?? 0} disabled={!editable} label={t('settings.resubmitDays')}
-                  onChange={(h) => setResub({ ...resub, [rt.code]: h })} />
+            {note('dates')}
+            {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('dates')}>{t('rec.save')}</Button>}
+          </Card>
+          <Card withBorder>
+            <Title order={5}>{t('settings.typesTitle')}</Title>
+            <Text size="sm" c="dimmed" mb="md">{t('settings.typesHint')}</Text>
+            <Group gap="lg">
+              {TYPE_TABS.map(([code, tab]) => (
+                <Switch key={code} label={t(`project.tabs.${tab}`)} disabled={!editable} checked={enabled.includes(code)}
+                  onChange={(e) => setEnabled(e.currentTarget.checked ? [...enabled, code] : enabled.filter((x) => x !== code))} />
+              ))}
+            </Group>
+            {note('types')}
+            {editable && <Button mt="md" variant="light" loading={save.isPending} disabled={!enabled.length} onClick={() => save.mutate('types')}>{t('rec.save')}</Button>}
+          </Card>
+          <Card withBorder>
+            <Title order={5}>{t('settings.notifyTitle')}</Title>
+            <Text size="sm" c="dimmed" mb="md">{t('settings.notifyHint')}</Text>
+            <Stack gap="sm">
+              {(['email', 'mahami'] as const).map((k) => {
+                const available = k === 'email' ? settings.data!.email_available : settings.data!.mahami_available;
+                return (
+                  <Switch key={k} label={t(`settings.${k}`)} checked={notify[k]} disabled={!editable}
+                    description={available ? undefined : t('settings.notOnServer')}
+                    onChange={(e) => setNotify({ ...notify, [k]: e.currentTarget.checked })} />
+                );
+              })}
+            </Stack>
+            {note('notify')}
+            {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('notify')}>{t('rec.save')}</Button>}
+          </Card>
+      </>)}
+      {panel('structure', <ProjectStructure projectId={projectId} />)}
+      {panel('roles', <ProjectRoles projectId={projectId} />)}
+      {panel('requests', <>
+          <Card withBorder>
+            <Title order={5}>{t('settings.reviewTitle')}</Title>
+            <Text size="sm" c="dimmed" mb="md">{t('settings.reviewHint')}</Text>
+            <Stack gap="sm">
+              <Group justify="space-between" wrap="nowrap">
+                <span />
+                <Group gap="lg" wrap="nowrap">
+                  <Text size="xs" c="dimmed" w={190} ta="center">{t('settings.replyDays')}</Text>
+                  <Text size="xs" c="dimmed" w={190} ta="center">{t('settings.resubmitDays')}</Text>
+                </Group>
               </Group>
-            </Group>
-          ))}
-          <Title order={6} mt="sm">{t('settings.routingTitle')}</Title>
-          <Text size="xs" c="dimmed">{t('settings.routingHint')}</Text>
-          {types.data.map((rt) => (
-            <Group key={rt.code} justify="space-between" wrap="nowrap">
-              <Text size="sm">{pick(rt, 'name')}</Text>
-              <Select w={400} allowDeselect={false} disabled={!editable} value={route[rt.code] ?? 'discipline'}
-                onChange={(v) => v && setRoute({ ...route, [rt.code]: v as Routing })}
-                data={(['discipline', 'manager', 'choose'] as const).map((m) => ({ value: m, label: t(`settings.routing.${m}`) }))} />
-            </Group>
-          ))}
-          <Switch mt="xs" label={t('settings.reminders')} description={t('settings.remindersHint')} checked={remind}
-            disabled={!editable} onChange={(e) => setRemind(e.currentTarget.checked)} />
-          <Switch mt="xs" label={t('settings.partySeesAll')} description={t('settings.partySeesAllHint')} checked={seeAll}
-            disabled={!editable} onChange={(e) => setSeeAll(e.currentTarget.checked)} />
-          <Switch mt="xs" label={t('settings.checklists')} description={t('settings.checklistsHint')} checked={checks}
-            disabled={!editable} onChange={(e) => setChecks(e.currentTarget.checked)} />
-          <Switch mt="xs" label={t('settings.linkSubmittals')} description={t('settings.linkSubmittalsHint')} checked={links}
-            disabled={!editable} onChange={(e) => setLinks(e.currentTarget.checked)} />
-        </Stack>
-        {note('days')}
-        {editable ? <Button mt="md" loading={save.isPending} onClick={() => save.mutate('days')}>{t('rec.save')}</Button>
-          : <Text size="xs" c="dimmed" mt="md">{t('settings.readOnly')}</Text>}
-      </Card>
-      <Card withBorder>
-        <Title order={5}>{t('cal.projectTitle')}</Title>
-        <Text size="sm" c="dimmed" mb="md">{t('cal.projectHint')}</Text>
-        <Text fw={600} size="sm" mb={6}>{t('cal.weekend')}</Text>
-        <Switch mb="xs" disabled={!editable} checked={cal.weekend === null}
-          label={t('cal.useOrgWeekend', { days: settings.data.org_calendar.weekend.map((d) => t(`cal.day.${d}`)).join('، ') || t('cal.none') })}
-          onChange={(e) => setCal({ ...cal, weekend: e.currentTarget.checked ? null : [...settings.data!.org_calendar.weekend] })} />
-        {cal.weekend !== null && <WeekendPicker value={cal.weekend} disabled={!editable} onChange={(w) => setCal({ ...cal, weekend: w })} />}
-        <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.workHours')}</Text>
-        <Switch mb="xs" disabled={!editable} checked={cal.work_start !== null} label={t('cal.workHoursOn')} description={t('cal.workHoursHint')}
-          onChange={(e) => setCal({ ...cal, ...(e.currentTarget.checked ? { work_start: '07:00', work_end: '15:00' } : { work_start: null, work_end: null }) })} />
-        {cal.work_start !== null && (
-          <Group>
-            <TextInput type="time" w={140} label={t('cal.from')} disabled={!editable} value={cal.work_start ?? ''}
-              onChange={(e) => setCal({ ...cal, work_start: e.currentTarget.value })} />
-            <TextInput type="time" w={140} label={t('cal.to')} disabled={!editable} value={cal.work_end ?? ''}
-              onChange={(e) => setCal({ ...cal, work_end: e.currentTarget.value })} />
-          </Group>
-        )}
-        <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.orgHolidays')}</Text>
-        {settings.data.org_calendar.holidays.length
-          ? <Text size="sm">{settings.data.org_calendar.holidays.map(holidayText).join(' · ')}</Text>
-          : <Text size="sm" c="dimmed">{t('cal.noOrgHolidays')}</Text>}
-        <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.projectHolidays')}</Text>
-        <HolidaysEditor value={cal.holidays} editable={editable} onChange={(h) => setCal({ ...cal, holidays: h })} />
-        {note('calendar')}
-        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('calendar')}>{t('rec.save')}</Button>}
-      </Card>
-      <Card withBorder>
-        <Title order={5}>{t('settings.notifyTitle')}</Title>
-        <Text size="sm" c="dimmed" mb="md">{t('settings.notifyHint')}</Text>
-        <Stack gap="sm">
-          {(['email', 'mahami'] as const).map((k) => {
-            const available = k === 'email' ? settings.data!.email_available : settings.data!.mahami_available;
-            return (
-              <Switch key={k} label={t(`settings.${k}`)} checked={notify[k]} disabled={!editable}
-                description={available ? undefined : t('settings.notOnServer')}
-                onChange={(e) => setNotify({ ...notify, [k]: e.currentTarget.checked })} />
-            );
-          })}
-        </Stack>
-        {note('notify')}
-        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('notify')}>{t('rec.save')}</Button>}
-      </Card>
-      <Card withBorder>
-        <Title order={5}>{t('settings.kindsTitle')}</Title>
-        <Text size="sm" c="dimmed" mb="md">{t('settings.kindsHint')}</Text>
-        <Stack gap="xs">
-          {kinds.map((k, i) => (
-            <Group key={k.code ?? `new-${i}`} gap="xs" wrap="nowrap" align="center" opacity={k.active ? 1 : 0.55}>
-              <TextInput flex={1} size="sm" placeholder={t('settings.kindAr')} aria-label={t('settings.kindAr')} disabled={!editable}
-                value={k.name_ar} onChange={(e) => setKind(i, { name_ar: e.currentTarget.value })} />
-              <TextInput flex={1} size="sm" dir="ltr" placeholder={t('settings.kindEn')} aria-label={t('settings.kindEn')} disabled={!editable}
-                value={k.name_en} onChange={(e) => setKind(i, { name_en: e.currentTarget.value })} />
-              <Tooltip label={t(k.active ? 'settings.kindActive' : 'settings.kindInactive')}>
-                <Switch size="sm" checked={k.active} disabled={!editable} aria-label={t('settings.kindActive')}
-                  onChange={(e) => setKind(i, { active: e.currentTarget.checked })} />
-              </Tooltip>
-              {editable && (
-                <>
-                  <ActionIcon variant="subtle" color="gray" disabled={i === 0} aria-label="up" onClick={() => move(i, -1)}>↑</ActionIcon>
-                  <ActionIcon variant="subtle" color="gray" disabled={i === kinds.length - 1} aria-label="down" onClick={() => move(i, 1)}>↓</ActionIcon>
-                  <ActionIcon variant="subtle" color="red" aria-label="remove" onClick={() => setKinds(kinds.filter((_, j) => j !== i))}>×</ActionIcon>
-                </>
-              )}
-            </Group>
-          ))}
-        </Stack>
-        {editable && (
-          <Button mt="sm" size="xs" variant="subtle" onClick={() => setKinds([...kinds, { code: null, name_ar: '', name_en: '', active: true }])}>
-            + {t('settings.kindAdd')}
-          </Button>
-        )}
-        {note('kinds')}
-        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('kinds')}>{t('rec.save')}</Button>}
-      </Card>
-    </Stack>
+              {types.data.map((rt) => (
+                <Group key={rt.code} justify="space-between" wrap="nowrap">
+                  <Text size="sm">{pick(rt, 'name')}</Text>
+                  <Group gap="lg" wrap="nowrap">
+                    <Period hours={reply[rt.code] ?? 0} disabled={!editable} label={t('settings.replyDays')}
+                      onChange={(h) => setReply({ ...reply, [rt.code]: h })} />
+                    <Period hours={resub[rt.code] ?? 0} disabled={!editable} label={t('settings.resubmitDays')}
+                      onChange={(h) => setResub({ ...resub, [rt.code]: h })} />
+                  </Group>
+                </Group>
+              ))}
+              <Title order={6} mt="sm">{t('settings.routingTitle')}</Title>
+              <Text size="xs" c="dimmed">{t('settings.routingHint')}</Text>
+              {types.data.map((rt) => (
+                <Group key={rt.code} justify="space-between" wrap="nowrap">
+                  <Text size="sm">{pick(rt, 'name')}</Text>
+                  <Select w={400} allowDeselect={false} disabled={!editable} value={route[rt.code] ?? 'discipline'}
+                    onChange={(v) => v && setRoute({ ...route, [rt.code]: v as Routing })}
+                    data={(['discipline', 'manager', 'choose'] as const).map((m) => ({ value: m, label: t(`settings.routing.${m}`) }))} />
+                </Group>
+              ))}
+              <Switch mt="xs" label={t('settings.reminders')} description={t('settings.remindersHint')} checked={remind}
+                disabled={!editable} onChange={(e) => setRemind(e.currentTarget.checked)} />
+              <Switch mt="xs" label={t('settings.partySeesAll')} description={t('settings.partySeesAllHint')} checked={seeAll}
+                disabled={!editable} onChange={(e) => setSeeAll(e.currentTarget.checked)} />
+              <Switch mt="xs" label={t('settings.checklists')} description={t('settings.checklistsHint')} checked={checks}
+                disabled={!editable} onChange={(e) => setChecks(e.currentTarget.checked)} />
+              <Switch mt="xs" label={t('settings.linkSubmittals')} description={t('settings.linkSubmittalsHint')} checked={links}
+                disabled={!editable} onChange={(e) => setLinks(e.currentTarget.checked)} />
+            </Stack>
+            {note('days')}
+            {editable ? <Button mt="md" loading={save.isPending} onClick={() => save.mutate('days')}>{t('rec.save')}</Button>
+              : <Text size="xs" c="dimmed" mt="md">{t('settings.readOnly')}</Text>}
+          </Card>
+          <Card withBorder>
+            <Title order={5}>{t('settings.kindsTitle')}</Title>
+            <Text size="sm" c="dimmed" mb="md">{t('settings.kindsHint')}</Text>
+            <Stack gap="xs">
+              {kinds.map((k, i) => (
+                <Group key={k.code ?? `new-${i}`} gap="xs" wrap="nowrap" align="center" opacity={k.active ? 1 : 0.55}>
+                  <TextInput flex={1} size="sm" placeholder={t('settings.kindAr')} aria-label={t('settings.kindAr')} disabled={!editable}
+                    value={k.name_ar} onChange={(e) => setKind(i, { name_ar: e.currentTarget.value })} />
+                  <TextInput flex={1} size="sm" dir="ltr" placeholder={t('settings.kindEn')} aria-label={t('settings.kindEn')} disabled={!editable}
+                    value={k.name_en} onChange={(e) => setKind(i, { name_en: e.currentTarget.value })} />
+                  <Tooltip label={t(k.active ? 'settings.kindActive' : 'settings.kindInactive')}>
+                    <Switch size="sm" checked={k.active} disabled={!editable} aria-label={t('settings.kindActive')}
+                      onChange={(e) => setKind(i, { active: e.currentTarget.checked })} />
+                  </Tooltip>
+                  {editable && (
+                    <>
+                      <ActionIcon variant="subtle" color="gray" disabled={i === 0} aria-label="up" onClick={() => move(i, -1)}>↑</ActionIcon>
+                      <ActionIcon variant="subtle" color="gray" disabled={i === kinds.length - 1} aria-label="down" onClick={() => move(i, 1)}>↓</ActionIcon>
+                      <ActionIcon variant="subtle" color="red" aria-label="remove" onClick={() => setKinds(kinds.filter((_, j) => j !== i))}>×</ActionIcon>
+                    </>
+                  )}
+                </Group>
+              ))}
+            </Stack>
+            {editable && (
+              <Button mt="sm" size="xs" variant="subtle" onClick={() => setKinds([...kinds, { code: null, name_ar: '', name_en: '', active: true }])}>
+                + {t('settings.kindAdd')}
+              </Button>
+            )}
+            {note('kinds')}
+            {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('kinds')}>{t('rec.save')}</Button>}
+          </Card>
+      </>)}
+      {panel('calendar', <>
+          <Card withBorder>
+            <Title order={5}>{t('cal.projectTitle')}</Title>
+            <Text size="sm" c="dimmed" mb="md">{t('cal.projectHint')}</Text>
+            <Text fw={600} size="sm" mb={6}>{t('cal.weekend')}</Text>
+            <Switch mb="xs" disabled={!editable} checked={cal.weekend === null}
+              label={t('cal.useOrgWeekend', { days: settings.data.org_calendar.weekend.map((d) => t(`cal.day.${d}`)).join('، ') || t('cal.none') })}
+              onChange={(e) => setCal({ ...cal, weekend: e.currentTarget.checked ? null : [...settings.data!.org_calendar.weekend] })} />
+            {cal.weekend !== null && <WeekendPicker value={cal.weekend} disabled={!editable} onChange={(w) => setCal({ ...cal, weekend: w })} />}
+            <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.workHours')}</Text>
+            <Switch mb="xs" disabled={!editable} checked={cal.work_start !== null} label={t('cal.workHoursOn')} description={t('cal.workHoursHint')}
+              onChange={(e) => setCal({ ...cal, ...(e.currentTarget.checked ? { work_start: '07:00', work_end: '15:00' } : { work_start: null, work_end: null }) })} />
+            {cal.work_start !== null && (
+              <Group>
+                <TextInput type="time" w={140} label={t('cal.from')} disabled={!editable} value={cal.work_start ?? ''}
+                  onChange={(e) => setCal({ ...cal, work_start: e.currentTarget.value })} />
+                <TextInput type="time" w={140} label={t('cal.to')} disabled={!editable} value={cal.work_end ?? ''}
+                  onChange={(e) => setCal({ ...cal, work_end: e.currentTarget.value })} />
+              </Group>
+            )}
+            <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.orgHolidays')}</Text>
+            {settings.data.org_calendar.holidays.length
+              ? <Text size="sm">{settings.data.org_calendar.holidays.map(holidayText).join(' · ')}</Text>
+              : <Text size="sm" c="dimmed">{t('cal.noOrgHolidays')}</Text>}
+            <Text fw={600} size="sm" mt="lg" mb={6}>{t('cal.projectHolidays')}</Text>
+            <HolidaysEditor value={cal.holidays} editable={editable} onChange={(h) => setCal({ ...cal, holidays: h })} />
+            {note('calendar')}
+            {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('calendar')}>{t('rec.save')}</Button>}
+          </Card>
+      </>)}
+      {enabled.includes('daily_report') && panel('daily', <DailySettingsCard projectId={projectId} editable={editable} />)}
+      {enabled.includes('test') && panel('lab', <ConcreteClasses projectId={projectId} editable={editable} />)}
+    </Tabs>
   );
 }

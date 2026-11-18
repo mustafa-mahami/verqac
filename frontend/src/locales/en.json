@@ -402,7 +402,16 @@
     "typesTitle": "Request types in this project",
     "typesHint": "Switch on only what this project uses; only those tabs show. Existing requests are kept when a type is switched off.",
     "datesTitle": "Project period",
-    "datesHint": "Project start and end dates per the contract. Daily reports are numbered from the start date (day one = report no. 1)."
+    "datesHint": "Project start and end dates per the contract. Daily reports are numbered from the start date (day one = report no. 1).",
+    "sections": {
+      "general": "General",
+      "structure": "Structure & stages",
+      "roles": "Team roles",
+      "requests": "Requests & periods",
+      "calendar": "Calendar & hours",
+      "daily": "Daily report",
+      "lab": "Laboratory"
+    }
   },
   "resp": {
     "title": "Consultant's comments",
