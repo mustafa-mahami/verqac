@@ -3,9 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
-import { GROUPS, LISTS, type DailySettings, type ListItem } from '../daily';
+import { crewList, GROUPS, OTHER_LISTS, type DailySettings, type ListItem } from '../daily';
 
-const PEOPLE = new Set(['supervision', 'contractor']);
 
 /** How the daily report records staff (names or trade + count) and the lists it suggests, in Arabic and English. */
 export default function DailySettingsCard({ projectId, editable }: { projectId: string; editable: boolean }) {
@@ -40,17 +39,18 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
       </SimpleGrid>
       <Tabs defaultValue="supervision" mt="lg" keepMounted={false}>
         <Tabs.List>
-          {LISTS.map((k) => <Tabs.Tab key={k} value={k}>{t(`dset.list.${k}`)} ({rows(k).length})</Tabs.Tab>)}
+          {GROUPS.map((g) => <Tabs.Tab key={g} value={g}>{t(`daily.g.${g}`)} — {t(s.crew[g] === 'names' ? 'dset.names' : 'dset.counts')} ({rows(crewList(s, g)).length})</Tabs.Tab>)}
+          {OTHER_LISTS.map((k) => <Tabs.Tab key={k} value={k}>{t(`dset.list.${k}`)} ({rows(k).length})</Tabs.Tab>)}
         </Tabs.List>
-        {LISTS.map((k) => {
-          const people = PEOPLE.has(k) && s.crew[k as 'supervision' | 'contractor'] === 'names';
+        {[...GROUPS.map((g) => [g, crewList(s, g)]), ...OTHER_LISTS.map((k) => [k, k])].map(([tab, k]) => {
+          const people = k.endsWith('_names');
           return (
-            <Tabs.Panel key={k} value={k} pt="sm">
-              <Text size="xs" c="dimmed" mb={6}>{t(`dset.listHint.${people ? 'people' : k}`)}</Text>
+            <Tabs.Panel key={tab} value={tab} pt="sm">
+              <Text size="xs" c="dimmed" mb={6}>{t(`dset.listHint.${k}`)}</Text>
               {rows(k).length > 0 && (
                 <Table withRowBorders={false} verticalSpacing={3} horizontalSpacing={4}>
                   <Table.Thead><Table.Tr>
-                    <Table.Th>{t(people ? 'dset.nameAr' : 'structure.nameAr')}</Table.Th><Table.Th>{t(people ? 'dset.nameEn' : 'structure.nameEn')}</Table.Th>
+                    <Table.Th>{t(people ? 'dset.nameAr' : 'dset.descAr')}</Table.Th><Table.Th>{t(people ? 'dset.nameEn' : 'dset.descEn')}</Table.Th>
                     {people && <><Table.Th>{t('dset.roleAr')}</Table.Th><Table.Th>{t('dset.roleEn')}</Table.Th></>}
                     <Table.Th w={70}>{t('dset.active')}</Table.Th>{editable && <Table.Th w={30} />}
                   </Table.Tr></Table.Thead>
@@ -71,7 +71,7 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
                 </Table>
               )}
               {editable && <Button mt={4} size="compact-xs" variant="subtle" onClick={() => setRows(k, [...rows(k), { ar: '', en: '', role_ar: null, role_en: null, active: true }])}>
-                + {t(`dset.add.${k}`)}</Button>}
+                + {t(`dset.add.${people ? 'person' : k.endsWith('_desc') ? 'desc' : k}`)}</Button>}
             </Tabs.Panel>
           );
         })}

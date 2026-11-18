@@ -16,7 +16,9 @@ export interface DailyOut extends DailyData {
   qa: { code: string; name_ar: string; name_en: string; submitted: number; answered: number }[];
 }
 export interface DailySettings { crew: Record<Group, 'names' | 'counts'>; link_materials: boolean; lists: Record<string, ListItem[]> }
-export const LISTS = ['supervision', 'contractor', 'labour', 'subcontractors', 'equipment'] as const;
+export const OTHER_LISTS = ['subcontractors', 'equipment'] as const;
+/** The list a crew group uses: people in "names" mode, positions / trades in "counts" mode. */
+export const crewList = (s: DailySettings, g: Group) => `${g}_${s.crew[g] === 'names' ? 'names' : 'desc'}`;
 export const itemLabel = (x: { ar: string; en: string }, lang: string) => (lang === 'en' ? x.en || x.ar : x.ar || x.en);
 export interface ProgressOut {
   project: number; stages: Record<string, number>; as_of: string | null;

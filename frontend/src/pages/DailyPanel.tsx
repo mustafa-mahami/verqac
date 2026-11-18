@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type LinkedRef, type RecordDetail } from '../api';
 import {
-  blankWork, CAUSES, GROUPS, itemLabel, WEATHER, type CrewLine, type DailyData, type DailyOut, type DailySettings, type DelayLine, type EquipLine,
+  blankWork, CAUSES, crewList, GROUPS, itemLabel, WEATHER, type CrewLine, type DailyData, type DailyOut, type DailySettings, type DelayLine, type EquipLine,
   type Group as CrewGroup, type MaterialLine, type WorkLine,
 } from '../daily';
 import i18n, { pick } from '../i18n';
@@ -92,7 +92,7 @@ function CrewTable({ lines, onChange, editable, settings }: { lines: CrewLine[];
       {GROUPS.map((g: CrewGroup) => {
         const rows = lines.map((x, i) => ({ x, i })).filter((r) => r.x.group === g);
         const names = settings.crew[g] === 'names';
-        const items = (settings.lists[g] ?? []).filter((x) => x.active);
+        const items = (settings.lists[crewList(settings, g)] ?? []).filter((x) => x.active);
         const opts = items.map((x) => itemLabel(x, lang) + (names && (lang === 'en' ? x.role_en : x.role_ar) ? ` — ${lang === 'en' ? x.role_en : x.role_ar}` : ''));
         // picking from the list fills the name (and position) in both languages; free text stays as typed
         const pick = (i: number, v: string) => {

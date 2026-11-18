@@ -135,7 +135,12 @@ class ListItem(BaseModel):
 class DailySettings(BaseModel):
     crew: dict[str, Literal["names", "counts"]] = {"supervision": "names", "contractor": "counts", "labour": "counts"}
     link_materials: bool = False
-    lists: dict[str, list[ListItem]] = {}  # supervision, contractor, labour, subcontractors, equipment
+    # per crew group two lists: <group>_names (people, "names" mode) and <group>_desc (positions / trades, "counts" mode);
+    # plus subcontractors and equipment
+    lists: dict[str, list[ListItem]] = {}
+
+
+LIST_KEYS = {*(f"{g}_{m}" for g in ("supervision", "contractor", "labour") for m in ("names", "desc")), "subcontractors", "equipment"}
 
 
 class NewDaily(BaseModel):
@@ -163,7 +168,13 @@ class ProgressOut(BaseModel):
 # ----------------------------------------------------------------------------- settings
 def daily_settings(project: Project) -> DailySettings:
     raw = dict((project.settings or {}).get("daily", {}))
-    raw["lists"] = {k: [ListItem.of(x) for x in v] for k, v in (raw.get("lists") or {}).items()}  # older lists were plain text
+    lists = {}
+    for k, v in (raw.get("lists") or {}).items():
+        if k in GROUPS:  # older settings: one list per group (people for staff, trades for labour)
+            k = f"{k}_desc" if k == "labour" else f"{k}_names"
+        lists.setdefault(k, []).extend(ListItem.of(x) for x in v)  # older lists were plain text
+    raw["lists"] = lists
+    return DailySettings(**raw)
     return DailySettings(**raw)
 
 
@@ -176,7 +187,7 @@ def get_daily_settings(project_id: uuid.UUID, c: Ctx = Depends(ctx)):
 def put_daily_settings(project_id: uuid.UUID, body: DailySettings, c: Ctx = Depends(ctx)):
     a = project_access(c, project_id)
     require(a.can_manage_project, "manage_project_required")
-    if set(body.crew) - set(GROUPS) or set(body.lists) - {*GROUPS, "subcontractors", "equipment"}:
+    if set(body.crew) - set(GROUPS) or set(body.lists) - LIST_KEYS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_settings")
     clean = {}
     for k, v in body.lists.items():
@@ -186,7 +197,10 @@ def put_daily_settings(project_id: uuid.UUID, body: DailySettings, c: Ctx = Depe
             if not (ar or en) or (ar or en) in seen:
                 continue
             seen.add(ar or en)
-            rows.append({**x.model_dump(), "ar": ar or en, "en": en or ar})
+            item = {**x.model_dump(), "ar": ar or en, "en": en or ar}
+            if not k.endswith("_names"):
+                item["role_ar"] = item["role_en"] = None  # positions only for people
+            rows.append(item)
         clean[k] = rows[:300]
     a.project.settings = {**(a.project.settings or {}), "daily": {**body.model_dump(), "lists": clean}}
     c.db.flush()
