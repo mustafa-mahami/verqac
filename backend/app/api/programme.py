@@ -251,3 +251,84 @@ def template(project_id: uuid.UUID, lang: str = "ar", c: Ctx = Depends(ctx)):
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                              headers={"Content-Disposition": f'attachment; filename="{a.project.code}-programme.xlsx"'})
+
+
+@router.get("/records/{record_id}/programme/xlsx")
+def export_xlsx(record_id: uuid.UUID, lang: str = "ar", c: Ctx = Depends(ctx)):
+    """The programme as Excel: the dates (re-importable) and a week-by-week bar sheet."""
+    from datetime import timedelta
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    from app.reports.record_pdf import programme_view
+    rec, _, _, _, prg = _load_prg(c, record_id)
+    ar = lang != "en"
+    view = programme_view(c.db, rec.project_id, prg.lines, "ar" if ar else "en")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Programme"
+    ws.sheet_view.rightToLeft = ar
+    head = Font(bold=True, color="FFFFFF")
+    fill = PatternFill("solid", fgColor="1F3A5F")
+    ws.append(["المرحلة", "الموقع", "البداية", "النهاية", "المدة (يوم)"] if ar else ["Stage", "Location", "Start", "Finish", "Days"])
+    for cell in ws[1]:
+        cell.font, cell.fill = head, fill
+    stage_fill = PatternFill("solid", fgColor="EEF2F7")
+    last_stage = ""
+    rows = view["rows"] if view else []
+    for r in rows:
+        if r["kind"] == "stage":
+            last_stage = r["stage"]
+            if r["where"]:  # a whole-project stage: one importable row
+                ws.append([r["stage"], r["where"], r["s"], r["f"], r["days"]])
+                for cell in ws[ws.max_row]:
+                    cell.fill = stage_fill
+            continue
+        ws.append([last_stage, r["where"], r["s"], r["f"], r["days"]])
+    for col, w in zip("ABCDE", (34, 22, 13, 13, 11)):
+        ws.column_dimensions[col].width = w
+    for row in ws.iter_rows(min_row=2, min_col=3, max_col=4):
+        for cell in row:
+            cell.number_format = "yyyy-mm-dd"
+    # week-by-week bars
+    if rows:
+        g = wb.create_sheet("Gantt")
+        g.sheet_view.rightToLeft = ar
+        lo = min(r["s"] for r in rows)
+        lo = lo - timedelta(days=lo.weekday())  # Monday
+        hi = max(r["f"] for r in rows)
+        weeks = []
+        d = lo
+        while d <= hi:
+            weeks.append(d)
+            d += timedelta(days=7)
+        g.append(["المرحلة / الموقع" if ar else "Stage / location", "البداية" if ar else "Start", "النهاية" if ar else "Finish",
+                  *[w.strftime("%d/%m/%y") for w in weeks]])
+        for cell in g[1]:
+            cell.font, cell.fill = Font(bold=True, color="FFFFFF", size=8), fill
+            cell.alignment = Alignment(text_rotation=90 if cell.column > 3 else 0, horizontal="center")
+        bar, sbar = PatternFill("solid", fgColor="2B5D8F"), PatternFill("solid", fgColor="343A40")
+        for r in rows:
+            label = r["stage"] + (f" · {r['where']}" if r["where"] and r["kind"] == "stage" else "") if r["kind"] == "stage" else f"   {r['where']}"
+            g.append([label, r["s"], r["f"]])
+            i = g.max_row
+            if r["kind"] == "stage":
+                g.cell(i, 1).font = Font(bold=True)
+                for k in range(1, 4 + len(weeks)):
+                    if k <= 3:
+                        g.cell(i, k).fill = stage_fill
+            for k, w in enumerate(weeks):
+                if w <= r["f"] and w + timedelta(days=6) >= r["s"]:
+                    g.cell(i, 4 + k).fill = sbar if r["kind"] == "stage" else bar
+            g.cell(i, 2).number_format = g.cell(i, 3).number_format = "yyyy-mm-dd"
+        g.column_dimensions["A"].width = 34
+        g.column_dimensions["B"].width = g.column_dimensions["C"].width = 11
+        for k in range(len(weeks)):
+            g.column_dimensions[get_column_letter(4 + k)].width = 2.6
+        g.row_dimensions[1].height = 48
+        g.freeze_panes = "D2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f'attachment; filename="{rec.number}-R{rec.rev_no}.xlsx"'})

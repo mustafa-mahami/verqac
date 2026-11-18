@@ -1113,7 +1113,8 @@
     "draftTitle": "Unsaved changes",
     "draftHint": "Changes to this programme from {{at}} were not saved. Restore them?",
     "draftRestore": "Restore",
-    "draftDrop": "Discard"
+    "draftDrop": "Discard",
+    "exportXlsx": "Export Excel"
   },
   "gantt": {
     "byFloor": "By floor",

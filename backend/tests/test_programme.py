@@ -112,3 +112,22 @@ def test_programme_import_template_and_match(client, site):
     assert rows[0]["stage_id"] == st["stages"][0]["id"] and rows[0]["location_id"] == floor["id"]
     assert client.post(f"/api/v1/records/{rid}/programme/import", headers=s["hqa"],
                        files={"file": ("p.pdf", b"%PDF")}).status_code == 422
+
+
+def test_programme_exports(client, site):
+    s, pid = site, site["pid"]
+    st = _structure(client, s)
+    rid = _prg(client, s)
+    floors = st["locations"][0]["units"]
+    lines = [{"stage_id": st["stages"][0]["id"], "location_id": f["id"], "start": f"2026-12-{1 + i * 3:02d}", "finish": f"2026-12-{3 + i * 3:02d}"}
+             for i, f in enumerate(floors)]
+    client.put(f"/api/v1/records/{rid}/programme", headers=s["hqa"], json={"lines": lines})
+    r = client.get(f"/api/v1/records/{rid}/programme/xlsx?lang=ar", headers=s["hqa"])
+    assert r.status_code == 200
+    wb = load_workbook(io.BytesIO(r.content))
+    assert wb.sheetnames == ["Programme", "Gantt"] and wb["Programme"].max_row == 1 + len(floors)
+    # the export imports back onto the same cells
+    rows = client.post(f"/api/v1/records/{rid}/programme/import", headers=s["hqa"], files={"file": ("x.xlsx", r.content)}).json()
+    assert {(x["stage_id"], x["location_id"], x["start"]) for x in rows} == {(x["stage_id"], x["location_id"], x["start"]) for x in lines}
+    pdf = client.get(f"/api/v1/records/{rid}/pdf?lang=ar", headers=s["hqa"])
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"

@@ -1113,7 +1113,8 @@
     "draftTitle": "تعديلات غير محفوظة",
     "draftHint": "وُجدت تعديلات لم تُحفظ على هذا البرنامج من {{at}}. هل تريد استعادتها؟",
     "draftRestore": "استعادة",
-    "draftDrop": "تجاهل"
+    "draftDrop": "تجاهل",
+    "exportXlsx": "تصدير Excel"
   },
   "gantt": {
     "byFloor": "حسب الطابق",

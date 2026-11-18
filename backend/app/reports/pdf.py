@@ -40,7 +40,7 @@ def render_html(template: str, **context) -> str:
     return _env.get_template(template).render(font_css=font_css(), **context)
 
 
-def html_to_pdf(html: str, *, footer_text: str = "") -> bytes:
+def html_to_pdf(html: str, *, footer_text: str = "", landscape: bool = False) -> bytes:
     from playwright.sync_api import sync_playwright
 
     footer = (
@@ -55,7 +55,7 @@ def html_to_pdf(html: str, *, footer_text: str = "") -> bytes:
             page.set_content(html, wait_until="load")
             page.evaluate("document.fonts.ready")
             return page.pdf(
-                format="A4", print_background=True, display_header_footer=True,
+                format="A4", landscape=landscape, print_background=True, display_header_footer=True,
                 header_template="<span></span>", footer_template=footer,
                 margin={"top": "14mm", "bottom": "16mm", "left": "12mm", "right": "12mm"},
             )

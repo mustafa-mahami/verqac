@@ -138,6 +138,61 @@ def _daily(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
             "visitors": r.visitors, "notes": r.notes, "num": num}
 
 
+PRG_T = {"ar": {"title": "البرنامج الزمني", "stage": "المرحلة", "where": "الموقع", "start": "البداية", "finish": "النهاية",
+                "days": "المدة (يوم)", "whole": "المشروع كاملاً", "span": "من {a} إلى {b} — {n} يوماً", "gantt": "المخطط الزمني",
+                "list": "تواريخ المراحل والطوابق"},
+          "en": {"title": "Time programme", "stage": "Stage", "where": "Location", "start": "Start", "finish": "Finish",
+                 "days": "Days", "whole": "Whole project", "span": "{a} to {b} — {n} days", "gantt": "Schedule",
+                 "list": "Dates of stages and floors"}}
+
+
+def programme_view(db, project_id, lines: list, lang: str) -> dict | None:
+    """Rows (stage, then its floors) with dates and Gantt positions in % of the programme span."""
+    from datetime import date, timedelta
+    from app.core.programme import plan_cells
+    from app.models.structure import ProjectLocation, ProjectStage
+    cells = plan_cells(lines)
+    if not cells:
+        return None
+    n = f"name_{lang}"
+    stages = list(db.scalars(select(ProjectStage).where(ProjectStage.project_id == project_id).order_by(ProjectStage.sort)))
+    groups = {g.id: g for g in db.scalars(select(ProjectLocation).where(ProjectLocation.project_id == project_id,
+                                                                        ProjectLocation.kind == "group"))}
+    units = sorted(db.scalars(select(ProjectLocation).where(ProjectLocation.project_id == project_id, ProjectLocation.kind == "unit")),
+                   key=lambda u: (groups[u.parent_id].sort if u.parent_id in groups else 0, u.sort))
+    lo = min(s for s, _ in cells.values())
+    hi = max(f for _, f in cells.values())
+    span = (hi - lo).days + 1
+    pos = lambda s, f: {"l": round((s - lo).days / span * 100, 2), "w": max(0.4, round(((f - s).days + 1) / span * 100, 2))}  # noqa: E731
+    T = PRG_T[lang]
+    rows = []
+    for st in stages:
+        mine = [(u, cells[(str(st.id), str(u.id))]) for u in units if (str(st.id), str(u.id)) in cells]
+        whole = cells.get((str(st.id), None))
+        if whole:
+            rows.append({"kind": "stage", "stage": getattr(st, n), "where": T["whole"], "s": whole[0], "f": whole[1],
+                         "days": (whole[1] - whole[0]).days + 1, **pos(*whole)})
+        elif mine:
+            s, f = min(x[1][0] for x in mine), max(x[1][1] for x in mine)
+            rows.append({"kind": "stage", "stage": getattr(st, n), "where": "", "s": s, "f": f, "days": (f - s).days + 1, **pos(s, f)})
+            for u, (a, b) in mine:
+                rows.append({"kind": "cell", "stage": "", "where": getattr(u, n), "s": a, "f": b, "days": (b - a).days + 1, **pos(a, b)})
+    months, d = [], date(lo.year, lo.month, 1)
+    while d <= hi:
+        if d >= lo:
+            months.append({"l": round((d - lo).days / span * 100, 2), "label": d.strftime("%m/%Y")})
+        d = (d + timedelta(days=32)).replace(day=1)
+    return {"t": T, "rows": rows, "months": months, "span": T["span"].format(a=lo.isoformat(), b=hi.isoformat(), n=span)}
+
+
+def _programme(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
+    if d.record_type.code != "programme":
+        return None
+    from app.models.programme import Programme
+    p = c.db.get(Programme, d.id)
+    return programme_view(c.db, d.project_id, p.lines, lang) if p else None
+
+
 def _lab(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
     if d.record_type.code != "test":
         return None
@@ -338,9 +393,10 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         resubmit_days=(d.resubmit_due_at - d.answered_at).days if d.resubmit_due_at and d.answered_at else None,
         stamp=stamp, stamp_short="-".join(stamp[i:i + 4] for i in range(0, 12, 4)).upper() if stamp else None,
         verify_url=verify_url, qr=_qr(verify_url) if verify_url else None,
-        lab=_lab(c, d, lang), daily=_daily(c, d, lang),
+        lab=_lab(c, d, lang), daily=_daily(c, d, lang), programme=_programme(c, d, lang),
         photos=[{**p, "who": PARTY[lang].get(p["party"], "")} for p in _photos(c, d)],
         checklist=[{"text": getattr(x, lang), "result": t["results"].get(x.result, ""), "code": x.result,
                     "note": x.note or ""} for x in d.checklist],
     )
-    return html_to_pdf(render_html("record.html", **ctx), footer_text=f"Verqac · {d.number} · Rev. {d.rev_no}")
+    return html_to_pdf(render_html("record.html", **ctx), footer_text=f"Verqac · {d.number} · Rev. {d.rev_no}",
+                       landscape=d.record_type.code == "programme")

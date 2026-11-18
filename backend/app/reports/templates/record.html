@@ -37,6 +37,16 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
 .r-ok { color: #1f6f43; }
 .photos { display: flex; flex-wrap: wrap; gap: 3%; margin-top: 8px; }
 .photos figure { width: 48.5%; margin: 0 0 10px; break-inside: avoid; page-break-inside: avoid; }
+.gantt { position: relative; }
+.g-row { display: flex; align-items: center; border-bottom: 1px solid #edf0f3; break-inside: avoid; page-break-inside: avoid; }
+.g-lab { width: 26%; flex: none; padding: 2px 6px; font-size: 8pt; border-inline-end: 1px solid #c9ced6; }
+.g-row.stage .g-lab { font-weight: 700; background: #f3f5f8; }
+.g-bar { position: relative; flex: 1; height: 14px; }
+.g-bar i { position: absolute; top: 3px; height: 8px; background: #2b5d8f; border-radius: 2px; }
+.g-row.stage .g-bar i { background: #343a40; height: 4px; top: 5px; }
+.g-m { position: absolute; top: 0; bottom: 0; border-inline-start: 1px solid #e3e7ec; }
+.g-head { display: flex; border-bottom: 1px solid #c9ced6; font-size: 7.5pt; color: #444; }
+.g-head .g-bar span { position: absolute; top: 1px; padding-inline-start: 2px; }
 .photos img { width: 100%; max-height: 85mm; object-fit: contain; border: 1px solid #c9ced6; background: #f6f7f9; }
 .photos figcaption { font-size: 8pt; color: #666; margin-top: 2px; }
 </style>
@@ -61,12 +71,12 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
     <tr><th>{{ t.due }}</th><td class="ltr">{{ due_at }}</td><th>{{ t.answered_on }}</th><td class="ltr">{{ answered_at }}</td></tr>
   </table>
 
-  <div class="section">{{ t.details }}</div>
+  {% if detail_rows and not programme %}<div class="section">{{ t.details }}</div>
   <table>
     {% for row in detail_rows %}
     <tr><th>{{ row[0] }}</th><td{% if row[2] %} class="ltr"{% endif %}>{{ row[1] }}</td><th>{{ row[3] }}</th><td{% if row[5] %} class="ltr"{% endif %}>{{ row[4] }}</td></tr>
     {% endfor %}
-  </table>
+  </table>{% endif %}
 
   {% if attachments %}
   <div class="section">{{ t.attachments }}</div>
@@ -100,6 +110,20 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
   <table class="check">{% for q in D.qa %}<tr><td style="width:50%">{{ q.name }}</td><td>{{ D.t.submitted }}: {{ q.submitted }}</td><td>{{ D.t.answered }}: {{ q.answered }}</td></tr>{% endfor %}</table>{% endif %}
   {% if D.visitors or D.notes %}<table>{% if D.visitors %}<tr><th>{{ D.t.visitors }}</th><td class="multi">{{ D.visitors }}</td></tr>{% endif %}
   {% if D.notes %}<tr><th>{{ D.t.notes }}</th><td class="multi">{{ D.notes }}</td></tr>{% endif %}</table>{% endif %}
+  {% endif %}
+
+  {% if programme %}{% set P = programme %}
+  <div class="section">{{ P.t.gantt }} — <span class="ltr">{{ P.span }}</span></div>
+  <div class="gantt">
+    <div class="g-head"><div class="g-lab">{{ P.t.stage }} / {{ P.t.where }}</div>
+      <div class="g-bar">{% for m in P.months %}<span style="inset-inline-start: {{ m.l }}%" class="ltr">{{ m.label }}</span>{% endfor %}</div></div>
+    {% for r in P.rows %}<div class="g-row {{ r.kind }}"><div class="g-lab">{{ r.stage if r.kind == 'stage' else '' }}{% if r.kind == 'stage' and r.where %} · {{ r.where }}{% endif %}{% if r.kind == 'cell' %}&nbsp;&nbsp;{{ r.where }}{% endif %}</div>
+      <div class="g-bar">{% for m in P.months %}<span class="g-m" style="inset-inline-start: {{ m.l }}%"></span>{% endfor %}<i style="inset-inline-start: {{ r.l }}%; width: {{ r.w }}%"></i></div></div>{% endfor %}
+  </div>
+  <div class="section" style="page-break-before: always">{{ P.t.list }}</div>
+  <table class="check"><tr><th style="width:30%">{{ P.t.stage }}</th><th>{{ P.t.where }}</th><th style="width:14%">{{ P.t.start }}</th><th style="width:14%">{{ P.t.finish }}</th><th style="width:10%">{{ P.t.days }}</th></tr>
+    {% for r in P.rows %}<tr{% if r.kind == 'stage' %} style="background:#f3f5f8;font-weight:600"{% endif %}><td>{{ r.stage }}</td><td>{{ r.where }}</td><td class="ltr">{{ r.s }}</td><td class="ltr">{{ r.f }}</td><td>{{ r.days }}</td></tr>{% endfor %}
+  </table>
   {% endif %}
 
   {% if lab %}

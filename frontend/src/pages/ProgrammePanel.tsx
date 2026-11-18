@@ -279,6 +279,11 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
           </Text>
         </div>
         <Group gap="xs">
+          {q.data.lines.length > 0 && (
+            <Button size="xs" variant="light" color="green" onClick={() => openProtected(`/records/${rec.id}/programme/xlsx?lang=${i18n.language}`, `${rec.number}-R${rec.rev_no}.xlsx`)}>
+              {t('prg.exportXlsx')}
+            </Button>
+          )}
           <Button size="xs" variant="subtle" onClick={() => openProtected(`/projects/${rec.project_id}/programme/template?lang=${i18n.language}`, 'programme-template.xlsx')}>
             {t('prg.template')}
           </Button>
