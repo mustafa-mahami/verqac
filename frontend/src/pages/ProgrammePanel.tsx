@@ -215,7 +215,14 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const whole = useMemo(() => new Set(stages.filter((x) => x.scope === 'whole' || !units.length).map((x) => x.id!)), [stages, units]);
   const byKey = useMemo(() => new Map(lines.map((l) => [cellKey(l.stage_id, l.location_id), l])), [lines]);
   const save = useMutation({
-    mutationFn: () => api<ProgrammeOut>(`/records/${rec.id}/programme`, { method: 'PUT', body: JSON.stringify({ lines, cycles, source }) }),
+    mutationFn: () => {
+      // cells of stages or floors removed from the structure since are dropped (they would count nowhere)
+      const sids = new Set(stages.map((x) => x.id!)), uids = new Set(units.map((u) => u.id!));
+      const kept = lines.filter((l) => sids.has(l.stage_id) && (whole.has(l.stage_id) || (l.location_id && uids.has(l.location_id))))
+        .map((l) => (whole.has(l.stage_id) ? { ...l, location_id: null } : l));
+      const cs = cycles.filter((c) => sids.has(c.stage_id)).map((c) => ({ ...c, pred: c.pred && sids.has(c.pred) ? c.pred : null }));
+      return api<ProgrammeOut>(`/records/${rec.id}/programme`, { method: 'PUT', body: JSON.stringify({ lines: kept, cycles: cs, source }) });
+    },
     onSuccess: (d) => { qc.setQueryData(['programme', rec.id], d); setMsg({ ok: true, text: t('settings.saved') }); },
     onError: (e) => setMsg({ ok: false, text: errText(e) }),
   });
@@ -280,6 +287,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
               {(props) => <Button size="xs" variant="light" loading={upload.isPending} {...props}>{t('prg.import')}</Button>}
             </FileButton>
             <Button size="xs" variant="light" onClick={() => setCycleOpen(true)}>{t('prg.cycle')}</Button>
+            {dirty && <Button size="xs" variant="subtle" color="gray" onClick={() => { setLines(q.data!.lines); setCycles(q.data!.cycles); setSource(q.data!.source); setDirty(false); setMsg(null); }}>{t('prg.undo')}</Button>}
             <Button size="xs" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button>
           </>}
         </Group>

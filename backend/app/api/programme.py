@@ -164,8 +164,8 @@ def put_programme(record_id: uuid.UUID, body: ProgrammeIO, c: Ctx = Depends(ctx)
     seen, lines = set(), []
     for x in body.lines:
         st = stages.get(x.stage_id)
-        if st is None or (x.location_id is not None and x.location_id not in units):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "programme_bad_cell")
+        if st is None or (st.scope != "whole" and (x.location_id is None or x.location_id not in units)):
+            continue  # a stage or floor removed from the structure since: the cell counts nowhere, drop it
         if x.finish < x.start:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "programme_finish_before_start")
         loc = None if st.scope == "whole" else x.location_id

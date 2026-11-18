@@ -1107,6 +1107,7 @@
     },
     "predMissing": "Computed once the earlier stage has dates",
     "predMissingList": "Stages linked to a stage without dates yet: {{list}}. Generate or enter the earlier stage first.",
-    "span2": "From → to"
+    "span2": "From → to",
+    "undo": "Undo changes"
   }
 }
