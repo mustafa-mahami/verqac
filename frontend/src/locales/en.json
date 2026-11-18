@@ -1116,7 +1116,13 @@
     "draftDrop": "Discard",
     "exportXlsx": "Export Excel",
     "clear": "Clear programme",
-    "clearConfirm": "Clear all dates, cycle and link settings and start again? Nothing is saved until you press Save, and you can undo before that."
+    "clearConfirm": "Clear all dates, cycle and link settings and start again? Nothing is saved until you press Save, and you can undo before that.",
+    "shift": "Shift programme",
+    "shiftTitle": "Shift the whole programme",
+    "shiftHint": "Every date (generated, entered by hand, whole-project stages) moves by the same number of days, and so do the floor-cycle starts; durations and links stay. Current start: {{from}}.",
+    "shiftNew": "New start date",
+    "shiftBy": "Shift by {{n}} days",
+    "shiftApply": "Shift"
   },
   "gantt": {
     "byFloor": "By floor",

@@ -9,7 +9,7 @@ import { api, ApiError, openProtected, type RecordDetail } from '../api';
 import type { ProgressOut } from '../daily';
 import { fmtDate } from '../format';
 import i18n, { pick } from '../i18n';
-import { cellKey, cellPlanned, cellStatus, cpm, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
+import { addDays, cellKey, cellPlanned, cellStatus, cpm, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
 import { useStructure } from './Structure';
 import Gantt, { type GanttItem } from './Gantt';
 
@@ -191,6 +191,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [cycleOpen, setCycleOpen] = useState(false);
+  const [shiftTo, setShiftTo] = useState<string | null>(null);
   const [rows, setRows] = useState<ImportRow[] | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   useEffect(() => { if (q.data) { setLines(q.data.lines); setCycles(q.data.cycles); setSource(q.data.source); setDirty(false); } }, [q.data]);
@@ -307,6 +308,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
               {(props) => <Button size="xs" variant="light" loading={upload.isPending} {...props}>{t('prg.import')}</Button>}
             </FileButton>
             <Button size="xs" variant="light" onClick={() => setCycleOpen(true)}>{t('prg.cycle')}</Button>
+            {from && <Button size="xs" variant="light" onClick={() => setShiftTo(from)}>{t('prg.shift')}</Button>}
             {(lines.length > 0 || cycles.length > 0) && (
               <Button size="xs" variant="subtle" color="red" onClick={() => {
                 if (!window.confirm(t('prg.clearConfirm'))) return;
@@ -372,6 +374,23 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
         </Table>
       </Card>
       {edit && dirty && <Tooltip label={t('prg.unsaved')}><Button onClick={() => save.mutate()} loading={save.isPending}>{t('rec.save')}</Button></Tooltip>}
+      <Modal opened={shiftTo !== null} onClose={() => setShiftTo(null)} title={t('prg.shiftTitle')}>
+        {from && shiftTo !== null && (
+          <Stack>
+            <Text size="sm" c="dimmed">{t('prg.shiftHint', { from: fmtDate(from) })}</Text>
+            <TextInput type="date" label={t('prg.shiftNew')} value={shiftTo} onChange={(e) => setShiftTo(e.currentTarget.value)} />
+            {shiftTo && <Text size="sm">{t('prg.shiftBy', { n: daysBetween(from, shiftTo) })}</Text>}
+            <Button disabled={!shiftTo || shiftTo === from} onClick={() => {
+              const n = daysBetween(from, shiftTo);
+              const moved = cycles.map((c) => (c.start ? { ...c, start: addDays(c.start, n) } : c));
+              setCycles(moved);
+              try { localStorage.setItem(`verqac:prg-cycle:${rec.id}`, JSON.stringify(moved)); } catch { /* ignore */ }
+              change(lines.map((l) => ({ ...l, start: addDays(l.start, n), finish: addDays(l.finish, n) })));
+              setShiftTo(null);
+            }}>{t('prg.shiftApply')}</Button>
+          </Stack>
+        )}
+      </Modal>
       <CycleModal storeKey={`verqac:prg-cycle:${rec.id}`} opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} existing={lines}
         units={units.map((u) => ({ id: u.id!, name: pick(u, 'name') }))}
         stages={stages.map((x) => ({ id: x.id!, name: pick(x, 'name'), whole: whole.has(x.id!) }))} />
