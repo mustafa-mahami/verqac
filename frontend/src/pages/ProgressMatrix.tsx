@@ -9,6 +9,7 @@ import { fmtDate } from '../format';
 import { pick } from '../i18n';
 import type { ProgrammeSummary } from '../programme';
 import { useStructure } from './Structure';
+import Gantt, { type GanttItem } from './Gantt';
 
 const shade = (p: number) => (p >= 100 ? 'var(--mantine-color-green-6)' : p > 0 ? `color-mix(in srgb, var(--mantine-color-green-6) ${Math.max(15, p)}%, white)` : 'transparent');
 const STATUS: Record<CellStatus, string> = {
@@ -87,7 +88,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
   const q = useQuery({ queryKey: ['progress', projectId], queryFn: () => api<ProgressOut>(`/projects/${projectId}/progress`) });
   const s = useStructure(projectId).data;
   const qc = useQueryClient();
-  const [view, setView] = useState<'actual' | 'status'>('actual');
+  const [view, setView] = useState<'actual' | 'status' | 'gantt'>('actual');
   const settings = useQuery({ queryKey: ['settings', projectId], queryFn: () => api<ProjectSettings>(`/projects/${projectId}/settings`) });
   const rebuild = useMutation({
     mutationFn: () => api<ProgressOut>(`/projects/${projectId}/progress/rebuild`, { method: 'POST' }),
@@ -122,6 +123,20 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
       </Tooltip>
     );
   };
+  const now = new Date().toISOString().slice(0, 10);
+  const ganttItems: GanttItem[] = p.cells.filter((c) => stages.some((x) => x.id === c.stage_id)).map((c) => {
+    const st = stages.find((x) => x.id === c.stage_id)!;
+    const started = c.progress > 0 || !!c.started_on;
+    const status: NonNullable<GanttItem['actual']>['status'] = started ? (c.status ?? 'on_track') : c.plan_start && c.plan_start <= now ? 'late_start' : 'not_due';
+    return {
+      stageId: c.stage_id, stageName: pick(st, 'name'), locId: c.location_id, weight: Number(st.weight),
+      locName: c.location_id ? pick(units.find((u) => u.id === c.location_id) ?? { name_ar: '', name_en: '' }, 'name') : null,
+      plan: c.plan_start && c.plan_finish ? { start: c.plan_start, finish: c.plan_finish } : null,
+      base: c.base_start && c.base_finish ? { start: c.base_start, finish: c.base_finish } : null,
+      actual: { start: c.started_on, finish: c.finished_on, pct: c.progress, status },
+    };
+  }).sort((a, b) => stages.findIndex((x) => x.id === a.stageId) - stages.findIndex((x) => x.id === b.stageId)
+    || units.findIndex((u) => u.id === a.locId) - units.findIndex((u) => u.id === b.locId));
   const stageName = (id: string) => pick(stages.find((x) => x.id === id) ?? { name_ar: '', name_en: '' }, 'name');
   const unitName = (id: string | null) => (id ? pick(units.find((u) => u.id === id) ?? { name_ar: '', name_en: '' }, 'name') : t('structure.whole'));
   return (
@@ -170,8 +185,8 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
       </Card>
       {hasPlan && (
         <Group justify="space-between">
-          <SegmentedControl size="xs" value={view} onChange={(v) => setView(v as 'actual' | 'status')}
-            data={[{ value: 'actual', label: t('progress.viewActual') }, { value: 'status', label: t('progress.viewStatus') }]} />
+          <SegmentedControl size="xs" value={view} onChange={(v) => setView(v as 'actual' | 'status' | 'gantt')}
+            data={[{ value: 'actual', label: t('progress.viewActual') }, { value: 'status', label: t('progress.viewStatus') }, { value: 'gantt', label: t('progress.viewGantt') }]} />
           {byStatus && (
             <Group gap="sm">
               {(['late', 'on_track', 'ahead', 'done'] as CellStatus[]).map((k) => (
@@ -182,6 +197,9 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
           )}
         </Group>
       )}
+      {view === 'gantt' && hasPlan ? (
+        <Card withBorder><Gantt items={ganttItems} showActual /></Card>
+      ) : (
       <Card withBorder p={0}>
         <ScrollArea>
           <Table withColumnBorders withTableBorder fz="xs" miw={300 + units.length * 70} verticalSpacing={4}>
@@ -217,6 +235,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
           </Table>
         </ScrollArea>
       </Card>
+      )}
       {p.late.length > 0 && (
         <Card withBorder>
           <Title order={5} mb="xs">{t('progress.lateTitle', { n: p.late.length })}</Title>

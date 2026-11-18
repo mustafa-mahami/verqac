@@ -8,36 +8,11 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError, openProtected, type RecordDetail } from '../api';
 import { fmtDate } from '../format';
 import i18n, { pick } from '../i18n';
-import { addDays, cellKey, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
+import { cellKey, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
 import { useStructure } from './Structure';
+import Gantt, { type GanttItem } from './Gantt';
 
 const errText = (e: unknown) => i18n.t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, { defaultValue: i18n.t('errors.generic') });
-
-/** Bars of every stage from its first start to its last finish, with today's line. */
-function Gantt({ rows, from, to }: { rows: { label: string; start: string; finish: string }[]; from: string; to: string }) {
-  const span = Math.max(1, daysBetween(from, to) + 1);
-  const today = new Date().toISOString().slice(0, 10);
-  const w = 760, lab = 200, rowH = 18, h = rows.length * rowH + 22;
-  const x = (d: string) => lab + (Math.min(Math.max(daysBetween(from, d), 0), span) / span) * (w - lab - 8);
-  const months: string[] = [];
-  for (let d = from.slice(0, 7) + '-01'; d <= to; d = addDays(d, 32).slice(0, 7) + '-01') if (d >= from) months.push(d);
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', direction: 'ltr' }}>
-      {months.map((m) => (
-        <g key={m}><line x1={x(m)} x2={x(m)} y1={12} y2={h} stroke="#eceff3" />
-          <text x={x(m) + 2} y={9} fontSize="8" fill="#888">{m.slice(0, 7)}</text></g>
-      ))}
-      {rows.map((r, i) => (
-        <g key={i}>
-          <text x={lab - 6} y={22 + i * rowH + 9} fontSize="9" textAnchor="end" fill="#333">{r.label}</text>
-          <rect x={x(r.start)} y={16 + i * rowH} width={Math.max(2, x(addDays(r.finish, 1)) - x(r.start))} height={rowH - 6} rx={3}
-            fill="var(--mantine-color-verqac-6)" opacity={0.8} />
-        </g>
-      ))}
-      {today >= from && today <= to && <line x1={x(today)} x2={x(today)} y1={12} y2={h} stroke="#d9480f" strokeDasharray="3 2" />}
-    </svg>
-  );
-}
 
 /** Floor cycle: per stage a start, days per floor and days until the next floor starts. */
 function CycleModal({ opened, onClose, cycles, onApply, stages, units, existing, storeKey }: {
@@ -280,6 +255,11 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const bars = spans.filter((x) => x.sp).map(({ st, sp }) => ({ label: pick(st, 'name'), start: sp!.start, finish: sp!.finish }));
   const from = bars.length ? bars.reduce((m, b) => (b.start < m ? b.start : m), bars[0].start) : null;
   const to = bars.length ? bars.reduce((m, b) => (b.finish > m ? b.finish : m), bars[0].finish) : null;
+  const gItems: GanttItem[] = stages.flatMap((st) => (whole.has(st.id!) ? [null] : units.map((u) => u.id!)).map((loc) => {
+    const l = byKey.get(cellKey(st.id!, loc));
+    return { stageId: st.id!, stageName: pick(st, 'name'), locId: loc, locName: loc ? pick(units.find((u) => u.id === loc)!, 'name') : null,
+      plan: l?.start && l.finish ? { start: l.start, finish: l.finish } : null, base: null, actual: null };
+  }));
   const dateIn = (stage: string, loc: string | null, f: 'start' | 'finish') => (
     <TextInput size="xs" type="date" w={140} disabled={!edit} value={byKey.get(cellKey(stage, loc))?.[f] ?? ''}
       onChange={(e) => setCell(stage, loc, { [f]: e.currentTarget.value })} />
@@ -323,7 +303,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
           </Group>
         </Alert>
       )}
-      {from && to && <Card withBorder p="xs"><Gantt rows={bars} from={from} to={to} /></Card>}
+      {from && to && <Card withBorder p="xs"><Gantt items={gItems} showActual={false} /></Card>}
       <Card withBorder p={0}>
         <Table verticalSpacing={4} fz="sm">
           <Table.Thead><Table.Tr>

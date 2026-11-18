@@ -164,6 +164,8 @@ class Cell(BaseModel):
     plan_start: date | None = None
     plan_finish: date | None = None
     status: str | None = None  # not_started | on_track | ahead | late | done
+    base_start: date | None = None  # the baseline programme, when it differs from the current one
+    base_finish: date | None = None
 
 
 class ProgressOut(BaseModel):
@@ -292,6 +294,7 @@ def _with_plan(db, project_id, out: ProgressOut, stages, units, actual: dict) ->
     out.plan_curve = series(plan, stages, units)
     out.plan_start = min(s for s, _ in plan.values())
     out.plan_finish = max(f for _, f in plan.values())
+    bplan = {}
     if base.record_id != cur.record_id:
         bplan = plan_cells(base.lines)
         if bplan:
@@ -307,6 +310,9 @@ def _with_plan(db, project_id, out: ProgressOut, stages, units, actual: dict) ->
     for sid, lid in keys:
         p = plan.get((str(sid), str(lid) if lid else None))
         c = have.get((sid, lid)) or Cell(stage_id=sid, location_id=lid, progress=0.0)
+        b = bplan.get((str(sid), str(lid) if lid else None))
+        if b is not None and b != p:
+            c.base_start, c.base_finish = b
         if p is not None:
             c.plan_start, c.plan_finish = p
             c.planned = cell_planned(*p, today)

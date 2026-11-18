@@ -23,7 +23,7 @@ export const itemLabel = (x: { ar: string; en: string }, lang: string) => (lang 
 export type CellStatus = 'not_started' | 'on_track' | 'ahead' | 'late' | 'done';
 export interface ProgressCell {
   stage_id: string; location_id: string | null; progress: number; progress_on: string | null; started_on: string | null; finished_on: string | null;
-  planned: number | null; plan_start: string | null; plan_finish: string | null; status: CellStatus | null;
+  planned: number | null; plan_start: string | null; plan_finish: string | null; status: CellStatus | null; base_start?: string | null; base_finish?: string | null;
 }
 export interface ProgressOut {
   project: number; stages: Record<string, number>; as_of: string | null;

@@ -992,7 +992,8 @@
       "done": "Done"
     },
     "lateTitle": "Behind the programme ({{n}})",
-    "gap": "Gap"
+    "gap": "Gap",
+    "viewGantt": "Gantt chart"
   },
   "dset": {
     "title": "Daily report",
@@ -1113,5 +1114,34 @@
     "draftHint": "Changes to this programme from {{at}} were not saved. Restore them?",
     "draftRestore": "Restore",
     "draftDrop": "Discard"
+  },
+  "gantt": {
+    "byFloor": "By floor",
+    "byStage": "By stage",
+    "z": {
+      "week": "Week",
+      "month": "Month",
+      "quarter": "Quarter",
+      "fit": "Fit"
+    },
+    "from": "From",
+    "to": "To",
+    "onlyLate": "Only behind",
+    "expand": "Expand all",
+    "collapse": "Collapse all",
+    "print": "Print",
+    "st": {
+      "done": "Done",
+      "on_track": "On track",
+      "ahead": "Ahead",
+      "late": "Behind",
+      "late_start": "Late start",
+      "not_due": "Not due",
+      "not_started": "Not started"
+    },
+    "darkPart": "Dark part of the bar = % done",
+    "floorStage": "Floor / stage",
+    "stageFloor": "Stage / floor",
+    "empty": "Nothing in this range."
   }
 }
