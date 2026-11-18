@@ -1073,7 +1073,7 @@
     "start": "Start",
     "finish": "Finish",
     "duration": "Duration",
-    "lag": "Lag to next floor",
+    "lag": "Idle days between floors",
     "days": "days",
     "location": "Location",
     "task": "Task in the file",
@@ -1093,6 +1093,8 @@
     "openCurrent": "View approved",
     "create": "Create the time programme",
     "cycleHowTitle": "How to use it",
-    "cycleHow": "1. Tick the stage to generate (it is ticked as soon as you fill a field).\n2. Start: when the stage starts on the first floor ({{first}}).\n3. Duration: how many days the stage takes on one floor.\n4. Lag: how many days after a floor starts the next one ({{second}}) starts.\nExample: structure starts 1/12, 21 days, lag 14 → {{first}} 1/12 to 21/12, {{second}} 15/12 to 4/1, and so on for all {{n}} floors.\n5. Press Generate, check the dates in the table and adjust any floor by hand, then Save. Hover the finish date to see every floor."
+    "cycleHow": "1. Tick the stage to generate (it is ticked as soon as you fill a field).\n2. Start: when the stage starts on the first floor ({{first}}).\n3. Duration: how many days the stage takes on one floor, e.g. up to casting the slab.\n4. Idle days between floors: empty days between a floor ending and the next one starting. 0 = the next day, 2 = a two-day stop as supervision may ask. For overlapping trades (plaster, tiles) choose \"from its start\": the next floor starts that many days after the one below starts.\nExample: structure starts 1/12, 21 days, 2 idle days → {{first}} 1/12 to 21/12, {{second}} 24/12 to 13/1, and so on for all {{n}} floors.\nDays are calendar days. For a stop on one floor only, edit its dates in the table after generating.\n5. Press Generate, check and adjust the dates, then Save. Hover the finish date to see every floor.",
+    "linkFs": "after the one below ends",
+    "linkSs": "from its start"
   }
 }

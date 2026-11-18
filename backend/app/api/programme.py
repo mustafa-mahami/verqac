@@ -32,6 +32,7 @@ class Cycle(BaseModel):
     start: date | None = None
     duration: int = Field(default=0, ge=0, le=3650)  # days per floor
     lag: int = Field(default=0, ge=0, le=3650)  # days until the next floor starts
+    link: str = Field(default="fs", pattern="^(fs|ss)$")  # lag counted after the floor finishes, or from its start
 
 
 class ProgrammeIO(BaseModel):
@@ -172,7 +173,7 @@ def put_programme(record_id: uuid.UUID, body: ProgrammeIO, c: Ctx = Depends(ctx)
                       "start": x.start.isoformat(), "finish": x.finish.isoformat()})
     prg.lines = lines
     prg.cycles = [{"stage_id": str(x.stage_id), "start": x.start.isoformat() if x.start else None,
-                   "duration": x.duration, "lag": x.lag} for x in body.cycles if x.stage_id in stages]
+                   "duration": x.duration, "lag": x.lag, "link": x.link} for x in body.cycles if x.stage_id in stages]
     prg.source = body.source
     from app.api.records import _audit
     _audit(c, rec, "programme", {"lines": len(lines), "source": body.source}, a)

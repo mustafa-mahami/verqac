@@ -1,6 +1,10 @@
 /** Time programme: planned start / finish of each stage x location cell. */
 export interface PLine { stage_id: string; location_id: string | null; start: string; finish: string }
-export interface PCycle { stage_id: string; start: string | null; duration: number; lag: number }
+export type Link = 'fs' | 'ss';
+export interface PCycle { stage_id: string; start: string | null; duration: number; lag: number; link?: Link }
+/** Start of floor i (calendar days). "fs": lag = idle days between floors (0 = the day after the floor below ends);
+ * "ss": lag = days after the floor below starts (overlapping trades). */
+export const floorStart = (c: PCycle, i: number) => addDays(c.start!, i * ((c.link ?? 'fs') === 'fs' ? c.duration + c.lag : c.lag));
 export interface ProgrammeOut { lines: PLine[]; cycles: PCycle[]; source: 'manual' | 'cycle' | 'import'; can_edit: boolean; start: string | null; finish: string | null }
 export interface ImportRow { name: string; location: string | null; path: string[]; start: string | null; finish: string | null; stage_id: string | null; location_id: string | null }
 export interface ProgrammeRev { id: string; number: string; rev_no: number; state_category: string; state_name_ar: string; state_name_en: string }

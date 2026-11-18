@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError, openProtected, type RecordDetail } from '../api';
 import { fmtDate } from '../format';
 import i18n, { pick } from '../i18n';
-import { addDays, cellKey, daysBetween, type ImportRow, type PCycle, type PLine, type ProgrammeOut } from '../programme';
+import { addDays, cellKey, daysBetween, floorStart, type ImportRow, type PCycle, type PLine, type ProgrammeOut } from '../programme';
 import { useStructure } from './Structure';
 
 const errText = (e: unknown) => i18n.t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, { defaultValue: i18n.t('errors.generic') });
@@ -50,7 +50,7 @@ function CycleModal({ opened, onClose, cycles, onApply, stages, units }: {
   useEffect(() => {
     if (!opened) return;
     const by = Object.fromEntries(cycles.map((c) => [c.stage_id, c]));
-    setRows(stages.map((s) => ({ stage_id: s.id, start: by[s.id]?.start ?? null, duration: by[s.id]?.duration ?? 0, lag: by[s.id]?.lag ?? 0, on: !!by[s.id] })));
+    setRows(stages.map((s) => ({ stage_id: s.id, start: by[s.id]?.start ?? null, duration: by[s.id]?.duration ?? 0, lag: by[s.id]?.lag ?? 0, link: by[s.id]?.link ?? 'fs', on: !!by[s.id] })));
   }, [opened, cycles, stages]);
   const set = (i: number, p: Partial<PCycle & { on: boolean }>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...p, on: p.on ?? true } : r)));
   const ok = rows.filter((r) => r.on && r.start && r.duration > 0);
@@ -62,22 +62,28 @@ function CycleModal({ opened, onClose, cycles, onApply, stages, units }: {
       <Table verticalSpacing={4} fz="sm">
         <Table.Thead><Table.Tr>
           <Table.Th w={30} /><Table.Th>{t('structure.stage')}</Table.Th><Table.Th w={150}>{t('prg.start')}</Table.Th>
-          <Table.Th w={110}>{t('prg.duration')}</Table.Th><Table.Th w={110}>{t('prg.lag')}</Table.Th><Table.Th w={110}>{t('prg.finish')}</Table.Th>
+          <Table.Th w={110}>{t('prg.duration')}</Table.Th><Table.Th w={220}>{t('prg.lag')}</Table.Th><Table.Th w={110}>{t('prg.finish')}</Table.Th>
         </Table.Tr></Table.Thead>
         <Table.Tbody>
           {rows.map((r, i) => {
             const s = stages[i];
-            const end = r.start && r.duration > 0 ? addDays(r.start, (s.whole ? 0 : r.lag * Math.max(0, unitCount - 1)) + r.duration - 1) : null;
+            const end = r.start && r.duration > 0 ? addDays(s.whole ? r.start : floorStart(r, Math.max(0, unitCount - 1)), r.duration - 1) : null;
             return (
               <Table.Tr key={r.stage_id}>
                 <Table.Td><Checkbox checked={r.on} onChange={(e) => set(i, { on: e.currentTarget.checked })} /></Table.Td>
                 <Table.Td>{s.name} {s.whole && <Badge size="xs" variant="light">{t('structure.whole')}</Badge>}</Table.Td>
                 <Table.Td><TextInput size="xs" type="date" value={r.start ?? ''} onChange={(e) => set(i, { start: e.currentTarget.value || null })} /></Table.Td>
                 <Table.Td><NumberInput size="xs" min={0} value={r.duration} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { duration: Number(v) || 0 })} /></Table.Td>
-                <Table.Td>{!s.whole && <NumberInput size="xs" min={0} value={r.lag} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { lag: Number(v) || 0 })} />}</Table.Td>
+                <Table.Td>{!s.whole && (
+                  <Group gap={4} wrap="nowrap">
+                    <NumberInput size="xs" w={80} min={0} value={r.lag} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { lag: Number(v) || 0 })} />
+                    <Select size="xs" w={130} allowDeselect={false} value={r.link ?? 'fs'} onChange={(v) => set(i, { link: (v ?? 'fs') as 'fs' | 'ss' })}
+                      data={[{ value: 'fs', label: t('prg.linkFs') }, { value: 'ss', label: t('prg.linkSs') }]} />
+                  </Group>
+                )}</Table.Td>
                 <Table.Td>
                   {end ? (
-                    <Tooltip multiline w={260} disabled={s.whole || unitCount < 2} label={units.map((u, k) => `${u}: ${fmtDate(addDays(r.start!, r.lag * k))} → ${fmtDate(addDays(r.start!, r.lag * k + r.duration - 1))}`).join('\n')}
+                    <Tooltip multiline w={260} disabled={s.whole || unitCount < 2} label={units.map((u, k) => `${u}: ${fmtDate(floorStart(r, k))} → ${fmtDate(addDays(floorStart(r, k), r.duration - 1))}`).join('\n')}
                       style={{ whiteSpace: 'pre-line' }}>
                       <Text size="xs" c="dimmed" style={{ cursor: 'help' }}>{fmtDate(end)}</Text>
                     </Tooltip>
@@ -199,7 +205,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
     const gen: PLine[] = [];
     for (const c of cs) {
       if (whole.has(c.stage_id)) gen.push({ stage_id: c.stage_id, location_id: null, start: c.start!, finish: addDays(c.start!, c.duration - 1) });
-      else units.forEach((u, i) => { const st = addDays(c.start!, c.lag * i); gen.push({ stage_id: c.stage_id, location_id: u.id!, start: st, finish: addDays(st, c.duration - 1) }); });
+      else units.forEach((u, i) => { const st = floorStart(c, i); gen.push({ stage_id: c.stage_id, location_id: u.id!, start: st, finish: addDays(st, c.duration - 1) }); });
     }
     setCycles([...cycles.filter((c) => !ids.has(c.stage_id)), ...cs]);
     change([...lines.filter((l) => !ids.has(l.stage_id)), ...gen], 'cycle');
