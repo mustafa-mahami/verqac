@@ -158,6 +158,7 @@ class ProjectSettingsOut(BaseModel):
     link_submittals: bool = False  # inspections show and link the approved submittals of their stage
     checklists: bool = False  # inspections are answered against their topic's checklist
     reminders: bool = True  # reminders before and after reply / resubmission deadlines
+    party_sees_all: bool = False  # staff see every record of their own company, not only their disciplines
     routing: dict[str, str] = {}  # record type code -> discipline | manager | choose
     calendar: ProjectCalendar = ProjectCalendar()
     types: list[str] = []  # record types the project uses
@@ -178,6 +179,7 @@ class ProjectSettingsIn(BaseModel):
     link_submittals: bool | None = None
     checklists: bool | None = None
     reminders: bool | None = None
+    party_sees_all: bool | None = None
     routing: dict[str, str] = {}
     calendar: ProjectCalendar | None = None
     types: list[str] | None = None

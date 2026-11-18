@@ -155,7 +155,7 @@ export interface RecordDetail {
 
 export interface ProjectStats { records: number; open: number; overdue: number }
 export interface ProjectSettings {
-  reply_hours: Record<string, number>; resubmit_hours: Record<string, number>; link_submittals: boolean; checklists: boolean; reminders: boolean;
+  reply_hours: Record<string, number>; resubmit_hours: Record<string, number>; link_submittals: boolean; checklists: boolean; reminders: boolean; party_sees_all: boolean;
   calendar: ProjectCalendarT; types: string[]; start_date: string | null; end_date: string | null; org_calendar: { weekend: number[]; holidays: { from: string; to: string | null; name: string }[] }; routing: Record<string, Routing>; notify: { email: boolean; mahami: boolean }; submittal_kinds: SubmittalKind[];
   email_available: boolean; mahami_available: boolean; can_edit: boolean; has_header: boolean;
 }

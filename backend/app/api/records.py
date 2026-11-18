@@ -88,6 +88,18 @@ class Perms:
         return True
 
 
+def can_see(c: Ctx, a: ProjectAccess, p: Perms, rec: Record) -> bool:
+    """Visible by the role's view scope (disciplines or the whole project). A record of the user's own company
+    beyond that scope is visible only when the project opens it (party_sees_all), or to whoever wrote or
+    submitted it."""
+    if p.can("view", rec):
+        return True
+    if a.party is None or rec.from_party_id != a.party.id:
+        return False
+    return (bool((a.project.settings or {}).get("party_sees_all", False))
+            or rec.created_by == c.user.id or rec.submitted_by == c.user.id)
+
+
 def _rtype(c: Ctx, code: str) -> RecordType:
     rt = c.db.scalar(select(RecordType).where(RecordType.org_id.is_(None), RecordType.code == code))
     if rt is None:
@@ -103,7 +115,7 @@ def _load(c: Ctx, record_id: uuid.UUID, lock: bool = False) -> tuple[Record, Pro
     a = project_access(c, rec.project_id)
     rt = c.db.get(RecordType, rec.record_type_id)
     p = Perms(c, a, rt)
-    if not p.can("view", rec) and not (rec.from_party_id == (a.party.id if a.party else None)):
+    if not can_see(c, a, p, rec):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     return rec, a, rt, p
 
@@ -437,7 +449,6 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
         counts[r.revision_group_id] = counts.get(r.revision_group_id, 0) + 1
         latest[r.revision_group_id] = r  # ordered by rev_no: the last one wins
     keep = rows if all_revisions else list(latest.values())
-    my_party = a.party.id if a.party else None
     out = []
     discs = {d.id: d for d in c.db.scalars(select(Discipline).where(
         Discipline.id.in_({r.discipline_id for r in keep if r.discipline_id})))}
@@ -448,7 +459,7 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
         from app.models.lab import LabResult
         labs = {x.record_id: x for x in c.db.scalars(select(LabResult).where(LabResult.record_id.in_([r.id for r in keep])))}
     for r in keep:
-        if not p.can("view", r) and r.from_party_id != my_party:
+        if not can_see(c, a, p, r):
             continue
         d = discs.get(r.discipline_id)
         out.append(RecordRow(id=r.id, number=r.number, rev_no=r.rev_no, title=r.title,

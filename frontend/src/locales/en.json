@@ -382,6 +382,8 @@
     "checklists": "Inspection checklists",
     "checklistsHint": "The supervising engineer answers the checklist of the request's topic; it is printed with the reply. Edit the lists under the stage topics.",
     "reminders": "Deadline reminders",
+    "partySeesAll": "Staff see all their company's requests",
+    "partySeesAllHint": "Off: each engineer sees only the requests of his disciplines (and those he wrote). Managers and staff without disciplines see everything. On: staff see every request of their company in all disciplines.",
     "remindersHint": "Reminds whoever must reply before the deadline (a day for submittals, 30 minutes for inspections) and when it is overdue, and the contractor before and after the resubmission deadline. Overdue submittals are reminded daily.",
     "typesTitle": "Request types in this project",
     "typesHint": "Switch on only what this project uses; only those tabs show. Existing requests are kept when a type is switched off.",
