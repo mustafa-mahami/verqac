@@ -103,6 +103,24 @@ TEST_TRANSITIONS = [
 ]
 TEST_TYPE = ("test", "LAB", "فحص مخبري", "Laboratory test", "lab_test", "contractor", "consultant", True, 22)
 
+# daily report: the contractor submits it, supervision approves it or returns it for correction
+# ("returned" is editable again by its author, and stays visible to supervision)
+DAILY_STATES = [
+    ("draft", "مسودة", "Draft", "draft", "gray", True),
+    ("submitted", "مقدَّم للإشراف", "Submitted", "submitted", "blue", False),
+    ("approved", "معتمد", "Approved", "approved", "green", False),
+    ("returned", "أُعيد للتعديل", "Returned for correction", "revise_and_resubmit", "orange", False),
+    ("cancelled", "ملغى", "Cancelled", "cancelled", "dark", False),
+]
+DAILY_TRANSITIONS = [
+    ("draft", "submitted", "submit", "تقديم للإشراف", "Submit", "submit", "submit", False, "primary"),
+    ("returned", "submitted", "submit", "إعادة التقديم", "Resubmit", "submit", "submit", False, "primary"),
+    ("submitted", "approved", "approve", "اعتماد التقرير", "Approve report", "respond", "respond", False, "green"),
+    ("submitted", "returned", "return", "إعادة للتعديل", "Return for correction", "respond", "none", True, "orange"),
+    ("draft", "cancelled", "cancel", "إلغاء", "Cancel", "cancel", "cancel", False, "subtle"),
+]
+DAILY_TYPE = ("daily_report", "DR", "تقرير يومي", "Daily report", "daily_report", "contractor", "consultant", False, 5)
+
 # code, prefix, ar, en, workflow, creator, responder, has revisions, sort
 MORE_TYPES = [
     ("material", "MIR", "فحص مواد موردة", "Material inspection", "inspection", "contractor", "consultant", True, 25),
@@ -113,7 +131,7 @@ MORE_TYPES = [
 # default periods in hours: (reply, resubmission); projects change them in settings
 DEFAULT_PERIODS = {"submittal": (7 * 24, 7 * 24), "inspection": (2, 2), "material": (24, 48),
                    "rfi": (3 * 24, 3 * 24), "ncr": (3 * 24, 3 * 24),
-                   "test": (3 * 24, 7 * 24)}
+                   "test": (3 * 24, 7 * 24), "daily_report": (24, 24)}
 
 # types with an inspection time (asked for / performed) and that link approved submittals
 TIMED_TYPES = ("inspection", "material")

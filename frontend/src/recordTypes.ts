@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import i18n from './i18n';
 
 /** What each request type shows and asks for. The engine is the same; the fields differ. */
-export type RegisterType = 'submittal' | 'inspection' | 'material' | 'test' | 'rfi' | 'ncr';
+export type RegisterType = 'daily_report' | 'submittal' | 'inspection' | 'material' | 'test' | 'rfi' | 'ncr';
 export type DetailKey = 'item' | 'manufacturer' | 'supplier' | 'drawing_ref' | 'spec_ref' | 'boq_ref' | 'quantity' | 'unit';
 export interface CustomField { key: string; kind: 'text' | 'long' | 'select'; options?: string[] }
 export interface TypeProfile {
@@ -16,6 +16,7 @@ export interface TypeProfile {
 }
 
 export const PROFILES: Record<RegisterType, TypeProfile> = {
+  daily_report: { keys: [], custom: [], kind: false, timed: false, requiredBy: false, checklist: false, tab: 'daily' },
   submittal: { keys: ['item', 'manufacturer', 'supplier', 'drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'unit'], custom: [],
     kind: true, timed: false, requiredBy: true, checklist: false, tab: 'submittals' },
   inspection: { keys: ['item', 'drawing_ref', 'spec_ref', 'boq_ref'], custom: [],

@@ -110,7 +110,7 @@
     "type_duplicate": "Two types have the same name.",
     "labels_required": "Enter the group and unit names in Arabic and English.",
     "name_required": "Enter the Arabic and English name on every line.",
-    "invalid_stage": "That stage is not in this project.",
+    "invalid_stage": "Invalid stage.",
     "invalid_location": "That location is not in this project.",
     "invalid_topic": "That subject does not belong to the chosen stage.",
     "topic_in_use": "A subject used by requests cannot be deleted. Switch it off instead.",
@@ -139,7 +139,11 @@
     "not_failed": "The result is not a fail.",
     "type_disabled": "This type is switched off in the project.",
     "invalid_types": "Choose at least one type.",
-    "invalid_material": "Invalid material."
+    "invalid_material": "Invalid material.",
+    "dr_exists": "A daily report exists for this date.",
+    "dr_future": "Cannot create a report for a future date.",
+    "progress_needs_stage": "Progress needs a stage.",
+    "invalid_settings": "Invalid settings."
   },
   "common": {
     "cancel": "Cancel",
@@ -237,7 +241,9 @@
       "materials": "Material inspections",
       "rfis": "RFIs",
       "ncrs": "NCRs",
-      "tests": "Lab tests"
+      "tests": "Lab tests",
+      "daily": "Daily reports",
+      "progress": "Progress"
     }
   },
   "rec": {
@@ -339,7 +345,8 @@
     "materials": "Material inspections",
     "rfis": "RFIs",
     "ncrs": "NCRs",
-    "tests": "Lab tests"
+    "tests": "Lab tests",
+    "daily": "Daily reports"
   },
   "settings": {
     "reviewTitle": "Reply and resubmission periods",
@@ -504,7 +511,8 @@
     "topicsCount": "{{count}} subjects",
     "addTopic": "Add a subject",
     "pickTopic": "Pick the subject",
-    "filterTopic": "Subject:"
+    "filterTopic": "Subject:",
+    "topic": "Topic"
   },
   "account": {
     "title": "My account",
@@ -664,6 +672,13 @@
       "description": "Notes",
       "respTitle": "Supervision review",
       "response": "Supervision review"
+    },
+    "daily_report": {
+      "new": "New daily report",
+      "back": "Daily reports",
+      "empty": "No daily reports yet.",
+      "respTitle": "Supervision review",
+      "response": "Supervision review"
     }
   },
   "custom": {
@@ -810,5 +825,130 @@
     "add": "Add class",
     "rule_text": "mean ≥ {{mean}}, each ≥ {{each}} MPa",
     "aliases": "Other names on certificates"
+  },
+  "daily": {
+    "title": "Daily report",
+    "date": "Report date",
+    "copy": "Start from the previous report",
+    "copyHint": "Copies crew and equipment; the previous report’s plan for tomorrow becomes today’s work list.",
+    "tabs": {
+      "day": "Day and equipment",
+      "crew": "Crew",
+      "works": "Works executed",
+      "materials": "Materials delivered",
+      "planned": "Tomorrow",
+      "issues": "Delays and safety",
+      "qa": "QA today"
+    },
+    "shift": "Shift",
+    "status": "Work status",
+    "from": "Start",
+    "to": "End",
+    "weather": "Weather",
+    "tmin": "Min temp",
+    "tmax": "Max temp",
+    "wind": "Wind",
+    "stopReason": "Reason for stop / partial work",
+    "equipment": "Equipment",
+    "hours": "Hours",
+    "idle": "Idle (h)",
+    "add": "Add",
+    "v": {
+      "day": "Day",
+      "night": "Night",
+      "both": "Day and night",
+      "normal": "Normal",
+      "partial": "Partial",
+      "stopped": "Stopped",
+      "sunny": "Sunny",
+      "cloudy": "Cloudy",
+      "rain": "Rain",
+      "storm": "Storm",
+      "snow": "Snow",
+      "fog": "Fog",
+      "dust": "Dust",
+      "hot": "Hot",
+      "cold": "Cold",
+      "calm": "Calm",
+      "moderate": "Moderate",
+      "strong": "Strong"
+    },
+    "g": {
+      "supervision": "Supervision staff",
+      "contractor": "Contractor staff",
+      "labour": "Labour"
+    },
+    "person": "Name",
+    "trade": "Trade / description",
+    "sub": "Subcontractor",
+    "crewHint": "How staff are recorded (names or counts) and the suggested lists come from the project settings.",
+    "worksHint": "For each work: stage, topic and location. Progress is optional and cumulative for the cell (stage × floor); weekly is enough. It counts once supervision approves the report.",
+    "desc": "Description",
+    "qty": "Qty",
+    "unit": "Unit",
+    "crewN": "Workers",
+    "progress": "Progress after today",
+    "was": "was",
+    "wholeStage": "Project-wide stage",
+    "addWork": "Add work",
+    "material": "Material",
+    "supplier": "Supplier",
+    "dn": "Delivery note",
+    "submittal": "Material approval",
+    "mirCreate": "Create material inspection",
+    "mirOpen": "Open material inspection",
+    "mirCreated": "Material inspection created as a draft — save the report.",
+    "plannedHint": "Works planned for tomorrow; they become tomorrow’s work list.",
+    "delays": "Delays and obstacles",
+    "lostHours": "Hours lost",
+    "cause": {
+      "weather": "Weather",
+      "materials": "Materials",
+      "design": "Design information",
+      "approval": "Approvals / handover",
+      "equipment": "Equipment",
+      "labour": "Labour",
+      "utilities": "Utilities",
+      "access": "Site access",
+      "other": "Other"
+    },
+    "hse": "Safety",
+    "incidents": "Incidents",
+    "near_misses": "Near misses",
+    "toolbox": "Toolbox talks",
+    "hseNotes": "Safety notes",
+    "visitors": "Visitors and instructions",
+    "notes": "General notes",
+    "qaHint": "Automatic from the project registers: what was submitted and answered that day.",
+    "qaNone": "Nothing in the QA registers that day.",
+    "submitted": "Submitted",
+    "answered": "Answered",
+    "save": "Save report",
+    "unsaved": "Unsaved changes"
+  },
+  "progress": {
+    "project": "Project progress",
+    "asOf": "As of the latest approved report, {{date}}",
+    "none": "No approved daily reports yet.",
+    "hint": "From approved daily reports only, weighted by the stage weights. A cell = the stage at a floor.",
+    "weight": "Weight",
+    "stage": "Stage %",
+    "updated": "Updated",
+    "noStages": "Define the project stages in the settings first."
+  },
+  "dset": {
+    "title": "Daily report",
+    "hint": "How the daily report records staff, and the suggested lists (one per line).",
+    "names": "Names",
+    "counts": "Description and count",
+    "list": {
+      "supervision": "Supervision staff",
+      "contractor": "Contractor staff",
+      "labour": "Labour trades",
+      "subcontractors": "Subcontractors",
+      "equipment": "Equipment"
+    },
+    "linkMaterials": "Link delivered materials to their approvals",
+    "linkMaterialsHint": "The materials section picks the material approval and can create a material inspection in one click."
   }
 }

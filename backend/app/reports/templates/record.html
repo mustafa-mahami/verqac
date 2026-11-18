@@ -75,6 +75,33 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
   </table>
   {% endif %}
 
+  {% if daily %}{% set D = daily %}
+  <div class="section">{{ D.t.title }}</div>
+  <table>{% for pair in D.head %}<tr>{% for k, v in pair %}<th>{{ k }}</th><td>{{ v }}</td>{% endfor %}{% if pair|length == 1 %}<th></th><td></td>{% endif %}</tr>{% endfor %}</table>
+  {% if D.crew %}<div class="section">{{ D.t.crew }}</div>
+  <table class="check">{% for g in D.crew %}
+    <tr><th colspan="3">{{ g.title }} — {{ g.total }}</th></tr>
+    {% for x in g.rows %}<tr><td style="width:50%">{{ x.name }}{% if x.sub %} · {{ x.sub }}{% endif %}</td><td>{{ D.t.count }}: {{ x.count }}</td><td>{{ D.t.hrs }}: {{ D.num(x.hours) }}</td></tr>{% endfor %}
+  {% endfor %}</table>{% endif %}
+  {% if D.equipment %}<div class="section">{{ D.t.equipment }}</div>
+  <table class="check">{% for x in D.equipment %}<tr><td style="width:40%">{{ x.name }}</td><td>{{ D.t.count }}: {{ x.count }}</td><td>{{ D.t.hrs }}: {{ D.num(x.hours) }}</td><td>{{ D.t.idle }}: {{ D.num(x.idle_hours) }}</td></tr>{% endfor %}</table>{% endif %}
+  {% if D.materials %}<div class="section">{{ D.t.materials }}</div>
+  <table class="check">{% for x in D.materials %}<tr><td style="width:40%">{{ x.material }}</td><td class="ltr">{{ D.num(x.qty) }} {{ x.unit or '' }}</td><td>{{ x.supplier or '' }}</td><td class="ltr">{{ x.delivery_note or '' }}</td></tr>{% endfor %}</table>{% endif %}
+  {% for key in ('works', 'planned') %}{% if D[key] %}<div class="section">{{ D.t[key] }}</div>
+  <table class="check"><tr><th style="width:24%">{{ D.t.stage }}</th><th style="width:20%">{{ D.t.where }}</th><th>{{ D.t.desc }}</th><th style="width:11%">{{ D.t.qty }}</th>{% if key == 'works' %}<th style="width:9%">{{ D.t.pct }}</th>{% endif %}</tr>
+    {% for x in D[key] %}<tr><td>{{ x.stage }}</td><td>{{ x.where }}</td><td>{{ x.desc }}</td><td class="ltr">{{ x.qty }}</td>{% if key == 'works' %}<td class="ltr">{{ x.pct }}</td>{% endif %}</tr>{% endfor %}
+  </table>{% endif %}{% endfor %}
+  {% if D.delays %}<div class="section">{{ D.t.delays }}</div>
+  <table class="check">{% for x in D.delays %}<tr><td style="width:25%">{{ x.cause }}</td><td>{{ x.description or '' }}</td><td style="width:12%">{{ D.num(x.hours) }} {{ D.t.hrs }}</td></tr>{% endfor %}</table>{% endif %}
+  {% if D.hse %}<div class="section">{{ D.t.hse }}</div>
+  <table><tr><th>{{ D.t.incidents }}</th><td>{{ D.hse.incidents or 0 }}</td><th>{{ D.t.near }}</th><td>{{ D.hse.near_misses or 0 }}</td><th>{{ D.t.toolbox }}</th><td>{{ D.hse.toolbox or 0 }}</td></tr>
+  {% if D.hse.notes %}<tr><td colspan="6" class="multi">{{ D.hse.notes }}</td></tr>{% endif %}</table>{% endif %}
+  {% if D.qa %}<div class="section">{{ D.t.qa }}</div>
+  <table class="check">{% for q in D.qa %}<tr><td style="width:50%">{{ q.name }}</td><td>{{ D.t.submitted }}: {{ q.submitted }}</td><td>{{ D.t.answered }}: {{ q.answered }}</td></tr>{% endfor %}</table>{% endif %}
+  {% if D.visitors or D.notes %}<table>{% if D.visitors %}<tr><th>{{ D.t.visitors }}</th><td class="multi">{{ D.visitors }}</td></tr>{% endif %}
+  {% if D.notes %}<tr><th>{{ D.t.notes }}</th><td class="multi">{{ D.notes }}</td></tr>{% endif %}</table>{% endif %}
+  {% endif %}
+
   {% if lab %}
   <div class="section">{{ lab.t.title }}</div>
   {% if lab.head %}<table>

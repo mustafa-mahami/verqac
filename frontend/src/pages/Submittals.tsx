@@ -42,6 +42,37 @@ function LinkPicker({ projectId, stageId, value, onChange }: {
   );
 }
 
+/** A daily report is created for a date; the previous report's crew, equipment and plan come with it. */
+function NewDaily({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const [day, setDay] = useState(today);
+  const [copy, setCopy] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true); setError(null);
+    try {
+      const r = await api<{ id: string }>(`/projects/${projectId}/daily-reports`, { method: 'POST', body: JSON.stringify({ report_date: day, copy_previous: copy }) });
+      navigate(`/records/${r.id}`);
+    } catch (e) {
+      setError(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic')));
+    } finally { setBusy(false); }
+  };
+  return (
+    <Stack>
+      {error && <Alert color="red">{error}</Alert>}
+      <TextInput type="date" label={t('daily.date')} max={today} value={day} onChange={(e) => setDay(e.currentTarget.value)} />
+      <Switch label={t('daily.copy')} description={t('daily.copyHint')} checked={copy} onChange={(e) => setCopy(e.currentTarget.checked)} />
+      <Group justify="flex-end">
+        <Button variant="default" onClick={onClose}>{t('common.cancel')}</Button>
+        <Button loading={busy} disabled={!day} onClick={go}>{t('rec.create')}</Button>
+      </Group>
+    </Stack>
+  );
+}
+
 function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; meta: RecordMeta; onClose: () => void; type: RegisterType }) {
   const pf = profile(type);
   const isIR = pf.timed;
@@ -345,8 +376,9 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
           </Table.ScrollContainer>
         </Card>
       )}
-      <Modal opened={open} onClose={() => setOpen(false)} title={typeText(type, 'new', 'rec.new')} size="xl">
-        {meta.data && <NewSubmittal projectId={projectId} meta={meta.data} type={type} onClose={() => setOpen(false)} />}
+      <Modal opened={open} onClose={() => setOpen(false)} title={typeText(type, 'new', 'rec.new')} size={type === 'daily_report' ? 'sm' : 'xl'}>
+        {type === 'daily_report' ? <NewDaily projectId={projectId} onClose={() => setOpen(false)} />
+          : meta.data && <NewSubmittal projectId={projectId} meta={meta.data} type={type} onClose={() => setOpen(false)} />}
       </Modal>
     </Stack>
   );

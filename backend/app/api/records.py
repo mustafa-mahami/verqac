@@ -219,6 +219,11 @@ def _answer_checklist(rec: Record, answers, to: WorkflowState, on: bool) -> None
                      for line, x in zip(rec.checklist, answers)]
 
 
+def editable_returned(rt: RecordType, rec: Record) -> bool:
+    """A daily report returned for correction is edited and resubmitted as it is (no new revision)."""
+    return rt.code == "daily_report" and rec.state_category == "revise_and_resubmit"
+
+
 def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> RecordDetail:
     state = _state(c, rec.state_id)
     trans = []
@@ -249,7 +254,7 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
 
     is_draft = rec.state_category == "draft"
     attach = []
-    if is_draft and p.can("edit", rec):
+    if (is_draft or editable_returned(rt, rec)) and p.can("edit", rec):
         attach.append("submission")
     if rec.state_category == "submitted" and p.can("respond", rec):
         attach.append("response")
@@ -772,6 +777,9 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
             rec.resubmit_due_at = add_period(now, periods(a.project, rt)[1], calendar_for(c.db, a.project))
     rec.state_id, rec.state_category, rec.updated_at = to.id, to.category, now
     c.db.flush()
+    if rt.code == "daily_report" and to.category == "approved":
+        from app.api.daily import apply_progress
+        apply_progress(c.db, rec)  # the approved report sets the progress of its cells
     stamp = _stamp(c, rec, to) if t.effect == "respond" else None
     c.db.add(RecordEvent(record_id=rec.id, action=t.action, from_state_id=t.from_state_id, to_state_id=to.id,
                          actor_id=c.user.id, on_behalf_of=on_behalf, comment=comment, stamp=stamp))

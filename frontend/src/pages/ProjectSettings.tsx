@@ -6,6 +6,7 @@ import { api, ApiError, type ProjectSettings as Settings, type ProjectCalendarT,
 import { pick } from '../i18n';
 import ProjectHeader from './ProjectHeader';
 import ConcreteClasses from './ConcreteClasses';
+import DailySettingsCard from './DailySettingsCard';
 import { TYPE_TABS } from '../recordTypes';
 import { cleanHolidays, HolidaysEditor, holidayText, WeekendPicker } from './Calendar';
 import ProjectStructure from './ProjectStructure';
@@ -85,6 +86,7 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
         {editable && <Button mt="md" variant="light" loading={save.isPending} disabled={!enabled.length} onClick={() => save.mutate('types')}>{t('rec.save')}</Button>}
       </Card>
       <ProjectStructure projectId={projectId} />
+      {enabled.includes('daily_report') && <DailySettingsCard projectId={projectId} editable={editable} />}
       {enabled.includes('test') && <ConcreteClasses projectId={projectId} editable={editable} />}
       <Card withBorder>
         <Title order={5}>{t('settings.reviewTitle')}</Title>

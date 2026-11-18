@@ -60,6 +60,75 @@ LAB_T = {"ar": {"title": "نتائج الفحص المخبري", "lab": "الم�
                               "repair": "Repair / remove and replace", "rejected": "Material / batch rejected", "other": "Other"}}}
 
 
+DAY_T = {"ar": {"title": "التقرير اليومي", "date": "التاريخ", "shift": "الوردية", "status": "حالة العمل", "weather": "الطقس",
+                "temp": "الحرارة", "wind": "الرياح", "hours": "ساعات العمل", "crew": "الطاقم والعمالة", "equipment": "المعدات",
+                "materials": "المواد الموردة", "works": "الأعمال المنفذة", "planned": "أعمال الغد المخطط لها", "delays": "التأخير والمعوقات",
+                "hse": "السلامة", "qa": "سجلات الجودة اليوم", "visitors": "الزوار والتعليمات", "notes": "ملاحظات",
+                "stage": "المرحلة / الموضوع", "where": "الموقع", "desc": "الوصف", "qty": "الكمية", "pct": "الإنجاز %", "count": "العدد",
+                "hrs": "الساعات", "idle": "توقف", "supplier": "المورّد", "dn": "سند التسليم", "cause": "السبب", "submitted": "مقدَّم",
+                "answered": "مُجاب", "incidents": "حوادث", "near": "شبه حوادث", "toolbox": "توعية", "all": "كل المشروع",
+                "groups": {"supervision": "طاقم الإشراف", "contractor": "طاقم المقاول", "labour": "العمالة"},
+                "v": {"day": "نهارية", "night": "ليلية", "both": "نهارية وليلية", "normal": "عمل كامل", "partial": "عمل جزئي", "stopped": "متوقف",
+                      "sunny": "مشمس", "cloudy": "غائم", "rain": "ماطر", "storm": "عاصف", "snow": "ثلج", "fog": "ضباب", "dust": "غبار",
+                      "hot": "حار", "cold": "بارد", "calm": "هادئة", "moderate": "معتدلة", "strong": "قوية",
+                      "weather_c": "الطقس", "materials": "المواد", "design": "معلومات التصميم", "approval": "الاعتمادات والاستلام",
+                      "equipment": "المعدات", "labour": "العمالة", "utilities": "الخدمات", "access": "الوصول للموقع", "other": "أخرى"}},
+         "en": {"title": "Daily report", "date": "Date", "shift": "Shift", "status": "Work status", "weather": "Weather", "temp": "Temperature",
+                "wind": "Wind", "hours": "Working hours", "crew": "Staff and labour", "equipment": "Equipment", "materials": "Materials delivered",
+                "works": "Works executed", "planned": "Works planned for tomorrow", "delays": "Delays and obstacles", "hse": "Safety",
+                "qa": "QA registers today", "visitors": "Visitors and instructions", "notes": "Notes", "stage": "Stage / topic",
+                "where": "Location", "desc": "Description", "qty": "Qty", "pct": "Progress %", "count": "Count", "hrs": "Hours", "idle": "Idle",
+                "supplier": "Supplier", "dn": "Delivery note", "cause": "Cause", "submitted": "Submitted", "answered": "Answered",
+                "incidents": "Incidents", "near": "Near misses", "toolbox": "Toolbox talks", "all": "Whole project",
+                "groups": {"supervision": "Supervision staff", "contractor": "Contractor staff", "labour": "Labour"},
+                "v": {"day": "Day", "night": "Night", "both": "Day and night", "normal": "Normal", "partial": "Partial", "stopped": "Stopped",
+                      "sunny": "Sunny", "cloudy": "Cloudy", "rain": "Rain", "storm": "Storm", "snow": "Snow", "fog": "Fog", "dust": "Dust",
+                      "hot": "Hot", "cold": "Cold", "calm": "Calm", "moderate": "Moderate", "strong": "Strong",
+                      "weather_c": "Weather", "materials": "Materials", "design": "Design information", "approval": "Approvals / handover",
+                      "equipment": "Equipment", "labour": "Labour", "utilities": "Utilities", "access": "Site access", "other": "Other"}}}
+
+
+def _daily(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
+    if d.record_type.code != "daily_report":
+        return None
+    from app.api.daily import _qa
+    from app.models.daily import DailyReport
+    from app.models.structure import ProjectLocation, ProjectStage, ProjectStageTopic
+    r = c.db.get(DailyReport, d.id)
+    if r is None:
+        return None
+    L, n = DAY_T[lang], f"name_{lang}"
+    names = {}
+    for model in (ProjectStage, ProjectStageTopic, ProjectLocation):
+        for x in c.db.scalars(select(model).where(model.project_id == r.project_id)):
+            names[str(x.id)] = getattr(x, n)
+    sep = "، " if lang == "ar" else ", "
+    num = lambda v: "" if v is None else f"{float(v):g}"  # noqa: E731
+
+    def works(lines):
+        return [{"stage": " › ".join(x for x in (names.get(str(w.get("stage_id")), ""), names.get(str(w.get("topic_id")), "")) if x),
+                 "where": L["all"] if w.get("all_locations") else sep.join(names.get(str(i), "") for i in w.get("location_ids") or []),
+                 "desc": w.get("description") or "", "qty": f"{num(w.get('qty'))} {w.get('unit') or ''}".strip(),
+                 "pct": num(w.get("progress"))} for w in lines]
+    v = L["v"]
+    head = [(L["date"], r.report_date.isoformat()), (L["shift"], v.get(r.shift, r.shift)),
+            (L["status"], v.get(r.work_status, "") + (f" — {r.stop_reason}" if r.stop_reason else "")),
+            (L["weather"], v.get(r.weather or "", "")), (L["temp"], f"{num(r.temp_min)} – {num(r.temp_max)} °C" if r.temp_max is not None else ""),
+            (L["wind"], v.get(r.wind or "", "")), (L["hours"], f"{r.hours_from or ''} – {r.hours_to or ''}" if r.hours_from else "")]
+    crew = {}
+    for x in r.crew:
+        crew.setdefault(x["group"], []).append(x)
+    hse = r.hse or {}
+    return {"t": L, "head": [head[i:i + 2] for i in range(0, len(head), 2)],
+            "crew": [{"title": L["groups"][g], "rows": rows, "total": sum(int(y.get("count") or 0) for y in rows)}
+                     for g, rows in ((g, crew.get(g, [])) for g in ("supervision", "contractor", "labour")) if rows],
+            "equipment": r.equipment, "materials": r.materials, "works": works(r.works), "planned": works(r.planned),
+            "delays": [{**x, "cause": v.get("weather_c" if x.get("cause") == "weather" else x.get("cause"), "")} for x in r.delays],
+            "hse": hse if any(hse.get(k) for k in ("incidents", "near_misses", "toolbox", "notes")) else None,
+            "qa": [{"name": getattr(q, n), "submitted": q.submitted, "answered": q.answered} for q in _qa(c, r.project_id, r.report_date)],
+            "visitors": r.visitors, "notes": r.notes, "num": num}
+
+
 def _lab(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
     if d.record_type.code != "test":
         return None
@@ -260,7 +329,7 @@ def render_record_pdf(c: Ctx, a: ProjectAccess, d: RecordDetail, lang: str) -> b
         resubmit_days=(d.resubmit_due_at - d.answered_at).days if d.resubmit_due_at and d.answered_at else None,
         stamp=stamp, stamp_short="-".join(stamp[i:i + 4] for i in range(0, 12, 4)).upper() if stamp else None,
         verify_url=verify_url, qr=_qr(verify_url) if verify_url else None,
-        lab=_lab(c, d, lang),
+        lab=_lab(c, d, lang), daily=_daily(c, d, lang),
         photos=[{**p, "who": PARTY[lang].get(p["party"], "")} for p in _photos(c, d)],
         checklist=[{"text": getattr(x, lang), "result": t["results"].get(x.result, ""), "code": x.result,
                     "note": x.note or ""} for x in d.checklist],

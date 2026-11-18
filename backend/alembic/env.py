@@ -6,6 +6,7 @@ from app.models.core import Base
 import app.models.records  # noqa: F401  (registers the record tables)
 import app.models.structure  # noqa: F401
 import app.models.lab  # noqa: F401
+import app.models.daily  # noqa: F401
 
 target_metadata = Base.metadata
 
