@@ -11,6 +11,7 @@ export interface GanttItem {
   plan: { start: string; finish: string } | null;
   base: { start: string; finish: string } | null; // the baseline, when it differs
   actual: { start: string | null; finish: string | null; pct: number; status: CellStatus | 'late_start' | 'not_due' } | null;
+  float?: number | null; // total float in days (critical path): 0 or less = critical
 }
 
 const ZOOM = { week: 22, month: 5, quarter: 1.8 } as const;
@@ -34,11 +35,14 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [onlyLate, setOnlyLate] = useState(false);
+  const hasCpm = items.some((x) => x.float !== undefined && x.float !== null);
+  const [crit, setCrit] = useState(false);
+  const isCrit = (it: GanttItem) => it.float !== undefined && it.float !== null && it.float <= 0;
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const box = useRef<HTMLDivElement>(null);
   const now = today();
 
-  const shown = items.filter((x) => (x.plan || x.actual?.start) && (!onlyLate || ['late', 'late_start'].includes(x.actual?.status ?? '')));
+  const shown = items.filter((x) => (x.plan || x.actual?.start) && (!onlyLate || ['late', 'late_start'].includes(x.actual?.status ?? '') || (crit && isCrit(x))));
   const dates = shown.flatMap((x) => [x.plan?.start, x.plan?.finish, x.base?.start, x.base?.finish, x.actual?.start, x.actual?.finish].filter(Boolean) as string[]);
   const lo = from || (dates.length ? addDays(dates.reduce((a, b) => (a < b ? a : b)), -7) : now);
   const hi = to || (dates.length ? addDays(dates.reduce((a, b) => (a > b ? a : b)), 14) : addDays(now, 30));
@@ -70,13 +74,17 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
       it.base && `${t('progress.baseline')}: ${fmtDate(it.base.start)} → ${fmtDate(it.base.finish)}`,
       a?.start && `${t('progress.actual')}: ${fmtDate(a.start)} → ${a.finish ? fmtDate(a.finish) : '…'} (${a.pct}%)`,
       a && t(`gantt.st.${a.status}`),
+      it.float !== undefined && it.float !== null && (it.float <= 0 ? t('gantt.critical') : t('gantt.float', { n: it.float })),
     ].filter(Boolean).join('\n');
     const aEnd = a?.start ? (a.finish ?? (a.pct > 0 ? (now > a.start ? now : a.start) : a.start)) : null;
     return (
       <Tooltip.Floating label={tip} multiline w={300} style={{ whiteSpace: 'pre-line' }}>
         <div style={{ position: 'relative', height: ROW, width: W }}>
           {p && <div style={{ position: 'absolute', insetInlineStart: x(p.start), width: w(p.start, p.finish), top: showActual ? 3 : 6, height: showActual ? 7 : 12,
-            background: showActual ? '#ced4da' : 'var(--mantine-color-verqac-6)', borderRadius: 3, opacity: showActual ? 1 : 0.85 }} />}
+            background: crit && isCrit(it) ? '#e03131' : showActual ? '#ced4da' : 'var(--mantine-color-verqac-6)', borderRadius: 3,
+            opacity: crit && !isCrit(it) ? 0.3 : showActual ? 1 : 0.85 }} />}
+          {crit && !isCrit(it) && p && it.float ? <div style={{ position: 'absolute', insetInlineStart: x(addDays(p.finish, 1)), width: w(addDays(p.finish, 1), addDays(p.finish, it.float)),
+            top: showActual ? 6 : 11, height: 1, borderTop: '1px dotted #868e96' }} /> : null}
           {it.base && <div style={{ position: 'absolute', insetInlineStart: x(it.base.start), width: w(it.base.start, it.base.finish), top: 2, height: showActual ? 9 : 14,
             border: '1px dashed #868e96', borderRadius: 3 }} />}
           {showActual && a?.start && aEnd && (
@@ -125,6 +133,7 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
           data={(['week', 'month', 'quarter', 'fit'] as Zoom[]).map((z) => ({ value: z, label: t(`gantt.z.${z}`) }))} />
         <TextInput size="xs" type="date" w={140} value={from} onChange={(e) => setFrom(e.currentTarget.value)} aria-label={t('gantt.from')} leftSection={<Text size="xs">{t('gantt.from')}</Text>} leftSectionWidth={36} />
         <TextInput size="xs" type="date" w={140} value={to} onChange={(e) => setTo(e.currentTarget.value)} aria-label={t('gantt.to')} leftSection={<Text size="xs">{t('gantt.to')}</Text>} leftSectionWidth={36} />
+        {hasCpm && <Checkbox size="xs" color="red" label={t('gantt.criticalPath')} checked={crit} onChange={(e) => setCrit(e.currentTarget.checked)} />}
         {showActual && <Checkbox size="xs" label={t('gantt.onlyLate')} checked={onlyLate} onChange={(e) => setOnlyLate(e.currentTarget.checked)} />}
         <Button size="compact-xs" variant="subtle" onClick={() => setClosed({})}>{t('gantt.expand')}</Button>
         <Button size="compact-xs" variant="subtle" onClick={() => setClosed(Object.fromEntries(groups.map((g) => [g.key, true])))}>{t('gantt.collapse')}</Button>
@@ -168,7 +177,7 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
                 <div key={`${it.stageId}${it.locId}`} style={{ display: 'flex', position: 'relative', borderTop: '1px solid #f1f3f5' }}>
                   <div style={{ ...cell, paddingInlineStart: 28 }}>
                     {showActual && <span style={{ width: 8, height: 8, borderRadius: 8, background: COL[it.actual?.status ?? 'not_due'], flex: 'none' }} />}
-                    <Text size="xs" style={{ flex: 1 }} truncate>{by === 'floor' ? it.stageName : (it.locName ?? t('structure.whole'))}</Text>
+                    <Text size="xs" style={{ flex: 1 }} c={crit && isCrit(it) ? 'red' : undefined} fw={crit && isCrit(it) ? 600 : undefined} truncate>{by === 'floor' ? it.stageName : (it.locName ?? t('structure.whole'))}</Text>
                     {showActual && <Text size="xs" c="dimmed">{it.actual?.pct ?? 0}%</Text>}
                   </div>
                   <div style={{ position: 'relative' }}>{lines}{bar(it)}</div>

@@ -7,7 +7,7 @@ import { api, type ProjectSettings } from '../api';
 import type { CellStatus, ProgressCell, ProgressOut } from '../daily';
 import { fmtDate } from '../format';
 import { pick } from '../i18n';
-import type { ProgrammeSummary } from '../programme';
+import { cellKey, cpm, type ProgrammeOut, type ProgrammeSummary } from '../programme';
 import { useStructure } from './Structure';
 import Gantt, { type GanttItem } from './Gantt';
 
@@ -88,6 +88,8 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
   const q = useQuery({ queryKey: ['progress', projectId], queryFn: () => api<ProgressOut>(`/projects/${projectId}/progress`) });
   const s = useStructure(projectId).data;
   const qc = useQueryClient();
+  const prg = useQuery({ queryKey: ['programme', q.data?.programme_id], enabled: !!q.data?.programme_id,
+    queryFn: () => api<ProgrammeOut>(`/records/${q.data!.programme_id}/programme`) });
   const [view, setView] = useState<'actual' | 'status' | 'gantt'>('actual');
   const settings = useQuery({ queryKey: ['settings', projectId], queryFn: () => api<ProjectSettings>(`/projects/${projectId}/settings`) });
   const rebuild = useMutation({
@@ -124,6 +126,8 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
     );
   };
   const now = new Date().toISOString().slice(0, 10);
+  const wholeSet = new Set(stages.filter((x) => x.scope === 'whole' || !units.length).map((x) => x.id!));
+  const floats = prg.data?.cycles.length ? cpm(prg.data.lines, prg.data.cycles, units.map((u) => u.id!), wholeSet) : null;
   const ganttItems: GanttItem[] = p.cells.filter((c) => stages.some((x) => x.id === c.stage_id)).map((c) => {
     const st = stages.find((x) => x.id === c.stage_id)!;
     const started = c.progress > 0 || !!c.started_on;
@@ -134,6 +138,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
       plan: c.plan_start && c.plan_finish ? { start: c.plan_start, finish: c.plan_finish } : null,
       base: c.base_start && c.base_finish ? { start: c.base_start, finish: c.base_finish } : null,
       actual: { start: c.started_on, finish: c.finished_on, pct: c.progress, status },
+      float: floats ? floats.get(cellKey(c.stage_id, c.location_id)) ?? null : null,
     };
   }).sort((a, b) => stages.findIndex((x) => x.id === a.stageId) - stages.findIndex((x) => x.id === b.stageId)
     || units.findIndex((u) => u.id === a.locId) - units.findIndex((u) => u.id === b.locId));
@@ -248,7 +253,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
             <Table.Tbody>
               {p.late.map((c) => (
                 <Table.Tr key={`${c.stage_id}${c.location_id}`}>
-                  <Table.Td>{stageName(c.stage_id)}</Table.Td><Table.Td>{unitName(c.location_id)}</Table.Td>
+                  <Table.Td>{stageName(c.stage_id)} {floats && (floats.get(cellKey(c.stage_id, c.location_id)) ?? 1) <= 0 && <Badge size="xs" color="red" variant="light">{t('gantt.criticalPath')}</Badge>}</Table.Td><Table.Td>{unitName(c.location_id)}</Table.Td>
                   <Table.Td>{c.progress}%</Table.Td><Table.Td>{c.planned}%</Table.Td>
                   <Table.Td><Text size="sm" c="red" fw={600}>{(c.progress - (c.planned ?? 0)).toFixed(0)}%</Text></Table.Td>
                   <Table.Td>{fmtDate(c.plan_finish)}</Table.Td>

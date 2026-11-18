@@ -82,3 +82,59 @@ export function schedule(cs: PCycle[], units: string[], whole: Set<string>, exis
     return { lines: [], error: (e as Error).message, missing };
   }
 }
+
+/** Critical path (CPM) over the cells of a programme: the links of its floor cycle (an earlier stage on the same
+ * floor, and each crew's floor-to-floor sequence) are the network; the saved dates are the early dates.
+ * Returns each cell's total float in days: 0 (or less) = critical, any delay moves the project's finish. */
+export function cpm(lines: PLine[], cycles: PCycle[], units: string[], whole: Set<string>): Map<string, number> {
+  type N = { s: number; f: number; d: number; lf: number };
+  const day = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / 86_400_000);
+  const nodes = new Map<string, N>();
+  for (const l of lines) {
+    if (!l.start || !l.finish) continue;
+    const s = day(l.start), f = day(l.finish);
+    nodes.set(cellKey(l.stage_id, l.location_id), { s, f, d: f - s + 1, lf: Infinity });
+  }
+  // edges: succ.start >= (pred.start | pred.finish) + k
+  const edges: { p: string; s: string; on: 'S' | 'F'; k: number }[] = [];
+  const cellsOf = (stage: string) => (whole.has(stage) ? [cellKey(stage, null)] : units.map((u) => cellKey(stage, u))).filter((k) => nodes.has(k));
+  for (const c of cycles) {
+    const mine = cellsOf(c.stage_id);
+    if (!whole.has(c.stage_id)) {  // the crew moves up floor by floor
+      for (let i = 1; i < mine.length; i++)
+        edges.push({ p: mine[i - 1], s: mine[i], on: (c.link ?? 'fs') === 'fs' ? 'F' : 'S', k: (c.link ?? 'fs') === 'fs' ? c.lag + 1 : c.lag });
+    }
+    if (!c.pred) continue;
+    const d = c.pred_days ?? 0;
+    const rel = c.rel ?? 'after_end';
+    const on: 'S' | 'F' = rel.endsWith('end') ? 'F' : 'S';
+    const k = rel === 'after_end' ? d + 1 : rel === 'after_start' ? d : -d;
+    const theirs = cellsOf(c.pred);
+    if (!theirs.length || !mine.length) continue;
+    if (!whole.has(c.stage_id) && !whole.has(c.pred)) {
+      for (const u of units) {
+        const a = cellKey(c.pred, u), b = cellKey(c.stage_id, u);
+        if (nodes.has(a) && nodes.has(b)) edges.push({ p: a, s: b, on, k });
+      }
+    } else if (!whole.has(c.stage_id)) {  // a floor stage after a whole-project one: its first floor
+      edges.push({ p: theirs[0], s: mine[0], on, k });
+    } else {  // a whole-project stage after a floor stage: the binding floor (latest finish / earliest start)
+      const pick = on === 'F' ? theirs.reduce((a, b) => (nodes.get(b)!.f > nodes.get(a)!.f ? b : a))
+        : theirs.reduce((a, b) => (nodes.get(b)!.s < nodes.get(a)!.s ? b : a));
+      edges.push({ p: pick, s: mine[0], on, k });
+    }
+  }
+  const end = Math.max(...[...nodes.values()].map((n) => n.f));
+  for (const n of nodes.values()) n.lf = end;
+  // backward pass: relax until stable (small networks)
+  for (let pass = 0, changed = true; changed && pass < 500; pass++) {
+    changed = false;
+    for (const e of edges) {
+      const p = nodes.get(e.p)!, s = nodes.get(e.s)!;
+      const ls = s.lf - s.d + 1;
+      const lf = e.on === 'F' ? ls - e.k : ls - e.k + p.d - 1;
+      if (lf < p.lf) { p.lf = lf; changed = true; }
+    }
+  }
+  return new Map([...nodes].map(([k, n]) => [k, n.lf - n.f]));
+}

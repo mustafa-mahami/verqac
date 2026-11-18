@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError, openProtected, type RecordDetail } from '../api';
 import { fmtDate } from '../format';
 import i18n, { pick } from '../i18n';
-import { cellKey, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
+import { cellKey, cpm, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
 import { useStructure } from './Structure';
 import Gantt, { type GanttItem } from './Gantt';
 
@@ -255,10 +255,11 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const bars = spans.filter((x) => x.sp).map(({ st, sp }) => ({ label: pick(st, 'name'), start: sp!.start, finish: sp!.finish }));
   const from = bars.length ? bars.reduce((m, b) => (b.start < m ? b.start : m), bars[0].start) : null;
   const to = bars.length ? bars.reduce((m, b) => (b.finish > m ? b.finish : m), bars[0].finish) : null;
+  const floats = cpm(lines, cycles, units.map((u) => u.id!), whole);
   const gItems: GanttItem[] = stages.flatMap((st) => (whole.has(st.id!) ? [null] : units.map((u) => u.id!)).map((loc) => {
     const l = byKey.get(cellKey(st.id!, loc));
     return { stageId: st.id!, stageName: pick(st, 'name'), locId: loc, locName: loc ? pick(units.find((u) => u.id === loc)!, 'name') : null,
-      plan: l?.start && l.finish ? { start: l.start, finish: l.finish } : null, base: null, actual: null };
+      plan: l?.start && l.finish ? { start: l.start, finish: l.finish } : null, base: null, actual: null, float: cycles.length ? floats.get(cellKey(st.id!, loc)) ?? null : null };
   }));
   const dateIn = (stage: string, loc: string | null, f: 'start' | 'finish') => (
     <TextInput size="xs" type="date" w={140} disabled={!edit} value={byKey.get(cellKey(stage, loc))?.[f] ?? ''}

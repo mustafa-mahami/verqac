@@ -1145,6 +1145,9 @@
     "darkPart": "Dark part of the bar = % done",
     "floorStage": "Floor / stage",
     "stageFloor": "Stage / floor",
-    "empty": "Nothing in this range."
+    "empty": "Nothing in this range.",
+    "criticalPath": "Critical path",
+    "critical": "On the critical path: any delay moves the project finish",
+    "float": "{{n}} days of float before the project finish moves"
   }
 }
