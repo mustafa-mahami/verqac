@@ -232,6 +232,8 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
         raise HTTPException(status.HTTP_409_CONFLICT, "stage_in_use")
     if removed_topics & used_topics:
         raise HTTPException(status.HTTP_409_CONFLICT, "topic_in_use")
+    # a stage that changes scope moves its approved % to other cells: recount from the approved reports
+    rescope = any(x.id in old and old[x.id].scope != x.scope for x in body)
     for i, x in enumerate(body):
         s = old.get(x.id) if x.id else None
         if x.id and s is None:
@@ -263,6 +265,9 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
           org_id=a.project.owner_org_id, project_id=project_id,
           changes={"stages": [f"{x.name_ar} {x.weight}" for x in body]}, ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
+    if rescope:
+        from app.api.daily import rebuild_progress
+        rebuild_progress(c.db, project_id)
     return structure_of(c, a.project, True)
 
 
@@ -300,4 +305,7 @@ def save_locations(project_id: uuid.UUID, body: list[GroupIO], c: Ctx = Depends(
           org_id=a.project.owner_org_id, project_id=project_id,
           changes={"groups": [f"{g.name_ar} ({len(g.units)})" for g in body]}, ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
+    # floors added, removed or switched on/off change which cells a report covers: recount
+    from app.api.daily import rebuild_progress
+    rebuild_progress(c.db, project_id)
     return structure_of(c, a.project, True)
