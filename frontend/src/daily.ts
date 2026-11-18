@@ -12,7 +12,7 @@ export interface DailyData {
   hse: { incidents: number; near_misses: number; toolbox: number; notes: string | null }; visitors: string | null; notes: string | null;
 }
 export interface DailyOut extends DailyData {
-  record_id: string; report_date: string; can_edit: boolean; current: Record<string, number>; totals: Record<string, number>;
+  record_id: string; report_date: string; can_edit: boolean; day_no: number | null; weekday: number; day_off: 'weekend' | 'holiday' | null; holiday: string | null; current: Record<string, number>; totals: Record<string, number>;
   qa: { code: string; name_ar: string; name_en: string; submitted: number; answered: number }[];
 }
 export interface DailySettings { crew: Record<Group, 'names' | 'counts'>; link_materials: boolean; lists: Record<string, ListItem[]> }

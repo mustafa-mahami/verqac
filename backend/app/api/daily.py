@@ -113,6 +113,10 @@ class QaCount(BaseModel):
 class DailyOut(DailyIO):
     record_id: uuid.UUID
     report_date: date
+    day_no: int | None = None  # day of the project, counted from its start date
+    weekday: int = 0  # 0 = Sunday ... 6 = Saturday
+    day_off: str | None = None  # weekend | holiday
+    holiday: str | None = None  # the holiday's name
     can_edit: bool
     qa: list[QaCount] = []
     current: dict[str, float] = {}  # "stage:location" -> approved % before this report
@@ -359,6 +363,16 @@ def _qa(c: Ctx, project_id, day: date) -> list[QaCount]:
     return out
 
 
+def day_info(c: Ctx, project_id, day: date) -> dict:
+    """Report no. (day of the project) and whether the day is a weekly day off or an official holiday."""
+    from app.core.workcal import day_off
+    project = c.db.get(Project, project_id)
+    off = day_off(c.db, project, day)
+    start = project.start_date
+    return {"day_no": (day - start).days + 1 if start and day >= start else None, "weekday": (day.weekday() + 1) % 7,
+            "day_off": off[0] if off else None, "holiday": off[1] if off else None}
+
+
 def _out(c: Ctx, rec, p, d: DailyReport) -> DailyOut:
     f = lambda v: float(v) if v is not None else None  # noqa: E731
     cur = {}
@@ -372,7 +386,7 @@ def _out(c: Ctx, rec, p, d: DailyReport) -> DailyOut:
                     temp_min=f(d.temp_min), temp_max=f(d.temp_max), wind=d.wind, hours_from=d.hours_from, hours_to=d.hours_to,
                     crew=d.crew, equipment=d.equipment, materials=d.materials, works=d.works, planned=d.planned, delays=d.delays,
                     hse=Hse(**(d.hse or {})), visitors=d.visitors, notes=d.notes, qa=_qa(c, d.project_id, d.report_date),
-                    current=cur, totals=totals)
+                    current=cur, totals=totals, **day_info(c, d.project_id, d.report_date))
 
 
 @router.get("/records/{record_id}/daily", response_model=DailyOut)

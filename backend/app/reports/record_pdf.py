@@ -60,7 +60,8 @@ LAB_T = {"ar": {"title": "نتائج الفحص المخبري", "lab": "الم�
                               "repair": "Repair / remove and replace", "rejected": "Material / batch rejected", "other": "Other"}}}
 
 
-DAY_T = {"ar": {"title": "التقرير اليومي", "date": "التاريخ", "shift": "الوردية", "status": "حالة العمل", "weather": "الطقس",
+DAY_T = {"ar": {"title": "التقرير اليومي", "day_no": "رقم التقرير (يوم المشروع)", "weekend": "عطلة أسبوعية", "holiday": "عطلة رسمية",
+                "days": ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"], "date": "التاريخ", "shift": "الوردية", "status": "حالة العمل", "weather": "الطقس",
                 "temp": "الحرارة", "wind": "الرياح", "hours": "ساعات العمل", "crew": "الطاقم والعمالة", "equipment": "المعدات",
                 "materials": "المواد الموردة", "works": "الأعمال المنفذة", "planned": "أعمال الغد المخطط لها", "delays": "التأخير والمعوقات",
                 "hse": "السلامة", "qa": "سجلات الجودة اليوم", "visitors": "الزوار والتعليمات", "notes": "ملاحظات",
@@ -73,7 +74,8 @@ DAY_T = {"ar": {"title": "التقرير اليومي", "date": "التاريخ"
                       "hot": "حار", "cold": "بارد", "calm": "هادئة", "moderate": "معتدلة", "strong": "قوية",
                       "weather_c": "الطقس", "materials": "المواد", "design": "معلومات التصميم", "approval": "الاعتمادات والاستلام",
                       "equipment": "المعدات", "labour": "العمالة", "utilities": "الخدمات", "access": "الوصول للموقع", "other": "أخرى"}},
-         "en": {"title": "Daily report", "date": "Date", "shift": "Shift", "status": "Work status", "weather": "Weather", "temp": "Temperature",
+         "en": {"title": "Daily report", "day_no": "Report no. (project day)", "weekend": "Weekly day off", "holiday": "Official holiday",
+                "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"], "date": "Date", "shift": "Shift", "status": "Work status", "weather": "Weather", "temp": "Temperature",
                 "wind": "Wind", "hours": "Working hours", "crew": "Staff and labour", "equipment": "Equipment", "materials": "Materials delivered",
                 "works": "Works executed", "planned": "Works planned for tomorrow", "delays": "Delays and obstacles", "hse": "Safety",
                 "qa": "QA registers today", "visitors": "Visitors and instructions", "notes": "Notes", "stage": "Stage / topic",
@@ -111,7 +113,12 @@ def _daily(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
                  "desc": w.get("description") or "", "qty": f"{num(w.get('qty'))} {w.get('unit') or ''}".strip(),
                  "pct": num(w.get("progress"))} for w in lines]
     v = L["v"]
-    head = [(L["date"], r.report_date.isoformat()), (L["shift"], v.get(r.shift, r.shift)),
+    from app.api.daily import day_info
+    info = day_info(c, r.project_id, r.report_date)
+    off = (L["weekend"] if info["day_off"] == "weekend" else f"{L['holiday']}" + (f": {info['holiday']}" if info["holiday"] else "")) if info["day_off"] else ""
+    head = [(L["day_no"], str(info["day_no"]) if info["day_no"] else ""),
+            (L["date"], f"{L['days'][info['weekday']]} {r.report_date.isoformat()}" + (f" — {off}" if off else "")),
+            (L["shift"], v.get(r.shift, r.shift)),
             (L["status"], v.get(r.work_status, "") + (f" — {r.stop_reason}" if r.stop_reason else "")),
             (L["weather"], v.get(r.weather or "", "")), (L["temp"], f"{num(r.temp_min)} – {num(r.temp_max)} °C" if r.temp_max is not None else ""),
             (L["wind"], v.get(r.wind or "", "")), (L["hours"], f"{r.hours_from or ''} – {r.hours_to or ''}" if r.hours_from else "")]

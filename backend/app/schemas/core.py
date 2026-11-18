@@ -161,6 +161,8 @@ class ProjectSettingsOut(BaseModel):
     routing: dict[str, str] = {}  # record type code -> discipline | manager | choose
     calendar: ProjectCalendar = ProjectCalendar()
     types: list[str] = []  # record types the project uses
+    start_date: date | None = None  # daily reports are numbered from it
+    end_date: date | None = None
     org_calendar: OrgCalendar = OrgCalendar()  # the owner organization's, read only here
     notify: NotifyChannels
     submittal_kinds: list[SubmittalKind]
@@ -179,6 +181,7 @@ class ProjectSettingsIn(BaseModel):
     routing: dict[str, str] = {}
     calendar: ProjectCalendar | None = None
     types: list[str] | None = None
+    dates: dict[str, date | None] | None = None  # start_date / end_date
     notify: NotifyChannels | None = None
     submittal_kinds: list[SubmittalKind] | None = None
 

@@ -143,7 +143,8 @@
     "dr_exists": "A daily report exists for this date.",
     "dr_future": "Cannot create a report for a future date.",
     "progress_needs_stage": "Progress needs a stage.",
-    "invalid_settings": "Invalid settings."
+    "invalid_settings": "Invalid settings.",
+    "invalid_dates": "The end date is before the start date."
   },
   "common": {
     "cancel": "Cancel",
@@ -383,7 +384,9 @@
     "reminders": "Deadline reminders",
     "remindersHint": "Reminds whoever must reply before the deadline (a day for submittals, 30 minutes for inspections) and when it is overdue, and the contractor before and after the resubmission deadline. Overdue submittals are reminded daily.",
     "typesTitle": "Request types in this project",
-    "typesHint": "Switch on only what this project uses; only those tabs show. Existing requests are kept when a type is switched off."
+    "typesHint": "Switch on only what this project uses; only those tabs show. Existing requests are kept when a type is switched off.",
+    "datesTitle": "Project period",
+    "datesHint": "Project start and end dates per the contract. Daily reports are numbered from the start date (day one = report no. 1)."
   },
   "resp": {
     "title": "Consultant's comments",
@@ -924,7 +927,10 @@
     "submitted": "Submitted",
     "answered": "Answered",
     "save": "Save report",
-    "unsaved": "Unsaved changes"
+    "unsaved": "Unsaved changes",
+    "no": "Report no. {{n}}",
+    "weekend": "Weekly day off",
+    "holiday": "Official holiday"
   },
   "progress": {
     "project": "Project progress",

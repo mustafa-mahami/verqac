@@ -170,7 +170,10 @@ export default function DailyPanel({ rec }: { rec: RecordDetail }) {
   return (
     <Card withBorder style={{ borderColor: 'var(--mantine-color-verqac-3)' }}>
       <Group justify="space-between" mb="xs">
-        <Title order={5}>{t('daily.title')} · {out.report_date}</Title>
+        <Group gap="xs">
+          <Title order={5}>{out.day_no ? t('daily.no', { n: out.day_no }) : t('daily.title')} · {t(`cal.day.${out.weekday}`)} {out.report_date}</Title>
+          {out.day_off && <Badge color="orange" variant="light" tt="none">{out.day_off === 'weekend' ? t('daily.weekend') : `${t('daily.holiday')}${out.holiday ? `: ${out.holiday}` : ''}`}</Badge>}
+        </Group>
         <Group gap="xs">
           {GROUPS.map((g) => <Badge key={g} variant="light" tt="none">{t(`daily.g.${g}`)}: {d.crew.filter((x) => x.group === g).reduce((a, x) => a + (x.count || 0), 0)}</Badge>)}
           <Badge variant="light" tt="none" color="gray">{t('daily.equipment')}: {d.equipment.reduce((a, x) => a + (x.count || 0), 0)}</Badge>

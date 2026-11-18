@@ -39,17 +39,18 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   const [checks, setChecks] = useState(false);
   const [remind, setRemind] = useState(true);
   const [enabled, setEnabled] = useState<string[]>([]);
+  const [dates, setDates] = useState<{ start_date: string | null; end_date: string | null }>({ start_date: null, end_date: null });
   const [cal, setCal] = useState<ProjectCalendarT>({ weekend: null, holidays: [], work_start: null, work_end: null });
   const [route, setRoute] = useState<Record<string, Routing>>({});
   const [notify, setNotify] = useState({ email: false, mahami: false });
   const [kinds, setKinds] = useState<SubmittalKind[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string; at: string } | null>(null);
   useEffect(() => {
-    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRemind(settings.data.reminders); setEnabled(settings.data.types); setCal(settings.data.calendar); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
+    if (settings.data) { setReply(settings.data.reply_hours); setResub(settings.data.resubmit_hours); setLinks(settings.data.link_submittals); setChecks(settings.data.checklists); setRemind(settings.data.reminders); setEnabled(settings.data.types); setDates({ start_date: settings.data.start_date, end_date: settings.data.end_date }); setCal(settings.data.calendar); setRoute(settings.data.routing); setNotify(settings.data.notify); setKinds(settings.data.submittal_kinds); }
   }, [settings.data]);
   const save = useMutation({
     mutationFn: (_at: string) =>
-      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, reminders: remind, routing: route, types: enabled,
+      api<Settings>(`/projects/${projectId}/settings`, { method: 'PUT', body: JSON.stringify({ reply_hours: reply, resubmit_hours: resub, link_submittals: links, checklists: checks, reminders: remind, routing: route, types: enabled, dates,
         calendar: { ...cal, holidays: cleanHolidays(cal.holidays) }, notify, submittal_kinds: kinds }) }),
     onSuccess: (s, at) => {
       qc.setQueryData(['settings', projectId], s);
@@ -73,6 +74,18 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
   return (
     <Stack maw={900}>
       <ProjectHeader projectId={projectId} settings={settings.data} />
+      <Card withBorder>
+        <Title order={5}>{t('settings.datesTitle')}</Title>
+        <Text size="sm" c="dimmed" mb="md">{t('settings.datesHint')}</Text>
+        <Group>
+          <TextInput type="date" w={200} label={t('projects.startDate')} disabled={!editable} value={dates.start_date ?? ''}
+            onChange={(e) => setDates({ ...dates, start_date: e.currentTarget.value || null })} />
+          <TextInput type="date" w={200} label={t('projects.endDate')} disabled={!editable} value={dates.end_date ?? ''}
+            onChange={(e) => setDates({ ...dates, end_date: e.currentTarget.value || null })} />
+        </Group>
+        {note('dates')}
+        {editable && <Button mt="md" variant="light" loading={save.isPending} onClick={() => save.mutate('dates')}>{t('rec.save')}</Button>}
+      </Card>
       <Card withBorder>
         <Title order={5}>{t('settings.typesTitle')}</Title>
         <Text size="sm" c="dimmed" mb="md">{t('settings.typesHint')}</Text>

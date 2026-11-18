@@ -147,6 +147,7 @@ def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     return ProjectSettingsOut(reply_hours=reply, resubmit_hours=resub, routing=route,
                               calendar=ProjectCalendar(**(a.project.settings or {}).get("calendar", {})),
                               types=[k for k in reply if type_enabled(a.project, k)],
+                              start_date=a.project.start_date, end_date=a.project.end_date,
                               org_calendar=OrgCalendar(**org_calendar(org)),
                               link_submittals=bool((a.project.settings or {}).get("link_submittals", False)),
                               checklists=bool((a.project.settings or {}).get("checklists", False)),
@@ -218,6 +219,13 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
         old_r = dict(settings.get("routing", {}))
         settings["routing"] = {**old_r, **body.routing}
         changes.update({f"routing_{k}": v for k, v in diff(old_r, settings["routing"]).items()})
+    if body.dates is not None:
+        start, end = body.dates.get("start_date"), body.dates.get("end_date")
+        if start and end and end < start:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_dates")
+        if (start, end) != (a.project.start_date, a.project.end_date):
+            changes["dates"] = [str(a.project.start_date), str(start), str(a.project.end_date), str(end)]
+            a.project.start_date, a.project.end_date = start, end
     if body.types is not None:
         if not body.types or any(t not in codes for t in body.types):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_types")

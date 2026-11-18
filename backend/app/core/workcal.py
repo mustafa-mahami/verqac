@@ -105,3 +105,20 @@ def add_period(start: datetime, hours: int, cal: Calendar | None) -> datetime:
         t += step
         left -= step
     return t.astimezone(start.tzinfo)
+
+
+def day_off(db, project, day: date) -> tuple[str, str | None] | None:
+    """Why a day is not a working day: ("weekend", None) or ("holiday", its name); None for a working day."""
+    from app.core.db import session_scope
+    from app.models.core import Organization
+    with session_scope(bypass=True) as s:
+        org = s.scalar(select(Organization).where(Organization.id == project.owner_org_id))
+        oc = org_calendar(org)
+    pc = (project.settings or {}).get("calendar", {})
+    for h in [*(pc.get("holidays") or []), *oc["holidays"]]:
+        if date.fromisoformat(h["from"]) <= day <= date.fromisoformat(h.get("to") or h["from"]):
+            return "holiday", h.get("name") or None
+    weekend = oc["weekend"] if pc.get("weekend") is None else pc["weekend"]
+    if (day.weekday() + 1) % 7 in weekend:
+        return "weekend", None
+    return None

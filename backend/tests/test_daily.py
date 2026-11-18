@@ -22,9 +22,10 @@ def test_daily_cycle_and_progress(client, site):
                   "equipment": [{"ar": "رافعة برجية", "en": "Tower crane"}]}}).json()
     assert [(x["ar"], x["en"]) for x in s["lists"]["labour_desc"]] == [("حداد", "Steel fixer"), ("نجار", "نجار")]
     assert s["lists"]["supervision_names"][0]["role_en"] == "Civil engineer"
-    client.put(f"/api/v1/projects/{pid}/settings", headers=site["hc"],
-               json={"calendar": {"weekend": None, "holidays": [], "work_start": "07:00", "work_end": "15:00"}})
     d1 = date.today() - timedelta(days=2)
+    client.put(f"/api/v1/projects/{pid}/settings", headers=site["hc"],
+               json={"calendar": {"weekend": None, "holidays": [{"from": d1.isoformat(), "name": "عيد"}], "work_start": "07:00", "work_end": "15:00"},
+                     "dates": {"start_date": (d1 - timedelta(days=9)).isoformat(), "end_date": None}})
     rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1.isoformat()}).json()["id"]
     assert client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"],
                        json={"report_date": d1.isoformat()}).json()["detail"] == "dr_exists"
@@ -42,6 +43,7 @@ def test_daily_cycle_and_progress(client, site):
             "delays": [{"cause": "materials", "hours": 2, "description": "تأخر وصول الحديد"}]}
     d = client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json=body).json()
     assert d["hours_from"] == "07:00" and d["hours_to"] == "15:00"  # from the project's working hours
+    assert d["weekday"] == (d1.weekday() + 1) % 7 and d["day_no"] == 10 and d["day_off"] == "holiday" and d["holiday"] == "عيد"
     assert d["totals"]["labour"] == 18 and d["totals"]["equipment"] == 1 and d["can_edit"] is True
     # nothing counts before supervision approves
     act(client, site["hqa"], rid, "submit")
