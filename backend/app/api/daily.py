@@ -314,12 +314,17 @@ def new_daily(project_id: uuid.UUID, body: NewDaily, c: Ctx = Depends(ctx)):
     rec = create_record(project_id, RecordIn(record_type="daily_report", number=base if not n else f"{base}-{n + 1}",
                                              title=f"التقرير اليومي {body.report_date.isoformat()}"), c)
     d = DailyReport(record_id=rec.id, project_id=project_id, report_date=body.report_date)
+    cal = (a.project.settings or {}).get("calendar", {})
+    if cal.get("work_start") and cal.get("work_end"):  # the project's working hours
+        d.hours_from, d.hours_to = cal["work_start"], cal["work_end"]
     if body.copy_previous:
         prev = c.db.scalar(select(DailyReport).join(Record, Record.id == DailyReport.record_id)
                            .where(DailyReport.project_id == project_id, DailyReport.report_date < body.report_date,
                                   Record.state_category != "cancelled").order_by(DailyReport.report_date.desc()).limit(1))
         if prev is not None:
-            d.shift, d.hours_from, d.hours_to = prev.shift, prev.hours_from, prev.hours_to
+            d.shift = prev.shift
+            if not d.hours_from:
+                d.hours_from, d.hours_to = prev.hours_from, prev.hours_to
             d.crew, d.equipment = prev.crew, prev.equipment
             d.works = [{**x, "qty": None, "progress": None} for x in prev.planned]
     c.db.add(d)

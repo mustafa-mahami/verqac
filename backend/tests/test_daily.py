@@ -22,12 +22,15 @@ def test_daily_cycle_and_progress(client, site):
                   "equipment": [{"ar": "رافعة برجية", "en": "Tower crane"}]}}).json()
     assert [(x["ar"], x["en"]) for x in s["lists"]["labour_desc"]] == [("حداد", "Steel fixer"), ("نجار", "نجار")]
     assert s["lists"]["supervision_names"][0]["role_en"] == "Civil engineer"
+    client.put(f"/api/v1/projects/{pid}/settings", headers=site["hc"],
+               json={"calendar": {"weekend": None, "holidays": [], "work_start": "07:00", "work_end": "15:00"}})
     d1 = date.today() - timedelta(days=2)
     rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1.isoformat()}).json()["id"]
     assert client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"],
                        json={"report_date": d1.isoformat()}).json()["detail"] == "dr_exists"
     future = (date.today() + timedelta(days=1)).isoformat()
     assert client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": future}).status_code == 422
+    assert client.get(f"/api/v1/records/{rid}/daily", headers=site["hqa"]).json()["hours_from"] == "07:00"
     body = {"weather": "sunny", "temp_min": 12, "temp_max": 21, "hours_from": "07:00", "hours_to": "15:00",
             "crew": [{"group": "labour", "name": "حداد", "count": 12, "hours": 8}, {"group": "labour", "name": "نجار", "count": 6}],
             "equipment": [{"name": "رافعة برجية", "count": 1, "hours": 8}],
@@ -38,6 +41,7 @@ def test_daily_cycle_and_progress(client, site):
             "planned": [{"stage_id": structure["id"], "location_ids": [floors[2]["id"]], "description": "استكمال حديد الطابق الأول"}],
             "delays": [{"cause": "materials", "hours": 2, "description": "تأخر وصول الحديد"}]}
     d = client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json=body).json()
+    assert d["hours_from"] == "07:00" and d["hours_to"] == "15:00"  # from the project's working hours
     assert d["totals"]["labour"] == 18 and d["totals"]["equipment"] == 1 and d["can_edit"] is True
     # nothing counts before supervision approves
     act(client, site["hqa"], rid, "submit")

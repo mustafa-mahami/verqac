@@ -972,6 +972,9 @@
       "equipment": "Equipment used, e.g. tower crane, concrete pump."
     },
     "descAr": "Description (Arabic)",
-    "descEn": "Description (English)"
+    "descEn": "Description (English)",
+    "position": "Position",
+    "positions": "Positions (chosen above, and used in the count mode)",
+    "noPositions": "Add positions below first"
   }
 }

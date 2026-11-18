@@ -1,9 +1,9 @@
-import { ActionIcon, Alert, Button, Card, Group, SegmentedControl, SimpleGrid, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Alert, Button, Card, Group, SegmentedControl, Select, SimpleGrid, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
-import { crewList, GROUPS, OTHER_LISTS, type DailySettings, type ListItem } from '../daily';
+import { GROUPS, OTHER_LISTS, type DailySettings, type ListItem } from '../daily';
 
 
 /** How the daily report records staff (names or trade + count) and the lists it suggests, in Arabic and English. */
@@ -23,6 +23,46 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
   const rows = (k: string) => s.lists[k] ?? [];
   const setRows = (k: string, v: ListItem[]) => setS({ ...s, lists: { ...s.lists, [k]: v } });
   const setRow = (k: string, i: number, p: Partial<ListItem>) => setRows(k, rows(k).map((x, j) => (j === i ? { ...x, ...p } : x)));
+  /** One list; people take their position from the group's descriptions (no second typing). */
+  const table = (k: string, rolesFrom?: string) => {
+    const people = !!rolesFrom;
+    const roles = rolesFrom ? rows(rolesFrom).filter((x) => x.ar) : [];
+    return (
+      <>
+        <Text size="xs" c="dimmed" mb={6}>{t(`dset.listHint.${k}`)}</Text>
+        {rows(k).length > 0 && (
+          <Table withRowBorders={false} verticalSpacing={3} horizontalSpacing={4}>
+            <Table.Thead><Table.Tr>
+              <Table.Th>{t(people ? 'dset.nameAr' : 'dset.descAr')}</Table.Th><Table.Th>{t(people ? 'dset.nameEn' : 'dset.descEn')}</Table.Th>
+              {people && <Table.Th w={230}>{t('dset.position')}</Table.Th>}
+              <Table.Th w={70}>{t('dset.active')}</Table.Th>{editable && <Table.Th w={30} />}
+            </Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {rows(k).map((x, i) => (
+                <Table.Tr key={i} opacity={x.active ? 1 : 0.55}>
+                  <Table.Td><TextInput size="xs" disabled={!editable} value={x.ar} onChange={(e) => setRow(k, i, { ar: e.currentTarget.value })} /></Table.Td>
+                  <Table.Td><TextInput size="xs" dir="ltr" disabled={!editable} value={x.en} onChange={(e) => setRow(k, i, { en: e.currentTarget.value })} /></Table.Td>
+                  {people && (
+                    <Table.Td>
+                      <Select size="xs" clearable searchable disabled={!editable} value={x.role_ar ?? null}
+                        placeholder={roles.length ? undefined : t('dset.noPositions')}
+                        data={Array.from(new Set([...roles.map((r) => r.ar), ...(x.role_ar ? [x.role_ar] : [])]))
+                          .map((v) => ({ value: v, label: (() => { const r = roles.find((y) => y.ar === v); return r && r.en && r.en !== r.ar ? `${r.ar} · ${r.en}` : v; })() }))}
+                        onChange={(v) => { const r = roles.find((y) => y.ar === v); setRow(k, i, { role_ar: v, role_en: r?.en ?? v }); }} />
+                    </Table.Td>
+                  )}
+                  <Table.Td><Switch size="xs" disabled={!editable} checked={x.active} onChange={(e) => setRow(k, i, { active: e.currentTarget.checked })} /></Table.Td>
+                  {editable && <Table.Td><ActionIcon size="sm" variant="subtle" color="red" aria-label="remove" onClick={() => setRows(k, rows(k).filter((_, j) => j !== i))}>×</ActionIcon></Table.Td>}
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        )}
+        {editable && <Button mt={4} size="compact-xs" variant="subtle" onClick={() => setRows(k, [...rows(k), { ar: '', en: '', role_ar: null, role_en: null, active: true }])}>
+          + {t(`dset.add.${people ? 'person' : k.endsWith('_desc') ? 'desc' : k}`)}</Button>}
+      </>
+    );
+  };
   return (
     <Card withBorder>
       <Title order={5}>{t('dset.title')}</Title>
@@ -39,42 +79,19 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
       </SimpleGrid>
       <Tabs defaultValue="supervision" mt="lg" keepMounted={false}>
         <Tabs.List>
-          {GROUPS.map((g) => <Tabs.Tab key={g} value={g}>{t(`daily.g.${g}`)} — {t(s.crew[g] === 'names' ? 'dset.names' : 'dset.counts')} ({rows(crewList(s, g)).length})</Tabs.Tab>)}
+          {GROUPS.map((g) => <Tabs.Tab key={g} value={g}>{t(`daily.g.${g}`)} — {t(s.crew[g] === 'names' ? 'dset.names' : 'dset.counts')} ({rows(`${g}_${s.crew[g] === 'names' ? 'names' : 'desc'}`).length})</Tabs.Tab>)}
           {OTHER_LISTS.map((k) => <Tabs.Tab key={k} value={k}>{t(`dset.list.${k}`)} ({rows(k).length})</Tabs.Tab>)}
         </Tabs.List>
-        {[...GROUPS.map((g) => [g, crewList(s, g)]), ...OTHER_LISTS.map((k) => [k, k])].map(([tab, k]) => {
-          const people = k.endsWith('_names');
-          return (
-            <Tabs.Panel key={tab} value={tab} pt="sm">
-              <Text size="xs" c="dimmed" mb={6}>{t(`dset.listHint.${k}`)}</Text>
-              {rows(k).length > 0 && (
-                <Table withRowBorders={false} verticalSpacing={3} horizontalSpacing={4}>
-                  <Table.Thead><Table.Tr>
-                    <Table.Th>{t(people ? 'dset.nameAr' : 'dset.descAr')}</Table.Th><Table.Th>{t(people ? 'dset.nameEn' : 'dset.descEn')}</Table.Th>
-                    {people && <><Table.Th>{t('dset.roleAr')}</Table.Th><Table.Th>{t('dset.roleEn')}</Table.Th></>}
-                    <Table.Th w={70}>{t('dset.active')}</Table.Th>{editable && <Table.Th w={30} />}
-                  </Table.Tr></Table.Thead>
-                  <Table.Tbody>
-                    {rows(k).map((x, i) => (
-                      <Table.Tr key={i} opacity={x.active ? 1 : 0.55}>
-                        <Table.Td><TextInput size="xs" disabled={!editable} value={x.ar} onChange={(e) => setRow(k, i, { ar: e.currentTarget.value })} /></Table.Td>
-                        <Table.Td><TextInput size="xs" dir="ltr" disabled={!editable} value={x.en} onChange={(e) => setRow(k, i, { en: e.currentTarget.value })} /></Table.Td>
-                        {people && <>
-                          <Table.Td><TextInput size="xs" disabled={!editable} value={x.role_ar ?? ''} onChange={(e) => setRow(k, i, { role_ar: e.currentTarget.value || null })} /></Table.Td>
-                          <Table.Td><TextInput size="xs" dir="ltr" disabled={!editable} value={x.role_en ?? ''} onChange={(e) => setRow(k, i, { role_en: e.currentTarget.value || null })} /></Table.Td>
-                        </>}
-                        <Table.Td><Switch size="xs" disabled={!editable} checked={x.active} onChange={(e) => setRow(k, i, { active: e.currentTarget.checked })} /></Table.Td>
-                        {editable && <Table.Td><ActionIcon size="sm" variant="subtle" color="red" aria-label="remove" onClick={() => setRows(k, rows(k).filter((_, j) => j !== i))}>×</ActionIcon></Table.Td>}
-                      </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              )}
-              {editable && <Button mt={4} size="compact-xs" variant="subtle" onClick={() => setRows(k, [...rows(k), { ar: '', en: '', role_ar: null, role_en: null, active: true }])}>
-                + {t(`dset.add.${people ? 'person' : k.endsWith('_desc') ? 'desc' : k}`)}</Button>}
-            </Tabs.Panel>
-          );
-        })}
+        {GROUPS.map((g) => (
+          <Tabs.Panel key={g} value={g} pt="sm">
+            {s.crew[g] === 'names' && <>
+              {table(`${g}_names`, `${g}_desc`)}
+              <Text fw={600} size="sm" mt="lg">{t('dset.positions')}</Text>
+            </>}
+            {table(`${g}_desc`)}
+          </Tabs.Panel>
+        ))}
+        {OTHER_LISTS.map((k) => <Tabs.Panel key={k} value={k} pt="sm">{table(k)}</Tabs.Panel>)}
       </Tabs>
       <Switch mt="lg" label={t('dset.linkMaterials')} description={t('dset.linkMaterialsHint')} disabled={!editable} checked={s.link_materials}
         onChange={(e) => setS({ ...s, link_materials: e.currentTarget.checked })} />
