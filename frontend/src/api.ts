@@ -54,7 +54,8 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
 export interface User { id: string; email: string; full_name_ar: string; full_name_en: string; locale: string }
 export interface Org { id: string; kind: string; name_ar: string; name_en: string }
 export interface Me { user: User; orgs: { org: Org; org_role: string }[] }
-export interface Role { id: string; code: string; name_ar: string; name_en: string; party_kind: string }
+export interface Role { id: string; code: string; name_ar: string; name_en: string; party_kind: string; base_code?: string | null }
+export interface ProjectRole extends Role { custom: boolean; hidden: boolean; members: number; can_edit: boolean }
 export interface Party { id: string; kind: string; status: string; org: Org | null; placeholder_name: string | null }
 export interface Project {
   id: string; owner_org_id: string; code: string; name_ar: string; name_en: string;

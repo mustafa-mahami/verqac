@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.access import project_access, require
+from app.core.roles import role_out
 from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
 from app.core.kinds import new_code, submittal_kinds
@@ -21,7 +22,7 @@ from app.models.records import Record, RecordType, StoredFile, SubmittalDetails
 from app.core.workcal import org_calendar
 from app.schemas.core import OrgCalendar, ProjectCalendar
 from app.schemas.core import (OrgOut, PartyOut, ProjectIn, ProjectListItem, ProjectOut, ProjectSettingsIn, SubmittalKind,
-                              ProjectSettingsOut, ProjectStats, RoleOut, NotifyChannels)
+                              ProjectSettingsOut, ProjectStats, NotifyChannels)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -55,7 +56,7 @@ def list_projects(c: Ctx = Depends(ctx)):
     ids = [p.id for p, _ in rows]
     parties = _parties(c, ids)
     stats = _stats(c, ids)
-    return [ProjectListItem(project=ProjectOut.model_validate(p), my_role=RoleOut.model_validate(r) if r else None,
+    return [ProjectListItem(project=ProjectOut.model_validate(p), my_role=role_out(p, r) if r else None,
                             parties=parties.get(p.id, []), stats=stats.get(p.id, ProjectStats()))
             for p, r in rows]
 
@@ -119,7 +120,7 @@ def create_project(body: ProjectIn, c: Ctx = Depends(ctx)):
           project_id=project.id, changes={"code": project.code, "name_en": project.name_en},
           ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
-    return ProjectListItem(project=ProjectOut.model_validate(project), my_role=RoleOut.model_validate(role),
+    return ProjectListItem(project=ProjectOut.model_validate(project), my_role=role_out(project, role),
                            parties=_parties(c, [project.id]).get(project.id, []))
 
 
@@ -132,7 +133,7 @@ def get_project(project_id: UUID, c: Ctx = Depends(ctx)):
     role = c.db.scalar(select(Role).join(ProjectMember, ProjectMember.role_id == Role.id)
                        .where(ProjectMember.project_id == project_id, ProjectMember.user_id == c.user.id))
     return ProjectListItem(project=ProjectOut.model_validate(project),
-                           my_role=RoleOut.model_validate(role) if role else None,
+                           my_role=role_out(project, role) if role else None,
                            parties=_parties(c, [project_id]).get(project_id, []))
 
 

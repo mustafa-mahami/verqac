@@ -7,6 +7,7 @@ from sqlalchemy import func, select, update
 
 from app.core.audit import audit
 from app.core.db import session_scope
+from app.core.roles import role_out
 from app.core.deps import Ctx, ctx
 from app.core.invites import create_invite
 from app.models.core import (Invitation, Organization, OrgMember, Project, ProjectMember, ProjectParty,
@@ -14,7 +15,7 @@ from app.models.core import (Invitation, Organization, OrgMember, Project, Proje
 from app.core.workcal import org_calendar
 from app.schemas.core import OrgCalendar
 from app.schemas.core import (InviteOut, MemberProject, OrgInviteIn, OrgMemberOut, OrgMemberPatch, PendingInvite,
-                              RoleOut, UserOut)
+                              UserOut)
 
 router = APIRouter(prefix="/orgs/{org_id}", tags=["organization"])
 
@@ -41,7 +42,7 @@ def list_members(org_id: UUID, c: Ctx = Depends(ctx)):
                 .where(ProjectParty.org_id == org_id).order_by(Project.code)):
             projects.setdefault(pm.user_id, []).append(MemberProject(
                 project_id=prj.id, code=prj.code, name_ar=prj.name_ar, name_en=prj.name_en,
-                role=RoleOut.model_validate(role), is_active=pm.is_active))
+                role=role_out(prj, role), is_active=pm.is_active))
     return [OrgMemberOut(user=UserOut.model_validate(u), org_role=m.org_role, is_active=m.is_active,
                          projects=projects.get(u.id, [])) for u, m in rows]
 

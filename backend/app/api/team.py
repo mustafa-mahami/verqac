@@ -9,10 +9,12 @@ from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
 from app.core.invites import create_invite
-from app.models.core import (Discipline, Invitation, Organization, OrgMember, ProjectMember, ProjectParty, Role,
-                             User)
+from app.core.roles import is_hidden, overrides, role_out
+from app.models.core import (Discipline, Invitation, Organization, OrgMember, Project, ProjectMember, ProjectParty, Role,
+                             RolePermission, User)
 from app.schemas.core import (InviteOut, MemberIn, MemberOut, MemberPatch, OrgOut, PartyIn, PartyInviteIn,
-                              PendingInvite, ProjectOut, RoleOut, TeamInviteIn, TeamOut, TeamParty, UserOut)
+                              PendingInvite, ProjectOut, ProjectRoleIn, ProjectRoleOut, ProjectRolePatch, TeamInviteIn, TeamOut,
+                              TeamParty, UserOut)
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["team"])
 
@@ -74,7 +76,7 @@ def get_team(project_id: UUID, c: Ctx = Depends(ctx)):
         .join(Role, Role.id == ProjectMember.role_id)
         .where(ProjectMember.project_id == project_id).order_by(Role.sort, User.full_name_en)
     ).all()
-    members = [MemberOut(id=m.id, user=UserOut.model_validate(u), party_id=m.party_id, role=RoleOut.model_validate(r),
+    members = [MemberOut(id=m.id, user=UserOut.model_validate(u), party_id=m.party_id, role=role_out(a.project, r),
                          discipline_ids=m.discipline_ids, is_active=m.is_active) for m, u, r in mrows]
     return TeamOut(project=ProjectOut.model_validate(a.project), can_manage_project=a.can_manage_project,
                    my_party_id=a.member.party_id if a.member else None, parties=parties, members=members)
@@ -122,11 +124,16 @@ def remove_party(project_id: UUID, party_id: UUID, c: Ctx = Depends(ctx)):
     _audit(c, a, "project_party", "remove", party.id, {"kind": party.kind})
 
 
-def _check_role_and_disciplines(c: Ctx, party: ProjectParty, role_id: UUID | None, discipline_ids: list[UUID] | None):
+def _check_role_and_disciplines(c: Ctx, party: ProjectParty, role_id: UUID | None, discipline_ids: list[UUID] | None,
+                                current: UUID | None = None):
     if role_id is not None:
         role = c.db.get(Role, role_id)
-        if role is None or role.party_kind != party.kind or role.org_id not in (None, party.org_id):
+        platform = role is not None and role.org_id is None and role.project_id is None
+        own = role is not None and role.project_id == party.project_id and role.org_id == party.org_id
+        if role is None or role.party_kind != party.kind or not (platform or own):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "role_not_for_party")
+        if role_id != current and is_hidden(c.db.get(Project, party.project_id), role):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "role_hidden")
     if discipline_ids:
         valid = set(c.db.scalars(select(Discipline.id).where(Discipline.org_id == party.org_id,
                                                              Discipline.id.in_(discipline_ids))))
@@ -163,7 +170,7 @@ def add_member(project_id: UUID, body: MemberIn, c: Ctx = Depends(ctx)):
             "disciplines": [str(d) for d in body.discipline_ids]})
     user, role = c.db.get(User, body.user_id), c.db.get(Role, body.role_id)
     return MemberOut(id=member.id, user=UserOut.model_validate(user), party_id=party.id,
-                     role=RoleOut.model_validate(role), discipline_ids=member.discipline_ids, is_active=True)
+                     role=role_out(a.project, role), discipline_ids=member.discipline_ids, is_active=True)
 
 
 @router.patch("/members/{member_id}", response_model=MemberOut)
@@ -176,7 +183,7 @@ def update_member(project_id: UUID, member_id: UUID, body: MemberPatch, c: Ctx =
     require(a.can_manage_party_team(party), "manage_team_required")
     if member.user_id == c.user.id and body.is_active is False:
         raise HTTPException(status.HTTP_409_CONFLICT, "cannot_remove_self")
-    _check_role_and_disciplines(c, party, body.role_id, body.discipline_ids)
+    _check_role_and_disciplines(c, party, body.role_id, body.discipline_ids, current=member.role_id)
 
     before = {"role_id": member.role_id, "discipline_ids": list(member.discipline_ids), "is_active": member.is_active}
     if body.role_id is not None:
@@ -190,7 +197,7 @@ def update_member(project_id: UUID, member_id: UUID, body: MemberPatch, c: Ctx =
     _audit(c, a, "project_member", "update", member.id, diff(before, after))
     user, role = c.db.get(User, member.user_id), c.db.get(Role, member.role_id)
     return MemberOut(id=member.id, user=UserOut.model_validate(user), party_id=party.id,
-                     role=RoleOut.model_validate(role), discipline_ids=member.discipline_ids,
+                     role=role_out(a.project, role), discipline_ids=member.discipline_ids,
                      is_active=member.is_active)
 
 
@@ -212,3 +219,118 @@ def invite_member(project_id: UUID, party_id: UUID, body: TeamInviteIn, bg: Back
                         subject_en=f"\"{org.name_en}\" and the project \"{a.project.name_en}\"")
     _audit(c, a, "project_member", "invite", party.id, {"email": out.email, "role_id": str(body.role_id)})
     return out
+
+
+# ---- roles of the project: each party names its own roles on top of the platform roles of that party
+
+
+def _role_party(c: Ctx, a: ProjectAccess, kind: str) -> ProjectParty | None:
+    """The party of this kind whose roles the user manages (his own party), or None."""
+    if a.party is None or a.party.kind != kind or not a.can_manage_party_team(a.party):
+        return None
+    return a.party
+
+
+def _project_role(c: Ctx, a: ProjectAccess, role_id: UUID) -> tuple[Role, ProjectParty]:
+    role = c.db.get(Role, role_id)
+    if role is None or not ((role.org_id is None and role.project_id is None) or role.project_id == a.project.id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    party = _role_party(c, a, role.party_kind)
+    if party is None or (role.project_id is not None and role.org_id != party.org_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "forbidden")
+    return role, party
+
+
+def _in_use(c: Ctx, project_id: UUID) -> dict[UUID, int]:
+    return dict(c.db.execute(select(ProjectMember.role_id, func.count()).where(
+        ProjectMember.project_id == project_id, ProjectMember.is_active).group_by(ProjectMember.role_id)).all())
+
+
+def _role_row(c: Ctx, a: ProjectAccess, r: Role, used: dict) -> ProjectRoleOut:
+    party = _role_party(c, a, r.party_kind)
+    can = party is not None and (r.project_id is None or r.org_id == party.org_id)
+    return ProjectRoleOut(**role_out(a.project, r).model_dump(), custom=r.project_id is not None,
+                          hidden=is_hidden(a.project, r), members=used.get(r.id, 0), can_edit=can)
+
+
+@router.get("/roles", response_model=list[ProjectRoleOut])
+def list_project_roles(project_id: UUID, c: Ctx = Depends(ctx)):
+    a = project_access(c, project_id)
+    used = _in_use(c, project_id)
+    roles = c.db.scalars(select(Role).where(
+        ((Role.org_id.is_(None)) & (Role.project_id.is_(None))) | (Role.project_id == project_id))
+        .order_by(Role.sort, Role.name_en)).all()
+    return [_role_row(c, a, r, used) for r in roles]
+
+
+@router.post("/roles", response_model=ProjectRoleOut, status_code=status.HTTP_201_CREATED)
+def add_project_role(project_id: UUID, body: ProjectRoleIn, c: Ctx = Depends(ctx)):
+    a = project_access(c, project_id)
+    base = c.db.get(Role, body.base_role_id)
+    if base is None or base.org_id is not None or base.project_id is not None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "role_not_for_party")
+    party = _role_party(c, a, base.party_kind)  # same party only: the base decides the party
+    if party is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "forbidden")
+    from uuid import uuid4
+    role = Role(org_id=party.org_id, project_id=project_id, code=f"p_{uuid4().hex[:12]}", base_code=base.code,
+                name_ar=body.name_ar.strip(), name_en=body.name_en.strip(), party_kind=base.party_kind,
+                manage_project=base.manage_project, manage_team=base.manage_team, act_on_behalf=base.act_on_behalf,
+                view_dashboards=base.view_dashboards, sort=base.sort)
+    c.db.add(role)
+    c.db.flush()
+    for rp in c.db.scalars(select(RolePermission).where(RolePermission.role_id == base.id)):
+        c.db.add(RolePermission(role_id=role.id, record_type=rp.record_type, action=rp.action, scope=rp.scope))
+    _audit(c, a, "role", "create", role.id, {"name_ar": role.name_ar, "name_en": role.name_en, "base": base.code})
+    c.db.flush()
+    return _role_row(c, a, role, {})
+
+
+@router.patch("/roles/{role_id}", response_model=ProjectRoleOut)
+def edit_project_role(project_id: UUID, role_id: UUID, body: ProjectRolePatch, c: Ctx = Depends(ctx)):
+    a = project_access(c, project_id)
+    role, _ = _project_role(c, a, role_id)
+    changes = {}
+    settings = dict(a.project.settings or {})
+    over = {k: dict(v) for k, v in overrides(a.project).items()}
+    o = over.setdefault(role.code, {})
+    for f in ("name_ar", "name_en"):
+        v = getattr(body, f)
+        if v is None:
+            continue
+        v = v.strip()
+        if role.project_id is not None:  # a project role is renamed in place
+            if v != getattr(role, f):
+                changes[f] = [getattr(role, f), v]
+                setattr(role, f, v)
+        else:  # a platform role is renamed for this project only; its own name clears the override
+            old = o.get(f) or getattr(role, f)
+            if v != old:
+                changes[f] = [old, v]
+            o.pop(f, None) if v == getattr(role, f) else o.__setitem__(f, v)
+    if body.hidden is not None and body.hidden != bool(o.get("hidden")):
+        changes["hidden"] = [bool(o.get("hidden")), body.hidden]
+        o["hidden"] = body.hidden
+    if not o.get("hidden"):
+        o.pop("hidden", None)
+    if not o:
+        over.pop(role.code, None)
+    settings["roles"] = over
+    a.project.settings = settings
+    if changes:
+        _audit(c, a, "role", "update", role.id, changes)
+    c.db.flush()
+    return _role_row(c, a, role, _in_use(c, project_id))
+
+
+@router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_role(project_id: UUID, role_id: UUID, c: Ctx = Depends(ctx)):
+    a = project_access(c, project_id)
+    role, _ = _project_role(c, a, role_id)
+    if role.project_id is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "role_is_base")  # platform roles are hidden, not deleted
+    if c.db.scalar(select(func.count()).select_from(ProjectMember).where(ProjectMember.role_id == role.id)) or \
+            c.db.scalar(select(func.count()).select_from(Invitation).where(Invitation.role_id == role.id)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "role_in_use")
+    _audit(c, a, "role", "delete", role.id, {"name_ar": role.name_ar, "name_en": role.name_en})
+    c.db.delete(role)

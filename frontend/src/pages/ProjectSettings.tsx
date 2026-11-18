@@ -10,6 +10,7 @@ import DailySettingsCard from './DailySettingsCard';
 import { TYPE_TABS } from '../recordTypes';
 import { cleanHolidays, HolidaysEditor, holidayText, WeekendPicker } from './Calendar';
 import ProjectStructure from './ProjectStructure';
+import ProjectRoles from './ProjectRoles';
 
 /** A period as days + hours (stored in hours). */
 function Period({ hours, onChange, disabled, label }: { hours: number; onChange: (h: number) => void; disabled: boolean; label: string }) {
@@ -100,6 +101,7 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
         {editable && <Button mt="md" variant="light" loading={save.isPending} disabled={!enabled.length} onClick={() => save.mutate('types')}>{t('rec.save')}</Button>}
       </Card>
       <ProjectStructure projectId={projectId} />
+      <ProjectRoles projectId={projectId} />
       {enabled.includes('daily_report') && <DailySettingsCard projectId={projectId} editable={editable} />}
       {enabled.includes('test') && <ConcreteClasses projectId={projectId} editable={editable} />}
       <Card withBorder>

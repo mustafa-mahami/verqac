@@ -144,7 +144,10 @@
     "dr_future": "Cannot create a report for a future date.",
     "progress_needs_stage": "Progress needs a stage.",
     "invalid_settings": "Invalid settings.",
-    "invalid_dates": "The end date is before the start date."
+    "invalid_dates": "The end date is before the start date.",
+    "role_in_use": "The role is held by members or invitations and cannot be deleted. You can hide it.",
+    "role_hidden": "This role is hidden in the project.",
+    "role_is_base": "Base roles are not deleted; they can be hidden."
   },
   "common": {
     "cancel": "Cancel",
@@ -995,5 +998,18 @@
     "consultant_pm": "Answers all requests in all disciplines and on behalf of engineers, issues NCRs, manages the consultant team.",
     "consultant_engineer": "In his disciplines: reviews and answers contractor requests (approve, notes, revise, reject), issues and closes NCRs, approves daily reports.",
     "owner_rep": "View and export only, all project requests."
+  },
+  "roles": {
+    "title": "Team roles",
+    "hint": "Each party renames its roles, hides those it does not use and adds new ones with the permissions of an existing role of the same party. Permissions are fixed per role and never cross parties.",
+    "nameAr": "Arabic name",
+    "nameEn": "English name",
+    "perms": "Permissions",
+    "members": "Members",
+    "hidden": "Hidden",
+    "base": "Permissions like",
+    "add": "Add role",
+    "like": "Like {{name}}",
+    "delete": "Delete role"
   }
 }

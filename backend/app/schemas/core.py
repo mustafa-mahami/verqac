@@ -81,6 +81,26 @@ class RoleOut(Out):
     name_ar: str
     name_en: str
     party_kind: str
+    base_code: str | None = None  # the platform role whose permissions it has (its own code for platform roles)
+
+
+class ProjectRoleOut(RoleOut):
+    custom: bool  # added in this project
+    hidden: bool  # not offered for new members
+    members: int  # active members holding it
+    can_edit: bool  # the user manages this party's roles
+
+
+class ProjectRoleIn(BaseModel):
+    name_ar: str = Field(min_length=1, max_length=100)
+    name_en: str = Field(min_length=1, max_length=100)
+    base_role_id: UUID
+
+
+class ProjectRolePatch(BaseModel):
+    name_ar: str | None = Field(default=None, min_length=1, max_length=100)
+    name_en: str | None = Field(default=None, min_length=1, max_length=100)
+    hidden: bool | None = None
 
 
 class PartyOut(BaseModel):

@@ -116,6 +116,9 @@ class Role(Base):
     name_ar: Mapped[str] = mapped_column(String(100), nullable=False)
     name_en: Mapped[str] = mapped_column(String(100), nullable=False)
     party_kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    # a role added in one project: its permissions are a copy of a platform role of the same party (base_code)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    base_code: Mapped[str | None] = mapped_column(String(40))
     # project-level abilities that are not tied to a record type
     manage_project: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     manage_team: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

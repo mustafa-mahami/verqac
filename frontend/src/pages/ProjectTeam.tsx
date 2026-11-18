@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import {
-  api, ApiError, type Discipline, type InviteOut, type Member, type OrgMember, type Role, type Team, type TeamParty,
+  api, ApiError, type Discipline, type InviteOut, type Member, type OrgMember, type ProjectRole, type Role, type Team, type TeamParty,
 } from '../api';
 import { useAuth } from '../auth';
 import i18n, { pick } from '../i18n';
@@ -26,12 +26,12 @@ function RoleSelect({ roles, value, ...rest }: { roles: Role[]; value?: string |
   return (
     <Select label={t('team.role')} required value={value} {...rest}
       data={roles.map((r) => ({ value: r.id, label: pick(r, 'name') }))}
-      description={chosen ? roleHint(chosen.code) : t('team.roleHint')}
+      description={chosen ? roleHint(chosen.base_code ?? chosen.code) : t('team.roleHint')}
       inputWrapperOrder={['label', 'input', 'description', 'error']}
       renderOption={({ option }) => (
         <div>
           <Text size="sm">{option.label}</Text>
-          <Text size="xs" c="dimmed">{roleHint(byId[option.value]?.code ?? '')}</Text>
+          <Text size="xs" c="dimmed">{roleHint(byId[option.value]?.base_code ?? byId[option.value]?.code ?? '')}</Text>
         </div>
       )} />
   );
@@ -89,7 +89,7 @@ function MemberForm({ projectId, party, team, onDone }: { projectId: string; par
   const [error, setError] = useState<string | null>(null);
   const orgId = party.org!.id;
   const users = useQuery({ queryKey: ['orgMembers', orgId], queryFn: () => api<OrgMember[]>(`/orgs/${orgId}/members`) });
-  const roles = useQuery({ queryKey: ['roles'], queryFn: () => api<Role[]>('/roles') });
+  const roles = useProjectRoles(projectId);
   const discs = useQuery({ queryKey: ['disciplines', orgId], queryFn: () => api<Discipline[]>(`/orgs/${orgId}/disciplines`) });
   const activeIds = new Set(team.members.filter((m) => m.is_active).map((m) => m.user.id));
   const candidates = (users.data ?? []).filter((m) => !activeIds.has(m.user.id));
@@ -109,7 +109,7 @@ function MemberForm({ projectId, party, team, onDone }: { projectId: string; par
         <Select label={t('team.user')} required searchable
           data={candidates.map((m) => ({ value: m.user.id, label: `${pick(m.user, 'full_name')} · ${m.user.email}` }))}
           {...form.getInputProps('user_id')} />
-        <RoleSelect roles={(roles.data ?? []).filter((r) => r.party_kind === party.kind)} {...form.getInputProps('role_id')} />
+        <RoleSelect roles={(roles.data ?? []).filter((r) => r.party_kind === party.kind && !r.hidden)} {...form.getInputProps('role_id')} />
         <MultiSelect label={t('team.disciplines')} placeholder={t('team.allDisciplines')}
           data={(discs.data ?? []).map((d) => ({ value: d.id, label: pick(d, 'name') }))}
           {...form.getInputProps('discipline_ids')} />
@@ -120,12 +120,16 @@ function MemberForm({ projectId, party, team, onDone }: { projectId: string; par
 }
 
 /** Role and discipline pickers for one party (roles of that party, disciplines of its organization). */
-function useRolesAndDisciplines(party: TeamParty) {
+function useProjectRoles(projectId: string) {
+  return useQuery({ queryKey: ['projectRoles', projectId], queryFn: () => api<ProjectRole[]>(`/projects/${projectId}/roles`) });
+}
+
+function useRolesAndDisciplines(projectId: string, party: TeamParty, keep?: string) {
   const orgId = party.org!.id;
-  const roles = useQuery({ queryKey: ['roles'], queryFn: () => api<Role[]>('/roles') });
+  const roles = useProjectRoles(projectId);
   const discs = useQuery({ queryKey: ['disciplines', orgId], queryFn: () => api<Discipline[]>(`/orgs/${orgId}/disciplines`) });
   return {
-    partyRoles: (roles.data ?? []).filter((r) => r.party_kind === party.kind),
+    partyRoles: (roles.data ?? []).filter((r) => r.party_kind === party.kind && (!r.hidden || r.id === keep)),
     discData: (discs.data ?? []).map((d) => ({ value: d.id, label: pick(d, 'name') })),
   };
 }
@@ -134,7 +138,7 @@ function MemberEditForm({ projectId, member, party, onDone }: { projectId: strin
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const { partyRoles, discData } = useRolesAndDisciplines(party);
+  const { partyRoles, discData } = useRolesAndDisciplines(projectId, party, member.role.id);
   const form = useForm({ initialValues: { role_id: member.role.id, discipline_ids: member.discipline_ids } });
   const save = useMutation({
     mutationFn: (v: typeof form.values) => api(`/projects/${projectId}/members/${member.id}`, { method: 'PATCH', body: JSON.stringify(v) }),
@@ -157,7 +161,7 @@ function MemberEditForm({ projectId, member, party, onDone }: { projectId: strin
 function InviteNewForm({ projectId, party, onInvite }: { projectId: string; party: TeamParty; onInvite: (i: InviteOut) => void }) {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
-  const { partyRoles, discData } = useRolesAndDisciplines(party);
+  const { partyRoles, discData } = useRolesAndDisciplines(projectId, party);
   const form = useForm({ initialValues: { email: '', role_id: '', discipline_ids: [] as string[] } });
   const send = useMutation({
     mutationFn: (v: typeof form.values) =>
@@ -283,7 +287,7 @@ export default function ProjectTeam() {
                       <Text size="xs" c="dimmed" dir="ltr" ta="start">{m.user.email}</Text>
                     </Table.Td>
                     <Table.Td><Text size="sm">{party ? t(`party.${party.kind}`) : ''}</Text></Table.Td>
-                    <Table.Td><Tooltip label={roleHint(m.role.code)} multiline w={320} disabled={!roleHint(m.role.code)}><Text size="sm" style={{ cursor: 'help' }}>{pick(m.role, 'name')}</Text></Tooltip></Table.Td>
+                    <Table.Td><Tooltip label={roleHint(m.role.base_code ?? m.role.code)} multiline w={320} disabled={!roleHint(m.role.base_code ?? m.role.code)}><Text size="sm" style={{ cursor: 'help' }}>{pick(m.role, 'name')}</Text></Tooltip></Table.Td>
                     <Table.Td>
                       <Text size="sm">
                         {m.discipline_ids.length === 0

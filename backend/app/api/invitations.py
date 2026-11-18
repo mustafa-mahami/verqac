@@ -14,13 +14,14 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import _issue
 from app.core.audit import audit
+from app.core.roles import role_out
 from app.core.deps import RequestMeta, _bearer, request_meta, system_db
 from app.core.security import decode_access_token, hash_password, hash_token
 from app.core.seed import DEFAULT_DISCIPLINES
 from app.core.seed_structure import seed_project_types
 from app.models.core import (Discipline, Invitation, Organization, OrgMember, Project, ProjectMember, ProjectParty,
                              Role, User)
-from app.schemas.core import AcceptIn, InvitationInfo, OrgOut, ProjectOut, RoleOut, TokenOut
+from app.schemas.core import AcceptIn, InvitationInfo, OrgOut, ProjectOut, TokenOut
 
 router = APIRouter(prefix="/invitations", tags=["invitations"])
 
@@ -61,7 +62,7 @@ def get_invitation(token: str, db: Session = Depends(system_db, scope="function"
         org=OrgOut.model_validate(org) if org else None,
         project=ProjectOut.model_validate(project) if project else None,
         party_kind=party.kind if party else None, party_placeholder=party.placeholder_name if party else None,
-        role=RoleOut.model_validate(role) if role else None,
+        role=role_out(project, role) if role else None,
     )
 
 
