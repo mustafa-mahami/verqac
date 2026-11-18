@@ -1,0 +1,292 @@
+import {
+  ActionIcon, Alert, Badge, Button, Card, Checkbox, FileButton, Group, Modal, NumberInput, ScrollArea, Select, Stack, Table, Text,
+  TextInput, Title, Tooltip,
+} from '@mantine/core';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { api, ApiError, openProtected, type RecordDetail } from '../api';
+import { fmtDate } from '../format';
+import i18n, { pick } from '../i18n';
+import { addDays, cellKey, daysBetween, type ImportRow, type PCycle, type PLine, type ProgrammeOut } from '../programme';
+import { useStructure } from './Structure';
+
+const errText = (e: unknown) => i18n.t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, { defaultValue: i18n.t('errors.generic') });
+
+/** Bars of every stage from its first start to its last finish, with today's line. */
+function Gantt({ rows, from, to }: { rows: { label: string; start: string; finish: string }[]; from: string; to: string }) {
+  const span = Math.max(1, daysBetween(from, to) + 1);
+  const today = new Date().toISOString().slice(0, 10);
+  const w = 760, lab = 200, rowH = 18, h = rows.length * rowH + 22;
+  const x = (d: string) => lab + (Math.min(Math.max(daysBetween(from, d), 0), span) / span) * (w - lab - 8);
+  const months: string[] = [];
+  for (let d = from.slice(0, 7) + '-01'; d <= to; d = addDays(d, 32).slice(0, 7) + '-01') if (d >= from) months.push(d);
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', direction: 'ltr' }}>
+      {months.map((m) => (
+        <g key={m}><line x1={x(m)} x2={x(m)} y1={12} y2={h} stroke="#eceff3" />
+          <text x={x(m) + 2} y={9} fontSize="8" fill="#888">{m.slice(0, 7)}</text></g>
+      ))}
+      {rows.map((r, i) => (
+        <g key={i}>
+          <text x={lab - 6} y={22 + i * rowH + 9} fontSize="9" textAnchor="end" fill="#333">{r.label}</text>
+          <rect x={x(r.start)} y={16 + i * rowH} width={Math.max(2, x(addDays(r.finish, 1)) - x(r.start))} height={rowH - 6} rx={3}
+            fill="var(--mantine-color-verqac-6)" opacity={0.8} />
+        </g>
+      ))}
+      {today >= from && today <= to && <line x1={x(today)} x2={x(today)} y1={12} y2={h} stroke="#d9480f" strokeDasharray="3 2" />}
+    </svg>
+  );
+}
+
+/** Floor cycle: per stage a start, days per floor and days until the next floor starts. */
+function CycleModal({ opened, onClose, cycles, onApply, stages, unitCount }: {
+  opened: boolean; onClose: () => void; cycles: PCycle[]; onApply: (c: PCycle[]) => void;
+  stages: { id: string; name: string; whole: boolean }[]; unitCount: number;
+}) {
+  const { t } = useTranslation();
+  const [rows, setRows] = useState<(PCycle & { on: boolean })[]>([]);
+  useEffect(() => {
+    if (!opened) return;
+    const by = Object.fromEntries(cycles.map((c) => [c.stage_id, c]));
+    setRows(stages.map((s) => ({ stage_id: s.id, start: by[s.id]?.start ?? null, duration: by[s.id]?.duration ?? 0, lag: by[s.id]?.lag ?? 0, on: !!by[s.id] })));
+  }, [opened, cycles, stages]);
+  const set = (i: number, p: Partial<PCycle & { on: boolean }>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...p, on: p.on ?? true } : r)));
+  const ok = rows.filter((r) => r.on && r.start && r.duration > 0);
+  return (
+    <Modal opened={opened} onClose={onClose} title={t('prg.cycleTitle')} size="xl">
+      <Text size="sm" c="dimmed" mb="sm">{t('prg.cycleHint', { n: unitCount })}</Text>
+      <Table verticalSpacing={4} fz="sm">
+        <Table.Thead><Table.Tr>
+          <Table.Th w={30} /><Table.Th>{t('structure.stage')}</Table.Th><Table.Th w={150}>{t('prg.start')}</Table.Th>
+          <Table.Th w={110}>{t('prg.duration')}</Table.Th><Table.Th w={110}>{t('prg.lag')}</Table.Th><Table.Th w={110}>{t('prg.finish')}</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {rows.map((r, i) => {
+            const s = stages[i];
+            const end = r.start && r.duration > 0 ? addDays(r.start, (s.whole ? 0 : r.lag * Math.max(0, unitCount - 1)) + r.duration - 1) : null;
+            return (
+              <Table.Tr key={r.stage_id}>
+                <Table.Td><Checkbox checked={r.on} onChange={(e) => set(i, { on: e.currentTarget.checked })} /></Table.Td>
+                <Table.Td>{s.name} {s.whole && <Badge size="xs" variant="light">{t('structure.whole')}</Badge>}</Table.Td>
+                <Table.Td><TextInput size="xs" type="date" value={r.start ?? ''} onChange={(e) => set(i, { start: e.currentTarget.value || null })} /></Table.Td>
+                <Table.Td><NumberInput size="xs" min={0} value={r.duration} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { duration: Number(v) || 0 })} /></Table.Td>
+                <Table.Td>{!s.whole && <NumberInput size="xs" min={0} value={r.lag} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { lag: Number(v) || 0 })} />}</Table.Td>
+                <Table.Td><Text size="xs" c="dimmed">{end ? fmtDate(end) : ''}</Text></Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+      <Group justify="flex-end" mt="md">
+        <Text size="xs" c="dimmed">{t('prg.cycleReplace')}</Text>
+        <Button disabled={!ok.length} onClick={() => onApply(ok.map(({ on: _on, ...c }) => c))}>{t('prg.generate')}</Button>
+      </Group>
+    </Modal>
+  );
+}
+
+/** Rows read from a file, with the stage and floor their names suggest; the engineer checks them before they count. */
+function ImportModal({ rows, onClose, onApply, stageData, unitData, whole }: {
+  rows: ImportRow[] | null; onClose: () => void; onApply: (lines: PLine[]) => void;
+  stageData: { value: string; label: string }[]; unitData: { value: string; label: string }[]; whole: Set<string>;
+}) {
+  const { t } = useTranslation();
+  const [list, setList] = useState<(ImportRow & { on: boolean })[]>([]);
+  useEffect(() => { if (rows) setList(rows.filter((r) => r.start || r.finish).map((r) => ({ ...r, on: !!(r.stage_id && r.start && r.finish && (whole.has(r.stage_id) || r.location_id)) }))); }, [rows, whole]);
+  const set = (i: number, p: Partial<ImportRow & { on: boolean }>) => setList(list.map((r, j) => {
+    if (j !== i) return r;
+    const n = { ...r, ...p };
+    return { ...n, on: p.on ?? !!(n.stage_id && n.start && n.finish && (whole.has(n.stage_id) || n.location_id)) };
+  }));
+  const chosen = list.filter((r) => r.on && r.stage_id && r.start && r.finish && (whole.has(r.stage_id) || r.location_id));
+  const apply = () => {
+    const cells = new Map<string, PLine>();
+    for (const r of chosen) {
+      const loc = whole.has(r.stage_id!) ? null : r.location_id;
+      const k = cellKey(r.stage_id!, loc);
+      const o = cells.get(k);
+      cells.set(k, { stage_id: r.stage_id!, location_id: loc, start: o && o.start < r.start! ? o.start : r.start!, finish: o && o.finish > r.finish! ? o.finish : r.finish! });
+    }
+    onApply([...cells.values()]);
+  };
+  return (
+    <Modal opened={!!rows} onClose={onClose} title={t('prg.importTitle')} size="90%">
+      <Text size="sm" c="dimmed" mb="sm">{t('prg.importHint', { all: list.length, ok: chosen.length })}</Text>
+      <ScrollArea h={460}>
+        <Table verticalSpacing={2} fz="xs" stickyHeader>
+          <Table.Thead><Table.Tr>
+            <Table.Th w={30} /><Table.Th>{t('prg.task')}</Table.Th><Table.Th w={95}>{t('prg.start')}</Table.Th><Table.Th w={95}>{t('prg.finish')}</Table.Th>
+            <Table.Th w={210}>{t('structure.stage')}</Table.Th><Table.Th w={170}>{t('prg.location')}</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {list.map((r, i) => (
+              <Table.Tr key={i} opacity={r.on ? 1 : 0.5}>
+                <Table.Td><Checkbox size="xs" checked={r.on} onChange={(e) => set(i, { on: e.currentTarget.checked })} /></Table.Td>
+                <Table.Td>
+                  <Text size="xs">{r.name}</Text>
+                  {(r.path.length > 0 || r.location) && <Text size="xs" c="dimmed">{[...r.path, r.location].filter(Boolean).join(' › ')}</Text>}
+                </Table.Td>
+                <Table.Td dir="ltr">{r.start ?? '—'}</Table.Td><Table.Td dir="ltr">{r.finish ?? '—'}</Table.Td>
+                <Table.Td><Select size="xs" data={stageData} value={r.stage_id} searchable clearable
+                  onChange={(v) => set(i, { stage_id: v, location_id: v && whole.has(v) ? null : r.location_id })} /></Table.Td>
+                <Table.Td>{r.stage_id && whole.has(r.stage_id)
+                  ? <Text size="xs" c="dimmed">{t('structure.whole')}</Text>
+                  : <Select size="xs" data={unitData} value={r.location_id} searchable clearable onChange={(v) => set(i, { location_id: v })} />}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </ScrollArea>
+      <Group justify="flex-end" mt="md">
+        <Text size="xs" c="dimmed">{t('prg.importReplace')}</Text>
+        <Button disabled={!chosen.length} onClick={apply}>{t('prg.importApply', { n: chosen.length })}</Button>
+      </Group>
+    </Modal>
+  );
+}
+
+/** The programme of a programme record: floor cycle, dates by hand or imported, a bar chart; supervision approves it. */
+export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['programme', rec.id], queryFn: () => api<ProgrammeOut>(`/records/${rec.id}/programme`) });
+  const s = useStructure(rec.project_id).data;
+  const [lines, setLines] = useState<PLine[]>([]);
+  const [cycles, setCycles] = useState<PCycle[]>([]);
+  const [source, setSource] = useState<ProgrammeOut['source']>('manual');
+  const [dirty, setDirty] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [cycleOpen, setCycleOpen] = useState(false);
+  const [rows, setRows] = useState<ImportRow[] | null>(null);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  useEffect(() => { if (q.data) { setLines(q.data.lines); setCycles(q.data.cycles); setSource(q.data.source); setDirty(false); } }, [q.data]);
+  const stages = useMemo(() => (s?.stages ?? []).filter((x) => x.is_active && x.id), [s]);
+  const units = useMemo(() => (s?.locations ?? []).filter((g) => g.is_active).flatMap((g) => g.units.filter((u) => u.is_active && u.id)), [s]);
+  const whole = useMemo(() => new Set(stages.filter((x) => x.scope === 'whole' || !units.length).map((x) => x.id!)), [stages, units]);
+  const byKey = useMemo(() => new Map(lines.map((l) => [cellKey(l.stage_id, l.location_id), l])), [lines]);
+  const save = useMutation({
+    mutationFn: () => api<ProgrammeOut>(`/records/${rec.id}/programme`, { method: 'PUT', body: JSON.stringify({ lines, cycles, source }) }),
+    onSuccess: (d) => { qc.setQueryData(['programme', rec.id], d); setMsg({ ok: true, text: t('settings.saved') }); },
+    onError: (e) => setMsg({ ok: false, text: errText(e) }),
+  });
+  const upload = useMutation({
+    mutationFn: (f: File) => { const fd = new FormData(); fd.append('file', f); return api<ImportRow[]>(`/records/${rec.id}/programme/import`, { method: 'POST', body: fd }); },
+    onSuccess: setRows, onError: (e) => setMsg({ ok: false, text: errText(e) }),
+  });
+  if (!q.data || !s) return null;
+  const edit = q.data.can_edit;
+  const change = (next: PLine[], src: ProgrammeOut['source'] = source) => { setLines(next); setSource(src); setDirty(true); setMsg(null); };
+  const setCell = (stage: string, loc: string | null, p: Partial<PLine>) => {
+    const k = cellKey(stage, loc);
+    const old = byKey.get(k);
+    const n = { stage_id: stage, location_id: loc, start: old?.start ?? '', finish: old?.finish ?? '', ...p };
+    const rest = lines.filter((l) => cellKey(l.stage_id, l.location_id) !== k);
+    change(n.start || n.finish ? [...rest, { ...n, finish: n.finish || n.start, start: n.start || n.finish }] : rest, 'manual');
+  };
+  const generate = (cs: PCycle[]) => {
+    const ids = new Set(cs.map((c) => c.stage_id));
+    const gen: PLine[] = [];
+    for (const c of cs) {
+      if (whole.has(c.stage_id)) gen.push({ stage_id: c.stage_id, location_id: null, start: c.start!, finish: addDays(c.start!, c.duration - 1) });
+      else units.forEach((u, i) => { const st = addDays(c.start!, c.lag * i); gen.push({ stage_id: c.stage_id, location_id: u.id!, start: st, finish: addDays(st, c.duration - 1) }); });
+    }
+    setCycles([...cycles.filter((c) => !ids.has(c.stage_id)), ...cs]);
+    change([...lines.filter((l) => !ids.has(l.stage_id)), ...gen], 'cycle');
+    setCycleOpen(false);
+  };
+  const imported = (ls: PLine[]) => {
+    const keys = new Set(ls.map((l) => cellKey(l.stage_id, l.location_id)));
+    change([...lines.filter((l) => !keys.has(cellKey(l.stage_id, l.location_id))), ...ls], 'import');
+    setRows(null);
+  };
+  const stageSpan = (sid: string) => {
+    const ls = lines.filter((l) => l.stage_id === sid && l.start && l.finish);
+    return ls.length ? { start: ls.reduce((m, l) => (l.start < m ? l.start : m), ls[0].start), finish: ls.reduce((m, l) => (l.finish > m ? l.finish : m), ls[0].finish), n: ls.length } : null;
+  };
+  const spans = stages.map((st) => ({ st, sp: stageSpan(st.id!) }));
+  const bars = spans.filter((x) => x.sp).map(({ st, sp }) => ({ label: pick(st, 'name'), start: sp!.start, finish: sp!.finish }));
+  const from = bars.length ? bars.reduce((m, b) => (b.start < m ? b.start : m), bars[0].start) : null;
+  const to = bars.length ? bars.reduce((m, b) => (b.finish > m ? b.finish : m), bars[0].finish) : null;
+  const dateIn = (stage: string, loc: string | null, f: 'start' | 'finish') => (
+    <TextInput size="xs" type="date" w={140} disabled={!edit} value={byKey.get(cellKey(stage, loc))?.[f] ?? ''}
+      onChange={(e) => setCell(stage, loc, { [f]: e.currentTarget.value })} />
+  );
+  const dur = (stage: string, loc: string | null) => {
+    const l = byKey.get(cellKey(stage, loc));
+    return l?.start && l.finish ? `${daysBetween(l.start, l.finish) + 1} ${t('prg.days')}` : '';
+  };
+  return (
+    <Stack>
+      <Group justify="space-between" align="flex-start">
+        <div>
+          <Title order={5}>{t('prg.title')}</Title>
+          <Text size="sm" c="dimmed">
+            {from && to ? t('prg.span', { from: fmtDate(from), to: fmtDate(to), days: daysBetween(from, to) + 1 }) : t('prg.empty')}
+            {' · '}{t(`prg.source.${source}`)}
+          </Text>
+        </div>
+        <Group gap="xs">
+          <Button size="xs" variant="subtle" onClick={() => openProtected(`/projects/${rec.project_id}/programme/template?lang=${i18n.language}`, 'programme-template.xlsx')}>
+            {t('prg.template')}
+          </Button>
+          {edit && <>
+            <FileButton accept=".xlsx,.xlsm,.csv,.xml,.xer" onChange={(f) => f && upload.mutate(f)}>
+              {(props) => <Button size="xs" variant="light" loading={upload.isPending} {...props}>{t('prg.import')}</Button>}
+            </FileButton>
+            <Button size="xs" variant="light" onClick={() => setCycleOpen(true)}>{t('prg.cycle')}</Button>
+            <Button size="xs" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button>
+          </>}
+        </Group>
+      </Group>
+      {edit && <Text size="xs" c="dimmed">{t('prg.formats')}</Text>}
+      {msg && <Alert color={msg.ok ? 'green' : 'red'} withCloseButton onClose={() => setMsg(null)}>{msg.text}</Alert>}
+      {from && to && <Card withBorder p="xs"><Gantt rows={bars} from={from} to={to} /></Card>}
+      <Card withBorder p={0}>
+        <Table verticalSpacing={4} fz="sm">
+          <Table.Thead><Table.Tr>
+            <Table.Th>{t('structure.stage')}</Table.Th><Table.Th w={150}>{t('prg.start')}</Table.Th><Table.Th w={150}>{t('prg.finish')}</Table.Th>
+            <Table.Th w={90}>{t('prg.duration')}</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {spans.map(({ st, sp }) => {
+              const sid = st.id!;
+              if (whole.has(sid)) return (
+                <Table.Tr key={sid}>
+                  <Table.Td fw={600}>{pick(st, 'name')} <Badge size="xs" variant="light">{t('structure.whole')}</Badge></Table.Td>
+                  <Table.Td>{dateIn(sid, null, 'start')}</Table.Td><Table.Td>{dateIn(sid, null, 'finish')}</Table.Td>
+                  <Table.Td><Text size="xs" c="dimmed">{dur(sid, null)}</Text></Table.Td>
+                </Table.Tr>
+              );
+              return (
+                <Fragment key={sid}>
+                  <Table.Tr style={{ cursor: 'pointer' }} onClick={() => setOpen({ ...open, [sid]: !open[sid] })}>
+                    <Table.Td fw={600}>
+                      <ActionIcon size="xs" variant="subtle" me={4}>{open[sid] ? '▾' : '▸'}</ActionIcon>
+                      {pick(st, 'name')} <Text span size="xs" c="dimmed">({sp?.n ?? 0}/{units.length})</Text>
+                    </Table.Td>
+                    <Table.Td><Text size="xs">{sp ? fmtDate(sp.start) : '—'}</Text></Table.Td>
+                    <Table.Td><Text size="xs">{sp ? fmtDate(sp.finish) : '—'}</Text></Table.Td>
+                    <Table.Td><Text size="xs" c="dimmed">{sp ? `${daysBetween(sp.start, sp.finish) + 1} ${t('prg.days')}` : ''}</Text></Table.Td>
+                  </Table.Tr>
+                  {open[sid] && units.map((u) => (
+                    <Table.Tr key={`${sid}${u.id}`} bg="var(--mantine-color-gray-0)">
+                      <Table.Td ps={36}><Text size="xs">{pick(u, 'name')}</Text></Table.Td>
+                      <Table.Td>{dateIn(sid, u.id!, 'start')}</Table.Td><Table.Td>{dateIn(sid, u.id!, 'finish')}</Table.Td>
+                      <Table.Td><Text size="xs" c="dimmed">{dur(sid, u.id!)}</Text></Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Fragment>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Card>
+      {edit && dirty && <Tooltip label={t('prg.unsaved')}><Button onClick={() => save.mutate()} loading={save.isPending}>{t('rec.save')}</Button></Tooltip>}
+      <CycleModal opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} unitCount={units.length}
+        stages={stages.map((x) => ({ id: x.id!, name: pick(x, 'name'), whole: whole.has(x.id!) }))} />
+      <ImportModal rows={rows} onClose={() => setRows(null)} onApply={imported} whole={whole}
+        stageData={stages.map((x) => ({ value: x.id!, label: pick(x, 'name') }))} unitData={units.map((u) => ({ value: u.id!, label: pick(u, 'name') }))} />
+    </Stack>
+  );
+}

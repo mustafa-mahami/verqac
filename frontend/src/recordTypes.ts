@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import i18n from './i18n';
 
 /** What each request type shows and asks for. The engine is the same; the fields differ. */
-export type RegisterType = 'daily_report' | 'submittal' | 'inspection' | 'material' | 'test' | 'rfi' | 'ncr';
+export type RegisterType = 'daily_report' | 'submittal' | 'inspection' | 'material' | 'test' | 'rfi' | 'ncr' | 'programme';
 export type DetailKey = 'item' | 'manufacturer' | 'supplier' | 'drawing_ref' | 'spec_ref' | 'boq_ref' | 'quantity' | 'unit';
 export interface CustomField { key: string; kind: 'text' | 'long' | 'select'; options?: string[] }
 export interface TypeProfile {
@@ -31,10 +31,12 @@ export const PROFILES: Record<RegisterType, TypeProfile> = {
   ncr: { keys: ['item', 'drawing_ref', 'spec_ref'],
     custom: [{ key: 'severity', kind: 'select', options: ['minor', 'major'] }, { key: 'required_action', kind: 'long' }],
     kind: false, timed: false, requiredBy: false, checklist: false, tab: 'ncrs' },
+  programme: { keys: [], custom: [], kind: false, timed: false, requiredBy: false, checklist: false, tab: 'progress' },
 };
 
 export const profile = (code: string): TypeProfile => PROFILES[code as RegisterType] ?? PROFILES.submittal;
-export const TYPE_TABS: [RegisterType, string][] = (Object.keys(PROFILES) as RegisterType[]).map((k) => [k, PROFILES[k].tab]);
+// the programme lives in the progress tab, not in a register of its own
+export const TYPE_TABS: [RegisterType, string][] = (Object.keys(PROFILES) as RegisterType[]).filter((k) => k !== 'programme').map((k) => [k, PROFILES[k].tab]);
 
 export const LTR_KEYS = new Set(['drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'delivery_note']);
 

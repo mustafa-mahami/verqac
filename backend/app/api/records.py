@@ -280,7 +280,8 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
     if is_draft:
         no_engineer = not any(not r.act_on_behalf for _, r in _responders(c, rec, rt))
     can_revise = (rt.has_revisions and not is_draft and rec.rev_no == _latest_rev(c, rec)
-                  and rec.state_category in ("revise_and_resubmit", "rejected", "approved_as_noted", "cancelled")
+                  and (rec.state_category in ("revise_and_resubmit", "rejected", "approved_as_noted", "cancelled")
+                       or (rt.code == "programme" and rec.state_category == "approved"))  # an updated programme
                   and p.can("create", discipline_id=rec.discipline_id))
     return RecordDetail(
         id=rec.id, project_id=rec.project_id, record_type=RecordTypeOut.model_validate(rt), number=rec.number,
@@ -326,6 +327,8 @@ ROUTING_MODES = ("discipline", "manager", "choose")
 
 def type_enabled(project, code: str) -> bool:
     """Each project shows the request types it uses (settings "types"; absent = all)."""
+    if code == "programme":  # part of the progress tab, not a register of its own
+        return True
     types = (project.settings or {}).get("types")
     return types is None or code in types
 
@@ -972,6 +975,11 @@ def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
                                quantity_uom=old.quantity_uom, specimen_count=old.specimen_count,
                                specification=old.specification,
                                lines=[{**x, "value": None, "text": None, "legible": True} for x in old.lines]))
+    if rt.code == "programme":  # the update starts from the previous programme
+        from app.models.programme import Programme
+        old = c.db.get(Programme, rec.id)
+        c.db.add(Programme(record_id=new.id, project_id=rec.project_id, lines=old.lines if old else [],
+                           cycles=old.cycles if old else [], source=old.source if old else "manual"))
     c.db.add(RecordEvent(record_id=new.id, action="new_revision", to_state_id=initial.id, actor_id=c.user.id,
                          comment=f"R{rec.rev_no} → R{new.rev_no}"))
     _audit(c, new, "revise", {"from_record": str(rec.id), "rev": new.rev_no}, a)

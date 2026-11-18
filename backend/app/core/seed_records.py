@@ -121,6 +121,9 @@ DAILY_TRANSITIONS = [
 ]
 DAILY_TYPE = ("daily_report", "DR", "تقرير يومي", "Daily report", "daily_report", "contractor", "consultant", False, 5)
 
+# the time programme: submitted by the contractor, approved by supervision; updates are new revisions
+PROGRAMME_TYPE = ("programme", "PRG", "البرنامج الزمني", "Time programme", "review", "contractor", "consultant", True, 3)
+
 # code, prefix, ar, en, workflow, creator, responder, has revisions, sort
 MORE_TYPES = [
     ("material", "MIR", "فحص مواد موردة", "Material inspection", "inspection", "contractor", "consultant", True, 25),
@@ -131,7 +134,8 @@ MORE_TYPES = [
 # default periods in hours: (reply, resubmission); projects change them in settings
 DEFAULT_PERIODS = {"submittal": (7 * 24, 7 * 24), "inspection": (2, 2), "material": (24, 48),
                    "rfi": (3 * 24, 3 * 24), "ncr": (3 * 24, 3 * 24),
-                   "test": (3 * 24, 7 * 24), "daily_report": (24, 24)}
+                   "test": (3 * 24, 7 * 24), "daily_report": (24, 24),
+                   "programme": (7 * 24, 7 * 24)}
 
 # types with an inspection time (asked for / performed) and that link approved submittals
 TIMED_TYPES = ("inspection", "material")

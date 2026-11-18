@@ -16,6 +16,7 @@ import BackButton from './BackButton';
 import Photos, { isPhoto, shrinkPhoto } from './Photos';
 import LabPanel from './LabPanel';
 import DailyPanel from './DailyPanel';
+import ProgrammePanel from './ProgrammePanel';
 import { PlacePicker, useStructure } from './Structure';
 import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, profile, typeText } from '../recordTypes';
 
@@ -434,7 +435,7 @@ export default function RecordPage() {
             <Button key={tr.action} color={btnColor[tr.style] ?? 'verqac'} variant={tr.style === 'subtle' ? 'subtle' : 'filled'}
               onClick={() => setAction(tr)}>{pick(tr, 'name')}</Button>
           ))}
-          {r.can_edit && !['daily_report'].includes(r.record_type.code) && <Button variant="light" onClick={() => setEditing(true)}>{t('rec.edit')}</Button>}
+          {r.can_edit && !['daily_report', 'programme'].includes(r.record_type.code) && <Button variant="light" onClick={() => setEditing(true)}>{t('rec.edit')}</Button>}
           {r.can_revise && <Button variant="light" loading={revise.isPending} onClick={() => revise.mutate()}>{t('rec.newRevision')}</Button>}
         </Group>
       )}
@@ -457,6 +458,7 @@ export default function RecordPage() {
             {r.checklist.length > 0 && responses.length === 0 && <ChecklistCard rec={r} />}
             {r.record_type.code === 'test' && <LabPanel rec={r} />}
             {r.record_type.code === 'daily_report' && <DailyPanel rec={r} />}
+            {r.record_type.code === 'programme' && <ProgrammePanel rec={r} />}
             <Card withBorder>
               <Title order={5} mb="sm">{t('rec.details')}</Title>
               <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">

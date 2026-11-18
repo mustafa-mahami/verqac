@@ -20,10 +20,19 @@ export const OTHER_LISTS = ['subcontractors', 'equipment'] as const;
 /** The list a crew group uses: people in "names" mode, positions / trades in "counts" mode. */
 export const crewList = (s: DailySettings, g: Group) => `${g}_${s.crew[g] === 'names' ? 'names' : 'desc'}`;
 export const itemLabel = (x: { ar: string; en: string }, lang: string) => (lang === 'en' ? x.en || x.ar : x.ar || x.en);
+export type CellStatus = 'not_started' | 'on_track' | 'ahead' | 'late' | 'done';
+export interface ProgressCell {
+  stage_id: string; location_id: string | null; progress: number; progress_on: string | null; started_on: string | null; finished_on: string | null;
+  planned: number | null; plan_start: string | null; plan_finish: string | null; status: CellStatus | null;
+}
 export interface ProgressOut {
   project: number; stages: Record<string, number>; as_of: string | null;
-  cells: { stage_id: string; location_id: string | null; progress: number; progress_on: string | null; started_on: string | null; finished_on: string | null }[];
+  cells: ProgressCell[];
   snapshots: { day: string; actual: number; planned: number | null }[];
+  planned: number | null; planned_baseline: number | null; spi: number | null; planned_stages: Record<string, number>;
+  plan_curve: { day: string; planned: number }[]; baseline_curve: { day: string; planned: number }[];
+  plan_start: string | null; plan_finish: string | null; baseline_finish: string | null;
+  programme_id: string | null; baseline_id: string | null; late: ProgressCell[];
 }
 export const GROUPS: Group[] = ['supervision', 'contractor', 'labour'];
 export const WEATHER = ['sunny', 'cloudy', 'rain', 'storm', 'snow', 'fog', 'dust', 'hot', 'cold'];

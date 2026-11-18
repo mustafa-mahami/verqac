@@ -157,9 +157,13 @@ class Cell(BaseModel):
     stage_id: uuid.UUID
     location_id: uuid.UUID | None
     progress: float
-    progress_on: date | None
-    started_on: date | None
-    finished_on: date | None
+    progress_on: date | None = None
+    started_on: date | None = None
+    finished_on: date | None = None
+    planned: float | None = None  # today, by the current programme
+    plan_start: date | None = None
+    plan_finish: date | None = None
+    status: str | None = None  # not_started | on_track | ahead | late | done
 
 
 class ProgressOut(BaseModel):
@@ -168,6 +172,19 @@ class ProgressOut(BaseModel):
     cells: list[Cell]
     snapshots: list[dict]
     as_of: date | None
+    # the programme (absent until one is approved)
+    planned: float | None = None  # project % planned for today, current programme
+    planned_baseline: float | None = None
+    spi: float | None = None  # actual / planned
+    planned_stages: dict[str, float] = {}
+    plan_curve: list[dict] = []  # current programme, week by week
+    baseline_curve: list[dict] = []  # the first approved programme, when it differs
+    plan_start: date | None = None
+    plan_finish: date | None = None
+    baseline_finish: date | None = None
+    programme_id: uuid.UUID | None = None
+    baseline_id: uuid.UUID | None = None
+    late: list[Cell] = []  # behind plan, worst first
 
 
 # ----------------------------------------------------------------------------- settings
@@ -251,9 +268,54 @@ def project_progress(db, project_id) -> ProgressOut:
     snaps = [{"day": x.day.isoformat(), "actual": float(x.actual), "planned": float(x.planned) if x.planned is not None else None}
              for x in db.scalars(select(ProgressSnapshot).where(ProgressSnapshot.project_id == project_id).order_by(ProgressSnapshot.day))]
     as_of = max((c.progress_on for c in cells if c.progress_on), default=None)
-    return ProgressOut(project=round(project, 1), stages=stage_pct, as_of=as_of, snapshots=snaps,
-                       cells=[Cell(stage_id=c.stage_id, location_id=c.location_id, progress=float(c.progress), progress_on=c.progress_on,
-                                   started_on=c.started_on, finished_on=c.finished_on) for c in cells])
+    out = ProgressOut(project=round(project, 1), stages=stage_pct, as_of=as_of, snapshots=snaps,
+                      cells=[Cell(stage_id=c.stage_id, location_id=c.location_id, progress=float(c.progress), progress_on=c.progress_on,
+                                  started_on=c.started_on, finished_on=c.finished_on) for c in cells])
+    _with_plan(db, project_id, out, stages, units, by)
+    return out
+
+
+def _with_plan(db, project_id, out: ProgressOut, stages, units, actual: dict) -> None:
+    """Planned against actual, from the approved programme (current = latest approved, baseline = the first)."""
+    from app.api.programme import programmes
+    from app.core.programme import plan_cells, planned_at, series, status
+    base, cur = programmes(db, project_id)
+    if cur is None:
+        return
+    today = datetime.now(TZ).date()
+    plan = plan_cells(cur.lines)
+    if not plan:
+        return
+    out.programme_id, out.baseline_id = cur.record_id, base.record_id
+    out.planned, out.planned_stages = planned_at(plan, stages, units, today)
+    out.spi = round(out.project / out.planned, 2) if out.planned else None
+    out.plan_curve = series(plan, stages, units)
+    out.plan_start = min(s for s, _ in plan.values())
+    out.plan_finish = max(f for _, f in plan.values())
+    if base.record_id != cur.record_id:
+        bplan = plan_cells(base.lines)
+        if bplan:
+            out.planned_baseline = planned_at(bplan, stages, units, today)[0]
+            out.baseline_curve = series(bplan, stages, units)
+            out.baseline_finish = max(f for _, f in bplan.values())
+    # every cell of the matrix, worked on or not: planned today and its status
+    keys = [(s.id, None) if s.scope == "whole" or not units else (s.id, u.id) for s in stages
+            for u in ([None] if s.scope == "whole" or not units else units)]
+    have = {(c.stage_id, c.location_id): c for c in out.cells}
+    cells, late = [], []
+    from app.core.programme import cell_planned
+    for sid, lid in keys:
+        p = plan.get((str(sid), str(lid) if lid else None))
+        c = have.get((sid, lid)) or Cell(stage_id=sid, location_id=lid, progress=0.0)
+        if p is not None:
+            c.plan_start, c.plan_finish = p
+            c.planned = cell_planned(*p, today)
+            c.status = status(c.planned, actual.get((sid, lid), 0.0))
+            if c.status == "late":
+                late.append(c)
+        cells.append(c)
+    out.cells = cells
+    out.late = sorted(late, key=lambda c: (c.progress - (c.planned or 0), c.plan_finish or today))[:50]
 
 
 def check_works(db, rec: Record) -> None:

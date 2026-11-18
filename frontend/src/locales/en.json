@@ -149,7 +149,13 @@
     "role_hidden": "This role is hidden in the project.",
     "role_is_base": "Base roles are not deleted; they can be hidden.",
     "not_same_org": "You cannot edit the name of a person from another organization.",
-    "dr_location_required": "A work line with a progress % needs its location or \"whole project\", or the % would count nowhere."
+    "dr_location_required": "A work line with a progress % needs its location or \"whole project\", or the % would count nowhere.",
+    "programme_exists": "The project already has a programme; update it with a new revision.",
+    "programme_bad_cell": "A stage or location not in the project.",
+    "programme_finish_before_start": "A finish date is before its start.",
+    "programme_file_type": "Unsupported file: xlsx, csv, xml or xer.",
+    "programme_file_unreadable": "The file could not be read.",
+    "programme_file_empty": "No tasks with names and dates found in the file."
   },
   "common": {
     "cancel": "Cancel",
@@ -692,6 +698,11 @@
       "empty": "No daily reports yet.",
       "respTitle": "Supervision review",
       "response": "Supervision review"
+    },
+    "programme": {
+      "new": "Programme",
+      "back": "Progress",
+      "empty": "No programme."
     }
   },
   "custom": {
@@ -953,7 +964,25 @@
     "noStages": "Define the project stages in the settings first.",
     "rebuild": "Recount from approved reports",
     "rebuildHint": "Refills the matrix and the curve from every approved daily report, oldest first. Useful after changing stages or locations.",
-    "rebuildConfirm": "Recount progress from the approved reports?"
+    "rebuildConfirm": "Recount progress from the approved reports?",
+    "actual": "Actual",
+    "planned": "Planned",
+    "plannedNow": "Planned to date",
+    "baseline": "Baseline",
+    "variance": "Variance",
+    "spiHint": "Schedule performance index = actual ÷ planned. 1 or more is on time, below 1 is late.",
+    "plannedBaseline": "Planned by the baseline: {{v}}%",
+    "viewActual": "Progress",
+    "viewStatus": "Status against programme",
+    "status": {
+      "not_started": "Not started",
+      "on_track": "On track",
+      "ahead": "Ahead",
+      "late": "Late",
+      "done": "Done"
+    },
+    "lateTitle": "Behind the programme ({{n}})",
+    "gap": "Gap"
   },
   "dset": {
     "title": "Daily report",
@@ -1018,5 +1047,41 @@
     "add": "Add role",
     "like": "Like {{name}}",
     "delete": "Delete role"
+  },
+  "prg": {
+    "title": "Time programme",
+    "empty": "No dates yet.",
+    "span": "{{from}} to {{to}} ({{days}} days)",
+    "source": {
+      "manual": "entered by hand",
+      "cycle": "floor cycle",
+      "import": "imported from a file"
+    },
+    "template": "Download Excel template",
+    "import": "Import file",
+    "cycle": "Generate by floor cycle",
+    "formats": "Import accepts: the Excel template, MS Project exports to Excel or XML, Primavera P6 exports to Excel or XER.",
+    "start": "Start",
+    "finish": "Finish",
+    "duration": "Duration",
+    "lag": "Lag to next floor",
+    "days": "days",
+    "location": "Location",
+    "task": "Task in the file",
+    "cycleTitle": "Generate the programme by floor cycle",
+    "cycleHint": "For each stage: its start on the first floor, the days one floor takes, and after how many days the next floor starts. Floors ({{n}}) follow the order of the project structure. Whole-project stages take a start and a duration only.",
+    "cycleReplace": "Only the chosen stages are replaced.",
+    "generate": "Generate",
+    "importTitle": "Check the imported file",
+    "importHint": "{{all}} rows in the file, {{ok}} linked to a stage and location. Check and correct the links; rows without them are not imported. Several rows on one cell take the earliest start and the latest finish.",
+    "importReplace": "Only the cells found in the file are replaced.",
+    "importApply": "Import {{n}} rows",
+    "unsaved": "Unsaved changes",
+    "none": "No approved programme yet. The contractor submits it and supervision approves it.",
+    "current": "Approved: R{{rev}} · {{from}} to {{to}}",
+    "baselineFinish": "Baseline finish: {{date}}",
+    "openPending": "Open R{{rev}}",
+    "openCurrent": "View approved",
+    "create": "Create the time programme"
   }
 }

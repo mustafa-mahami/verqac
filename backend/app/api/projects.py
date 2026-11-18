@@ -147,7 +147,7 @@ def get_settings(project_id: UUID, c: Ctx = Depends(ctx)):
     org = c.db.get(Organization, a.project.owner_org_id)
     return ProjectSettingsOut(reply_hours=reply, resubmit_hours=resub, routing=route,
                               calendar=ProjectCalendar(**(a.project.settings or {}).get("calendar", {})),
-                              types=[k for k in reply if type_enabled(a.project, k)],
+                              types=[k for k in reply if k != "programme" and type_enabled(a.project, k)],
                               start_date=a.project.start_date, end_date=a.project.end_date,
                               org_calendar=OrgCalendar(**org_calendar(org)),
                               link_submittals=bool((a.project.settings or {}).get("link_submittals", False)),
