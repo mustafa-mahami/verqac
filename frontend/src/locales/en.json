@@ -1091,6 +1091,8 @@
     "baselineFinish": "Baseline finish: {{date}}",
     "openPending": "Open R{{rev}}",
     "openCurrent": "View approved",
-    "create": "Create the time programme"
+    "create": "Create the time programme",
+    "cycleHowTitle": "How to use it",
+    "cycleHow": "1. Tick the stage to generate (it is ticked as soon as you fill a field).\n2. Start: when the stage starts on the first floor ({{first}}).\n3. Duration: how many days the stage takes on one floor.\n4. Lag: how many days after a floor starts the next one ({{second}}) starts.\nExample: structure starts 1/12, 21 days, lag 14 → {{first}} 1/12 to 21/12, {{second}} 15/12 to 4/1, and so on for all {{n}} floors.\n5. Press Generate, check the dates in the table and adjust any floor by hand, then Save. Hover the finish date to see every floor."
   }
 }

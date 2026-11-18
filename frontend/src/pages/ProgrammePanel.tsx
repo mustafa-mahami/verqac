@@ -40,10 +40,11 @@ function Gantt({ rows, from, to }: { rows: { label: string; start: string; finis
 }
 
 /** Floor cycle: per stage a start, days per floor and days until the next floor starts. */
-function CycleModal({ opened, onClose, cycles, onApply, stages, unitCount }: {
+function CycleModal({ opened, onClose, cycles, onApply, stages, units }: {
   opened: boolean; onClose: () => void; cycles: PCycle[]; onApply: (c: PCycle[]) => void;
-  stages: { id: string; name: string; whole: boolean }[]; unitCount: number;
+  stages: { id: string; name: string; whole: boolean }[]; units: string[];
 }) {
+  const unitCount = units.length;
   const { t } = useTranslation();
   const [rows, setRows] = useState<(PCycle & { on: boolean })[]>([]);
   useEffect(() => {
@@ -55,7 +56,9 @@ function CycleModal({ opened, onClose, cycles, onApply, stages, unitCount }: {
   const ok = rows.filter((r) => r.on && r.start && r.duration > 0);
   return (
     <Modal opened={opened} onClose={onClose} title={t('prg.cycleTitle')} size="xl">
-      <Text size="sm" c="dimmed" mb="sm">{t('prg.cycleHint', { n: unitCount })}</Text>
+      <Alert variant="light" mb="sm" title={t('prg.cycleHowTitle')}>
+        <Text size="sm" style={{ whiteSpace: 'pre-line' }}>{t('prg.cycleHow', { n: unitCount, first: units[0] ?? '', second: units[1] ?? '' })}</Text>
+      </Alert>
       <Table verticalSpacing={4} fz="sm">
         <Table.Thead><Table.Tr>
           <Table.Th w={30} /><Table.Th>{t('structure.stage')}</Table.Th><Table.Th w={150}>{t('prg.start')}</Table.Th>
@@ -72,7 +75,14 @@ function CycleModal({ opened, onClose, cycles, onApply, stages, unitCount }: {
                 <Table.Td><TextInput size="xs" type="date" value={r.start ?? ''} onChange={(e) => set(i, { start: e.currentTarget.value || null })} /></Table.Td>
                 <Table.Td><NumberInput size="xs" min={0} value={r.duration} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { duration: Number(v) || 0 })} /></Table.Td>
                 <Table.Td>{!s.whole && <NumberInput size="xs" min={0} value={r.lag} suffix={` ${t('prg.days')}`} onChange={(v) => set(i, { lag: Number(v) || 0 })} />}</Table.Td>
-                <Table.Td><Text size="xs" c="dimmed">{end ? fmtDate(end) : ''}</Text></Table.Td>
+                <Table.Td>
+                  {end ? (
+                    <Tooltip multiline w={260} disabled={s.whole || unitCount < 2} label={units.map((u, k) => `${u}: ${fmtDate(addDays(r.start!, r.lag * k))} → ${fmtDate(addDays(r.start!, r.lag * k + r.duration - 1))}`).join('\n')}
+                      style={{ whiteSpace: 'pre-line' }}>
+                      <Text size="xs" c="dimmed" style={{ cursor: 'help' }}>{fmtDate(end)}</Text>
+                    </Tooltip>
+                  ) : ''}
+                </Table.Td>
               </Table.Tr>
             );
           })}
@@ -283,7 +293,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
         </Table>
       </Card>
       {edit && dirty && <Tooltip label={t('prg.unsaved')}><Button onClick={() => save.mutate()} loading={save.isPending}>{t('rec.save')}</Button></Tooltip>}
-      <CycleModal opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} unitCount={units.length}
+      <CycleModal opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} units={units.map((u) => pick(u, 'name'))}
         stages={stages.map((x) => ({ id: x.id!, name: pick(x, 'name'), whole: whole.has(x.id!) }))} />
       <ImportModal rows={rows} onClose={() => setRows(null)} onApply={imported} whole={whole}
         stageData={stages.map((x) => ({ value: x.id!, label: pick(x, 'name') }))} unitData={units.map((u) => ({ value: u.id!, label: pick(u, 'name') }))} />
