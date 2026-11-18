@@ -29,7 +29,10 @@ CAUSES = ("weather", "materials", "design", "approval", "equipment", "labour", "
 class CrewLine(BaseModel):
     group: Literal["supervision", "contractor", "labour"]
     sub: str | None = Field(default=None, max_length=150)  # subcontractor (labour / contractor staff)
-    name: str = Field(max_length=150)  # person (names mode) or trade / description (counts mode)
+    name: str = Field(max_length=150)  # person (names mode) or trade / description (counts mode), Arabic
+    name_en: str | None = Field(default=None, max_length=150)
+    role: str | None = Field(default=None, max_length=150)  # position of a named person, Arabic
+    role_en: str | None = Field(default=None, max_length=150)
     count: int = Field(default=1, ge=0, le=5000)
     hours: float | None = Field(default=None, ge=0, le=24)
 
@@ -116,10 +119,23 @@ class DailyOut(DailyIO):
     totals: dict[str, int] = {}
 
 
+class ListItem(BaseModel):
+    """A suggested person / trade / subcontractor / equipment, in both languages."""
+    ar: str = Field(max_length=150)
+    en: str = Field(default="", max_length=150)
+    role_ar: str | None = Field(default=None, max_length=150)  # people: position
+    role_en: str | None = Field(default=None, max_length=150)
+    active: bool = True
+
+    @classmethod
+    def of(cls, x):
+        return cls(ar=x, en=x) if isinstance(x, str) else cls(**x)
+
+
 class DailySettings(BaseModel):
     crew: dict[str, Literal["names", "counts"]] = {"supervision": "names", "contractor": "counts", "labour": "counts"}
     link_materials: bool = False
-    lists: dict[str, list[str]] = {}  # supervision, contractor, labour, subcontractors, equipment
+    lists: dict[str, list[ListItem]] = {}  # supervision, contractor, labour, subcontractors, equipment
 
 
 class NewDaily(BaseModel):
@@ -146,7 +162,9 @@ class ProgressOut(BaseModel):
 
 # ----------------------------------------------------------------------------- settings
 def daily_settings(project: Project) -> DailySettings:
-    return DailySettings(**(project.settings or {}).get("daily", {}))
+    raw = dict((project.settings or {}).get("daily", {}))
+    raw["lists"] = {k: [ListItem.of(x) for x in v] for k, v in (raw.get("lists") or {}).items()}  # older lists were plain text
+    return DailySettings(**raw)
 
 
 @router.get("/projects/{project_id}/daily-settings", response_model=DailySettings)
@@ -160,7 +178,16 @@ def put_daily_settings(project_id: uuid.UUID, body: DailySettings, c: Ctx = Depe
     require(a.can_manage_project, "manage_project_required")
     if set(body.crew) - set(GROUPS) or set(body.lists) - {*GROUPS, "subcontractors", "equipment"}:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_settings")
-    clean = {k: list(dict.fromkeys(x.strip() for x in v if x.strip()))[:300] for k, v in body.lists.items()}
+    clean = {}
+    for k, v in body.lists.items():
+        seen, rows = set(), []
+        for x in v:
+            ar, en = x.ar.strip(), x.en.strip()
+            if not (ar or en) or (ar or en) in seen:
+                continue
+            seen.add(ar or en)
+            rows.append({**x.model_dump(), "ar": ar or en, "en": en or ar})
+        clean[k] = rows[:300]
     a.project.settings = {**(a.project.settings or {}), "daily": {**body.model_dump(), "lists": clean}}
     c.db.flush()
     return daily_settings(a.project)

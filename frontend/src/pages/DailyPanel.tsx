@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type LinkedRef, type RecordDetail } from '../api';
 import {
-  blankWork, CAUSES, GROUPS, WEATHER, type CrewLine, type DailyData, type DailyOut, type DailySettings, type DelayLine, type EquipLine,
+  blankWork, CAUSES, GROUPS, itemLabel, WEATHER, type CrewLine, type DailyData, type DailyOut, type DailySettings, type DelayLine, type EquipLine,
   type Group as CrewGroup, type MaterialLine, type WorkLine,
 } from '../daily';
 import i18n, { pick } from '../i18n';
@@ -85,13 +85,27 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
 /** Staff and labour: names or trade + count per group, as the project settings say. */
 function CrewTable({ lines, onChange, editable, settings }: { lines: CrewLine[]; onChange: (l: CrewLine[]) => void; editable: boolean; settings: DailySettings }) {
   const { t } = useTranslation();
-  const subs = settings.lists.subcontractors ?? [];
+  const lang = i18n.language === 'en' ? 'en' : 'ar';
+  const subs = (settings.lists.subcontractors ?? []).filter((x) => x.active).map((x) => itemLabel(x, lang));
   return (
     <Stack gap="sm">
       {GROUPS.map((g: CrewGroup) => {
         const rows = lines.map((x, i) => ({ x, i })).filter((r) => r.x.group === g);
         const names = settings.crew[g] === 'names';
-        const opts = settings.lists[g] ?? [];
+        const items = (settings.lists[g] ?? []).filter((x) => x.active);
+        const opts = items.map((x) => itemLabel(x, lang) + (names && (lang === 'en' ? x.role_en : x.role_ar) ? ` — ${lang === 'en' ? x.role_en : x.role_ar}` : ''));
+        // picking from the list fills the name (and position) in both languages; free text stays as typed
+        const pick = (i: number, v: string) => {
+          const k = opts.indexOf(v);
+          const it = k >= 0 ? items[k] : null;
+          set(i, it ? { name: it.ar, name_en: it.en, role: it.role_ar ?? null, role_en: it.role_en ?? null }
+            : { name: v, name_en: null, role: null, role_en: null });
+        };
+        const shown = (x: CrewLine) => {
+          const n = lang === 'en' ? x.name_en || x.name : x.name;
+          const r = lang === 'en' ? x.role_en || x.role : x.role;
+          return r ? `${n} — ${r}` : n;
+        };
         const set = (i: number, p: Partial<CrewLine>) => onChange(lines.map((x, j) => (j === i ? { ...x, ...p } : x)));
         const total = rows.reduce((a, r) => a + (r.x.count || 0), 0);
         return (
@@ -99,8 +113,8 @@ function CrewTable({ lines, onChange, editable, settings }: { lines: CrewLine[];
             <Text size="sm" fw={600}>{t(`daily.g.${g}`)} <Badge size="sm" variant="light">{total}</Badge></Text>
             {rows.map(({ x, i }) => (
               <Group key={i} gap="xs" mt={4} wrap="nowrap">
-                <Autocomplete size="xs" style={{ flex: 1 }} placeholder={t(names ? 'daily.person' : 'daily.trade')} disabled={!editable} value={x.name}
-                  data={opts} onChange={(v) => set(i, { name: v })} />
+                <Autocomplete size="xs" style={{ flex: 1 }} placeholder={t(names ? 'daily.person' : 'daily.trade')} disabled={!editable} value={shown(x)}
+                  data={opts} onChange={(v) => pick(i, v)} />
                 {g !== 'supervision' && subs.length > 0 && (
                   <Select size="xs" w={170} placeholder={t('daily.sub')} clearable disabled={!editable} value={x.sub} data={subs} onChange={(v) => set(i, { sub: v })} />
                 )}
@@ -151,7 +165,7 @@ export default function DailyPanel({ rec }: { rec: RecordDetail }) {
   const set = (p: Partial<DailyData>) => { setD({ ...d, ...p }); setDirty(true); };
   const S = settings.data;
   const opt = (k: string, list: string[]) => list.map((v) => ({ value: v, label: t(`daily.${k}.${v}`) }));
-  const equipOpts = S.lists.equipment ?? [];
+  const equipOpts = (S.lists.equipment ?? []).filter((x) => x.active).map((x) => itemLabel(x, i18n.language === 'en' ? 'en' : 'ar'));
 
   return (
     <Card withBorder style={{ borderColor: 'var(--mantine-color-verqac-3)' }}>

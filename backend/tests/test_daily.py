@@ -17,8 +17,11 @@ def test_daily_cycle_and_progress(client, site):
     # settings: names for supervision, counts for the rest
     s = client.put(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"], json={
         "crew": {"supervision": "names", "contractor": "counts", "labour": "counts"}, "link_materials": True,
-        "lists": {"labour": ["حداد", "نجار", "عامل", " "], "equipment": ["رافعة برجية", "مضخة باطون"]}}).json()
-    assert s["lists"]["labour"] == ["حداد", "نجار", "عامل"]
+        "lists": {"labour": [{"ar": "حداد", "en": "Steel fixer"}, {"ar": "نجار", "en": ""}, {"ar": " ", "en": ""}],
+                  "supervision": [{"ar": "م. سامي داود", "en": "Eng. Sami Dawood", "role_ar": "مهندس مدني", "role_en": "Civil engineer"}],
+                  "equipment": [{"ar": "رافعة برجية", "en": "Tower crane"}]}}).json()
+    assert [(x["ar"], x["en"]) for x in s["lists"]["labour"]] == [("حداد", "Steel fixer"), ("نجار", "نجار")]
+    assert s["lists"]["supervision"][0]["role_en"] == "Civil engineer"
     d1 = date.today() - timedelta(days=2)
     rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1.isoformat()}).json()["id"]
     assert client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"],

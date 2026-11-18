@@ -117,7 +117,9 @@ def _daily(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
             (L["wind"], v.get(r.wind or "", "")), (L["hours"], f"{r.hours_from or ''} – {r.hours_to or ''}" if r.hours_from else "")]
     crew = {}
     for x in r.crew:
-        crew.setdefault(x["group"], []).append(x)
+        name = (x.get("name_en") or x["name"]) if lang == "en" else x["name"]
+        role = (x.get("role_en") or x.get("role")) if lang == "en" else x.get("role")
+        crew.setdefault(x["group"], []).append({**x, "name": name + (f" — {role}" if role else "")})
     hse = r.hse or {}
     return {"t": L, "head": [head[i:i + 2] for i in range(0, len(head), 2)],
             "crew": [{"title": L["groups"][g], "rows": rows, "total": sum(int(y.get("count") or 0) for y in rows)}

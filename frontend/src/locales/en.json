@@ -938,17 +938,37 @@
   },
   "dset": {
     "title": "Daily report",
-    "hint": "How the daily report records staff, and the suggested lists (one per line).",
+    "hint": "How staff are recorded in the daily report, and the suggested lists in both languages. A choice from the list shows in the reader’s language in the report and the printout; a name not in the list can still be typed.",
     "names": "Names",
     "counts": "Description and count",
     "list": {
       "supervision": "Supervision staff",
       "contractor": "Contractor staff",
-      "labour": "Labour trades",
+      "labour": "Labour",
       "subcontractors": "Subcontractors",
       "equipment": "Equipment"
     },
     "linkMaterials": "Link delivered materials to their approvals",
-    "linkMaterialsHint": "The materials section picks the material approval and can create a material inspection in one click."
+    "linkMaterialsHint": "The materials section picks the material approval and can create a material inspection in one click.",
+    "nameAr": "Name (Arabic)",
+    "nameEn": "Name (English)",
+    "roleAr": "Position (Arabic)",
+    "roleEn": "Position (English)",
+    "active": "Active",
+    "add": {
+      "supervision": "Add person",
+      "contractor": "Add person / position",
+      "labour": "Add trade",
+      "subcontractors": "Add subcontractor",
+      "equipment": "Add equipment"
+    },
+    "listHint": {
+      "people": "Staff names and positions, e.g. Eng. Sami Dawood — Civil engineer.",
+      "supervision": "Supervision positions, e.g. civil engineer, inspector.",
+      "contractor": "Contractor positions, e.g. site engineer, foreman, surveyor.",
+      "labour": "Labour trades, e.g. steel fixer, carpenter, labourer.",
+      "subcontractors": "Subcontractors working on the project.",
+      "equipment": "Equipment used, e.g. tower crane, concrete pump."
+    }
   }
 }
