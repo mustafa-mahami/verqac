@@ -1114,7 +1114,9 @@
     "draftHint": "Changes to this programme from {{at}} were not saved. Restore them?",
     "draftRestore": "Restore",
     "draftDrop": "Discard",
-    "exportXlsx": "Export Excel"
+    "exportXlsx": "Export Excel",
+    "clear": "Clear programme",
+    "clearConfirm": "Clear all dates, cycle and link settings and start again? Nothing is saved until you press Save, and you can undo before that."
   },
   "gantt": {
     "byFloor": "By floor",

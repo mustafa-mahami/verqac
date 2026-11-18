@@ -292,6 +292,13 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
               {(props) => <Button size="xs" variant="light" loading={upload.isPending} {...props}>{t('prg.import')}</Button>}
             </FileButton>
             <Button size="xs" variant="light" onClick={() => setCycleOpen(true)}>{t('prg.cycle')}</Button>
+            {(lines.length > 0 || cycles.length > 0) && (
+              <Button size="xs" variant="subtle" color="red" onClick={() => {
+                if (!window.confirm(t('prg.clearConfirm'))) return;
+                try { localStorage.removeItem(`verqac:prg-cycle:${rec.id}`); } catch { /* ignore */ }
+                setCycles([]); change([], 'manual');
+              }}>{t('prg.clear')}</Button>
+            )}
             {dirty && <Button size="xs" variant="subtle" color="gray" onClick={() => { setLines(q.data!.lines); setCycles(q.data!.cycles); setSource(q.data!.source); setDirty(false); setMsg(null); dropDraft(); }}>{t('prg.undo')}</Button>}
             <Button size="xs" disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button>
           </>}
