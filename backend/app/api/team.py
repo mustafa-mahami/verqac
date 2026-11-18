@@ -3,10 +3,11 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit, diff
+from app.core.db import session_scope
 from app.core.deps import Ctx, ctx
 from app.core.invites import create_invite
 from app.core.roles import is_hidden, overrides, role_out
@@ -193,9 +194,22 @@ def update_member(project_id: UUID, member_id: UUID, body: MemberPatch, c: Ctx =
     if body.is_active is not None:
         member.is_active = body.is_active
     after = {"role_id": member.role_id, "discipline_ids": list(member.discipline_ids), "is_active": member.is_active}
+    user = c.db.get(User, member.user_id)
+    names = {f: v.strip() for f in ("full_name_ar", "full_name_en")
+             if (v := getattr(body, f)) is not None and v.strip() != getattr(user, f)}
+    if names:
+        # a person's name is theirs across the platform: only a colleague of the same organization corrects it
+        same_org = c.db.scalar(select(OrgMember.user_id).where(OrgMember.org_id == party.org_id,
+                                                               OrgMember.user_id == user.id))
+        require(same_org is not None, "not_same_org")
+        before.update({f: getattr(user, f) for f in names})
+        after.update(names)
+        with session_scope(bypass=True) as side:  # users may only update themselves under RLS
+            side.execute(update(User).where(User.id == user.id).values(**names))
+        c.db.expire(user)
     c.db.flush()
     _audit(c, a, "project_member", "update", member.id, diff(before, after))
-    user, role = c.db.get(User, member.user_id), c.db.get(Role, member.role_id)
+    role = c.db.get(Role, member.role_id)
     return MemberOut(id=member.id, user=UserOut.model_validate(user), party_id=party.id,
                      role=role_out(a.project, role), discipline_ids=member.discipline_ids,
                      is_active=member.is_active)

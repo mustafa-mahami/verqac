@@ -53,3 +53,15 @@ def test_project_roles(client, site):
     assert surveyor["code"] not in _roles(client, s, s["hc"])
     # the rename shows on the member
     assert _qa_member(client, s)["role"]["name_ar"] == "مراقب الجودة"
+
+
+def test_manager_corrects_member_name(client, site):
+    s = site
+    m = _qa_member(client, s)
+    url = f"/api/v1/projects/{s['pid']}/members/{m['id']}"
+    r = client.patch(url, headers=s["hc"], json={"full_name_ar": "خالد مهنا", "full_name_en": "Khaled Muhanna"})
+    assert r.status_code == 200, r.text
+    assert r.json()["user"]["full_name_ar"] == "خالد مهنا" and r.json()["user"]["full_name_en"] == "Khaled Muhanna"
+    assert client.get("/api/v1/auth/me", headers=s["hqa"]).json()["user"]["full_name_ar"] == "خالد مهنا"
+    # another party's manager cannot
+    assert client.patch(url, headers=s["hk"], json={"full_name_ar": "x y"}).status_code == 403

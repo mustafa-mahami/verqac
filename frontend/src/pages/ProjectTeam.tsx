@@ -139,7 +139,8 @@ function MemberEditForm({ projectId, member, party, onDone }: { projectId: strin
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const { partyRoles, discData } = useRolesAndDisciplines(projectId, party, member.role.id);
-  const form = useForm({ initialValues: { role_id: member.role.id, discipline_ids: member.discipline_ids } });
+  const form = useForm({ initialValues: { role_id: member.role.id, discipline_ids: member.discipline_ids,
+    full_name_ar: member.user.full_name_ar, full_name_en: member.user.full_name_en } });
   const save = useMutation({
     mutationFn: (v: typeof form.values) => api(`/projects/${projectId}/members/${member.id}`, { method: 'PATCH', body: JSON.stringify(v) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['team', projectId] }); onDone(); },
@@ -149,7 +150,11 @@ function MemberEditForm({ projectId, member, party, onDone }: { projectId: strin
     <form onSubmit={form.onSubmit((v) => save.mutate(v))}>
       <Stack>
         {error && <Alert color="red">{error}</Alert>}
-        <Text fw={500}>{pick(member.user, 'full_name')}</Text>
+        <Group grow>
+          <TextInput label={t('team.nameAr')} dir="rtl" required minLength={2} {...form.getInputProps('full_name_ar')} />
+          <TextInput label={t('team.nameEn')} dir="ltr" required minLength={2} {...form.getInputProps('full_name_en')} />
+        </Group>
+        <Text size="xs" c="dimmed" mt={-8}>{member.user.email}</Text>
         <RoleSelect roles={partyRoles} allowDeselect={false} {...form.getInputProps('role_id')} />
         <MultiSelect label={t('team.disciplines')} placeholder={t('team.allDisciplines')} data={discData} {...form.getInputProps('discipline_ids')} />
         <Button type="submit" loading={save.isPending}>{t('rec.save')}</Button>

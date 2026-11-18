@@ -147,7 +147,8 @@
     "invalid_dates": "The end date is before the start date.",
     "role_in_use": "The role is held by members or invitations and cannot be deleted. You can hide it.",
     "role_hidden": "This role is hidden in the project.",
-    "role_is_base": "Base roles are not deleted; they can be hidden."
+    "role_is_base": "Base roles are not deleted; they can be hidden.",
+    "not_same_org": "You cannot edit the name of a person from another organization."
   },
   "common": {
     "cancel": "Cancel",
@@ -185,10 +186,12 @@
     "noUsersToAdd": "Everyone in your organization is already in the project. Invite new users from \"Organization users\".",
     "you": "You",
     "partyKind": "Party",
-    "edit": "Edit role and disciplines",
+    "edit": "Edit member",
     "inviteNew": "Invite new colleague",
     "inviteNewHint": "Joins your organization and this project with the chosen role and disciplines in one step.",
-    "roleHint": "Pick a role to see what it can do"
+    "roleHint": "Pick a role to see what it can do",
+    "nameAr": "Arabic name",
+    "nameEn": "English name"
   },
   "invite": {
     "linkTitle": "Invitation link",

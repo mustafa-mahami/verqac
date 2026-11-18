@@ -274,6 +274,9 @@ class MemberPatch(BaseModel):
     role_id: UUID | None = None
     discipline_ids: list[UUID] | None = None
     is_active: bool | None = None
+    # the party's manager corrects a colleague's name (people of the party's own organization only)
+    full_name_ar: str | None = Field(default=None, min_length=2, max_length=200)
+    full_name_en: str | None = Field(default=None, min_length=2, max_length=200)
 
 
 class MemberProject(BaseModel):
