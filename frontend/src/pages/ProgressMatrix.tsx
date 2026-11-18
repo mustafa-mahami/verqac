@@ -188,10 +188,10 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
           </Group>
         )}
       </Card>
-      {hasPlan && (
+      {(
         <Group justify="space-between">
           <SegmentedControl size="xs" value={view} onChange={(v) => setView(v as 'actual' | 'status' | 'gantt')}
-            data={[{ value: 'actual', label: t('progress.viewActual') }, { value: 'status', label: t('progress.viewStatus') }, { value: 'gantt', label: t('progress.viewGantt') }]} />
+            data={[{ value: 'actual', label: t('progress.viewActual') }, ...(hasPlan ? [{ value: 'status', label: t('progress.viewStatus') }] : []), { value: 'gantt', label: t('progress.viewGantt') }]} />
           {byStatus && (
             <Group gap="sm">
               {(['late', 'on_track', 'ahead', 'done'] as CellStatus[]).map((k) => (
@@ -202,7 +202,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
           )}
         </Group>
       )}
-      {view === 'gantt' && hasPlan ? (
+      {view === 'gantt' ? (
         <Card withBorder><Gantt items={ganttItems} showActual /></Card>
       ) : (
       <Card withBorder p={0}>

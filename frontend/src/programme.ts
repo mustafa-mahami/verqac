@@ -138,3 +138,17 @@ export function cpm(lines: PLine[], cycles: PCycle[], units: string[], whole: Se
   }
   return new Map([...nodes].map(([k, n]) => [k, n.lf - n.f]));
 }
+
+/** Planned % of a cell on a day (linear, as on the server) and its status against the actual %. */
+export function cellPlanned(start: string, finish: string, day: string): number {
+  if (day < start) return 0;
+  if (day >= finish) return 100;
+  return Math.round(((daysBetween(start, day) + 1) / (daysBetween(start, finish) + 1)) * 1000) / 10;
+}
+export function cellStatus(planned: number, actual: number): 'done' | 'not_started' | 'late' | 'ahead' | 'on_track' {
+  if (actual >= 100) return 'done';
+  if (planned <= 0 && actual <= 0) return 'not_started';
+  if (actual + 10 < planned) return 'late';
+  if (actual > planned + 5) return 'ahead';
+  return 'on_track';
+}

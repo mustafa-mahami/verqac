@@ -6,9 +6,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, openProtected, type RecordDetail } from '../api';
+import type { ProgressOut } from '../daily';
 import { fmtDate } from '../format';
 import i18n, { pick } from '../i18n';
-import { cellKey, cpm, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
+import { cellKey, cellPlanned, cellStatus, cpm, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
 import { useStructure } from './Structure';
 import Gantt, { type GanttItem } from './Gantt';
 
@@ -182,6 +183,8 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['programme', rec.id], queryFn: () => api<ProgrammeOut>(`/records/${rec.id}/programme`) });
   const s = useStructure(rec.project_id).data;
+  // the actual progress (approved daily reports), to compare this programme with the site while it is drafted
+  const prog = useQuery({ queryKey: ['progress', rec.project_id], queryFn: () => api<ProgressOut>(`/projects/${rec.project_id}/progress`) });
   const [lines, setLines] = useState<PLine[]>([]);
   const [cycles, setCycles] = useState<PCycle[]>([]);
   const [source, setSource] = useState<ProgrammeOut['source']>('manual');
@@ -256,10 +259,21 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const from = bars.length ? bars.reduce((m, b) => (b.start < m ? b.start : m), bars[0].start) : null;
   const to = bars.length ? bars.reduce((m, b) => (b.finish > m ? b.finish : m), bars[0].finish) : null;
   const floats = cpm(lines, cycles, units.map((u) => u.id!), whole);
+  const today = new Date().toISOString().slice(0, 10);
+  const done = new Map((prog.data?.cells ?? []).map((c) => [cellKey(c.stage_id, c.location_id), c]));
+  const hasActual = (prog.data?.cells ?? []).some((c) => c.progress > 0 || c.started_on);
   const gItems: GanttItem[] = stages.flatMap((st) => (whole.has(st.id!) ? [null] : units.map((u) => u.id!)).map((loc) => {
-    const l = byKey.get(cellKey(st.id!, loc));
+    const k = cellKey(st.id!, loc);
+    const l = byKey.get(k);
+    const a = done.get(k);
+    const started = !!a && (a.progress > 0 || !!a.started_on);
+    const planned = l?.start && l.finish ? cellPlanned(l.start, l.finish, today) : 0;
+    const status: NonNullable<GanttItem['actual']>['status'] = started ? cellStatus(planned, a!.progress)
+      : l?.start && l.start <= today ? 'late_start' : 'not_due';
     return { stageId: st.id!, stageName: pick(st, 'name'), locId: loc, locName: loc ? pick(units.find((u) => u.id === loc)!, 'name') : null,
-      plan: l?.start && l.finish ? { start: l.start, finish: l.finish } : null, base: null, actual: null, float: cycles.length ? floats.get(cellKey(st.id!, loc)) ?? null : null };
+      plan: l?.start && l.finish ? { start: l.start, finish: l.finish } : null, base: null,
+      actual: hasActual ? { start: a?.started_on ?? null, finish: a?.finished_on ?? null, pct: a?.progress ?? 0, status } : null,
+      float: cycles.length ? floats.get(k) ?? null : null };
   }));
   const dateIn = (stage: string, loc: string | null, f: 'start' | 'finish') => (
     <TextInput size="xs" type="date" w={140} disabled={!edit} value={byKey.get(cellKey(stage, loc))?.[f] ?? ''}
@@ -316,7 +330,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
           </Group>
         </Alert>
       )}
-      {from && to && <Card withBorder p="xs"><Gantt items={gItems} showActual={false} /></Card>}
+      {from && to && <Card withBorder p="xs"><Gantt items={gItems} showActual={hasActual} /></Card>}
       <Card withBorder p={0}>
         <Table verticalSpacing={4} fz="sm">
           <Table.Thead><Table.Tr>
