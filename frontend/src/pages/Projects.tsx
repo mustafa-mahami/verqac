@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Group, Modal, Select, SimpleGrid, Stack, Table, Text, TextInput, Title } from '@mantine/core';
+import { Alert, Badge, Button, Card, Group, Modal, Progress, Select, SimpleGrid, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDisclosure } from '@mantine/hooks';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type ProjectItem, type ProjectTypeT } from '../api';
 import { useAuth } from '../auth';
 import { pick } from '../i18n';
+import { fmtDate } from '../format';
 
 function partyName(item: ProjectItem, kind: string) {
   const p = item.parties.find((x) => x.kind === kind);
@@ -40,7 +41,9 @@ function ProjectsTable({ items }: { items: ProjectItem[] }) {
               <Table.Th>{t('party.consultant')}</Table.Th>
               <Table.Th>{t('party.owner')}</Table.Th>
               <Table.Th>{t('projects.myRole')}</Table.Th>
-              <Table.Th ta="center">{t('projects.colRecords')}</Table.Th>
+              <Table.Th>{t('projects.startDate')}</Table.Th>
+              <Table.Th>{t('projects.endDate')}</Table.Th>
+              <Table.Th miw={140}>{t('projects.colProgress')}</Table.Th>
               <Table.Th ta="center">{t('projects.colOpen')}</Table.Th>
               <Table.Th ta="center">{t('projects.colOverdue')}</Table.Th>
             </Table.Tr>
@@ -56,7 +59,22 @@ function ProjectsTable({ items }: { items: ProjectItem[] }) {
                   <Table.Td>{party(item, 'consultant')}</Table.Td>
                   <Table.Td>{party(item, 'owner')}</Table.Td>
                   <Table.Td><Text size="sm">{item.my_role ? pick(item.my_role, 'name') : '—'}</Text></Table.Td>
-                  <Table.Td ta="center"><Text size="sm">{item.stats.records}</Text></Table.Td>
+                  <Table.Td><Text size="sm" dir="ltr" ta="start">{p.start_date ? fmtDate(p.start_date) : '—'}</Text></Table.Td>
+                  <Table.Td><Text size="sm" dir="ltr" ta="start">{p.end_date ? fmtDate(p.end_date) : '—'}</Text></Table.Td>
+                  <Table.Td>
+                    {item.stats.progress === null || item.stats.progress === undefined ? <Text size="sm" c="dimmed">—</Text> : (() => {
+                      const behind = item.stats.planned !== null && item.stats.planned !== undefined && item.stats.progress + 5 < item.stats.planned;
+                      return (
+                        <Tooltip label={item.stats.planned !== null && item.stats.planned !== undefined
+                          ? t('projects.progressTip', { a: item.stats.progress, p: item.stats.planned }) : t('projects.progressNoPlan')}>
+                          <Group gap={6} wrap="nowrap">
+                            <Progress value={item.stats.progress} w={70} size="sm" color={behind ? 'red' : 'verqac'} />
+                            <Text size="sm" fw={600} c={behind ? 'red' : undefined}>{item.stats.progress}%</Text>
+                          </Group>
+                        </Tooltip>
+                      );
+                    })()}
+                  </Table.Td>
                   <Table.Td ta="center"><Text size="sm" fw={item.stats.open ? 600 : 400}>{item.stats.open}</Text></Table.Td>
                   <Table.Td ta="center">
                     {item.stats.overdue ? <Badge color="red" tt="none">{item.stats.overdue}</Badge> : <Text size="sm" c="dimmed">0</Text>}

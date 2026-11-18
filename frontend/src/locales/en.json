@@ -61,7 +61,10 @@
     "colRecords": "Submittals",
     "colOpen": "Awaiting reply",
     "colOverdue": "Overdue",
-    "typeHint": "Copies its stages and locations"
+    "typeHint": "Copies its stages and locations",
+    "colProgress": "Progress",
+    "progressTip": "Actual {{a}}% · planned to date {{p}}%",
+    "progressNoPlan": "From the approved daily reports; no approved programme to compare with"
   },
   "errors": {
     "invalid_credentials": "Wrong email or password.",

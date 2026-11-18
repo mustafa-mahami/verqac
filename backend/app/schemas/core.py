@@ -129,6 +129,8 @@ class ProjectStats(BaseModel):
     records: int = 0  # record numbers (all revisions of a number count once)
     open: int = 0  # submitted, waiting for an answer
     overdue: int = 0  # open past the reply date
+    progress: float | None = None  # project %, from the approved daily reports (None: no stages)
+    planned: float | None = None  # planned % today, from the approved programme
 
 
 class ProjectListItem(BaseModel):

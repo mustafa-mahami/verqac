@@ -73,7 +73,17 @@ def _stats(c: Ctx, project_ids: list[UUID]) -> dict[UUID, ProjectStats]:
                func.count().filter((Record.state_category == "submitted") & (Record.due_at < now)))
         .where(Record.project_id.in_(project_ids)).group_by(Record.project_id)
     ).all()
-    return {pid: ProjectStats(records=n, open=o, overdue=od) for pid, n, o, od in rows}
+    out = {pid: ProjectStats(records=n, open=o, overdue=od) for pid, n, o, od in rows}
+    from app.api.daily import project_progress
+    from app.models.structure import ProjectStage
+    staged = set(c.db.scalars(select(ProjectStage.project_id).where(ProjectStage.project_id.in_(project_ids),
+                                                                     ProjectStage.is_active).distinct()))
+    for pid in project_ids:
+        if pid in staged:
+            pr = project_progress(c.db, pid)
+            st = out.setdefault(pid, ProjectStats())
+            st.progress, st.planned = pr.project, pr.planned
+    return out
 
 
 @router.post("", response_model=ProjectListItem, status_code=201)
