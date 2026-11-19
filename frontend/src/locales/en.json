@@ -1268,5 +1268,14 @@
     "custom": "Custom",
     "badRange": "Choose a valid start and end: end after start, start not in the future.",
     "fromStart": "Since project start"
+  },
+  "bulk": {
+    "all": "Select all",
+    "chosen": "{{n}} selected",
+    "none": "No action you can take on these records",
+    "clear": "Clear selection",
+    "result": "Done on {{done}}; {{skipped}} skipped (the action does not apply).",
+    "confirm": "It will run on {{n}} of the {{of}} selected records; the rest do not allow this action in their current state.",
+    "comment": "Comment (written on every record)"
   }
 }

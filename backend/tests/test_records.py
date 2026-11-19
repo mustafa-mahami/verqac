@@ -436,3 +436,23 @@ def test_routing_modes(client, site):
         "title": "xyz", "discipline_id": site["cdisc"]["C"], "addressed_to": site["ee"] if "ee" in site else str(rec["id"])})
     assert bad.status_code == 422
     assert client.put(url, headers=hc, json={"routing": {"submittal": "nobody"}}).status_code == 422
+
+
+def test_bulk_actions(client, site):
+    a, b = new_sub(client, site), new_sub(client, site)
+    c3 = new_sub(client, site, h=site["hc"], disc="E")  # another discipline: the civil engineer cannot answer it
+    for r in (a, b):
+        submit(client, site, r)
+    attach(client, site["hc"], c3["id"])
+    assert act(client, site["hc"], c3["id"], "submit").status_code == 200
+    ids = [a["id"], b["id"], c3["id"]]
+    acts = {x["action"]: x for x in client.post("/api/v1/records-bulk/actions", headers=site["hce"], json={"ids": ids}).json()}
+    assert acts["approve"]["count"] == 2 and acts["revise"]["requires_comment"] is True
+    # the contractor sees its own actions only
+    assert {x["action"] for x in client.post("/api/v1/records-bulk/actions", headers=site["hqa"], json={"ids": ids}).json()} <= {"cancel"}
+    r = client.post("/api/v1/records-bulk/transition", headers=site["hce"], json={"ids": ids, "action": "revise"}).json()
+    assert r["done"] == 0 and len(r["failed"]) == 2 and r["failed"][0]["error"] == "comment_required"
+    r = client.post("/api/v1/records-bulk/transition", headers=site["hce"], json={"ids": ids, "action": "approve"}).json()
+    assert (r["done"], r["skipped"], r["failed"]) == (2, 1, [])
+    assert client.get(f"/api/v1/records/{a['id']}", headers=site["hce"]).json()["state"]["category"] == "approved"
+    assert client.get(f"/api/v1/records/{c3['id']}", headers=site["hk"]).json()["state"]["category"] == "submitted"

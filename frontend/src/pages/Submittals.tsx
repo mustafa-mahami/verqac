@@ -1,9 +1,9 @@
 import {
-  Alert, Badge, Button, Card, FileInput, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, Textarea,
+  Alert, Badge, Button, Card, Checkbox, FileInput, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, Textarea,
   TextInput, UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -290,6 +290,13 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
   const shown = useMemo(() => sortRows(applyFilter(rows.data ?? [], filter, false, structure.data), sort, dir),
     [rows.data, structure.data, filter.status, filter.discipline, filter.kind, filter.stage, filter.topic, filter.loc, filter.q, filter.from, filter.to, sort, dir]);
   const narrowed = !!(filter.q || filter.from || filter.to);
+  // bulk actions: tick records, then run an action they allow (as in Odoo)
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  useEffect(() => setSel(new Set()), [type, projectId]);
+  const visible = new Set(shown.map((r) => r.id));
+  const chosen = [...sel].filter((id) => visible.has(id));
+  const allOn = shown.length > 0 && chosen.length === shown.length;
+  const toggle = (id: string) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); setSel(n); };
 
   return (
     <Stack>
@@ -315,12 +322,17 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
         <RecordStats rows={rows.data} filter={filter} onChange={setFilter} showDraft={meta.data?.party_kind === 'contractor'}
           structure={structure.data} states={meta.data?.states} />
       )}
+      {chosen.length > 0 && <BulkBar ids={chosen} projectId={projectId} onDone={() => setSel(new Set())} />}
       {rows.isSuccess && shown.length === 0 ? <Text c="dimmed">{rows.data.length ? t('stats.noneHere') : typeText(type, 'empty', 'rec.empty')}</Text> : (
         <Card withBorder p={0}>
           <Table.ScrollContainer minWidth={760}>
             <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md">
               <Table.Thead>
                 <Table.Tr>
+                  <Table.Th w={36}>
+                    <Checkbox size="xs" aria-label={t('bulk.all')} checked={allOn} indeterminate={chosen.length > 0 && !allOn}
+                      onChange={() => setSel(allOn ? new Set() : new Set(shown.map((r) => r.id)))} />
+                  </Table.Th>
                   <SortTh label={t('rec.number')} k="number" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={t('rec.title')} k="title" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={t('rec.discipline')} k="discipline" sort={sort} dir={dir} onSort={onSort} />
@@ -333,6 +345,9 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
               <Table.Tbody>
                 {shown.map((r) => (
                   <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => { saveNav(shown.map((x) => x.id), location.pathname + location.search); navigate(`/records/${r.id}`); }}>
+                    <Table.Td onClick={(e) => e.stopPropagation()}>
+                      <Checkbox size="xs" aria-label={r.number} checked={sel.has(r.id)} onChange={() => toggle(r.id)} />
+                    </Table.Td>
                     <Table.Td><Text size="sm" fw={500} dir="ltr" ta="start" style={{ whiteSpace: 'nowrap' }}>{r.number} · R{r.rev_no}</Text></Table.Td>
                     <Table.Td>
                       <Text size="sm" lineClamp={2}>{rowTitle(structure.data, r)}</Text>
@@ -383,5 +398,66 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
           : meta.data && <NewSubmittal projectId={projectId} meta={meta.data} type={type} onClose={() => setOpen(false)} />}
       </Modal>
     </Stack>
+  );
+}
+
+
+interface BulkAction { action: string; name_ar: string; name_en: string; requires_comment: boolean; style: string; count: number }
+interface BulkResult { done: number; skipped: number; failed: { id: string; number: string; error: string }[] }
+const STYLE: Record<string, string> = { green: 'green', teal: 'teal', orange: 'orange', red: 'red', primary: 'verqac', subtle: 'gray' };
+
+/** The chosen records: the actions this user may take on them, each with how many it applies to. */
+function BulkBar({ ids, projectId, onDone }: { ids: string[]; projectId: string; onDone: () => void }) {
+  const { t, i18n } = useTranslation();
+  const qc = useQueryClient();
+  const key = [...ids].sort().join(',');
+  const acts = useQuery({ queryKey: ['bulkActions', key], queryFn: () => api<BulkAction[]>('/records-bulk/actions', { method: 'POST', body: JSON.stringify({ ids }) }) });
+  const [pick, setPick] = useState<BulkAction | null>(null);
+  const [comment, setComment] = useState('');
+  const [result, setResult] = useState<BulkResult | null>(null);
+  const run = useMutation({
+    mutationFn: () => api<BulkResult>('/records-bulk/transition', { method: 'POST', body: JSON.stringify({ ids, action: pick!.action, comment: comment || null }) }),
+    onSuccess: (r) => {
+      setResult(r); setPick(null); setComment('');
+      qc.invalidateQueries({ queryKey: ['records', projectId] });
+      qc.invalidateQueries({ queryKey: ['bulkActions'] });
+      if (!r.failed.length) onDone();
+    },
+  });
+  const name = (a: BulkAction) => (i18n.language === 'en' ? a.name_en : a.name_ar);
+  return (
+    <Card withBorder p="xs" bg="var(--mantine-color-gray-0)">
+      <Group gap="xs">
+        <Text size="sm" fw={600}>{t('bulk.chosen', { n: ids.length })}</Text>
+        {acts.data?.length === 0 && <Text size="sm" c="dimmed">{t('bulk.none')}</Text>}
+        {acts.data?.map((a) => (
+          <Button key={a.action} size="xs" variant="light" color={STYLE[a.style] ?? 'gray'} onClick={() => { setPick(a); setResult(null); }}>
+            {name(a)} ({a.count})
+          </Button>
+        ))}
+        <Button size="xs" variant="subtle" color="gray" onClick={onDone}>{t('bulk.clear')}</Button>
+      </Group>
+      {result && (
+        <Alert mt="xs" py={6} color={result.failed.length ? 'orange' : 'green'} withCloseButton onClose={() => setResult(null)}>
+          {t('bulk.result', { done: result.done, skipped: result.skipped })}
+          {result.failed.map((f) => <Text key={f.id} size="xs">{f.number}: {t(`errors.${f.error}`, { defaultValue: f.error })}</Text>)}
+        </Alert>
+      )}
+      <Modal opened={!!pick} onClose={() => setPick(null)} title={pick ? name(pick) : ''}>
+        {pick && (
+          <Stack>
+            <Text size="sm">{t('bulk.confirm', { n: pick.count, of: ids.length })}</Text>
+            {pick.requires_comment && (
+              <Textarea label={t('bulk.comment')} required autosize minRows={3} value={comment} onChange={(e) => setComment(e.currentTarget.value)} />
+            )}
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setPick(null)}>{t('common.cancel', { defaultValue: 'إلغاء' })}</Button>
+              <Button color={STYLE[pick.style] ?? 'verqac'} loading={run.isPending} disabled={pick.requires_comment && !comment.trim()}
+                onClick={() => run.mutate()}>{name(pick)} ({pick.count})</Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+    </Card>
   );
 }

@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -1052,3 +1053,91 @@ def record_pdf(record_id: uuid.UUID, lang: str = Query("ar", pattern="^(ar|en)$"
     return Response(pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="{name}"'})
 
+
+
+# ----------------------------------------------------------------------------- bulk actions
+class BulkIn(BaseModel):
+    ids: list[uuid.UUID] = Field(max_length=1000)
+
+
+class BulkAction(BaseModel):
+    action: str
+    name_ar: str
+    name_en: str
+    requires_comment: bool
+    style: str
+    count: int  # how many of the chosen records it applies to
+
+
+class BulkTransitionIn(BulkIn):
+    action: str = Field(max_length=40)
+    comment: str | None = Field(default=None, max_length=10000)
+
+
+class BulkFailure(BaseModel):
+    id: uuid.UUID
+    number: str
+    error: str
+
+
+class BulkResult(BaseModel):
+    done: int
+    skipped: int  # the action does not apply to them (state, permission)
+    failed: list[BulkFailure] = []
+
+
+def _bulk_records(c: Ctx, ids: list[uuid.UUID]):
+    """The chosen records this user may see, with their access and permissions (types differ per record)."""
+    out, cache = [], {}
+    for rec in c.db.scalars(select(Record).where(Record.id.in_(ids))):
+        if rec.project_id not in cache:
+            cache[rec.project_id] = project_access(c, rec.project_id)
+        a = cache[rec.project_id]
+        rt = c.db.get(RecordType, rec.record_type_id)
+        p = Perms(c, a, rt)
+        if can_see(c, a, p, rec):
+            out.append((rec, a, rt, p))
+    return out
+
+
+@router.post("/records-bulk/actions", response_model=list[BulkAction])
+def bulk_actions(body: BulkIn, c: Ctx = Depends(ctx)):
+    """What the user can do to the chosen records, with how many each action applies to (like Odoo's action menu)."""
+    found: dict[str, BulkAction] = {}
+    by_state: dict = {}
+    for rec, a, rt, p in _bulk_records(c, body.ids):
+        if rec.state_id not in by_state:
+            by_state[rec.state_id] = list(c.db.scalars(select(WorkflowTransition).where(WorkflowTransition.from_state_id == rec.state_id)
+                                                      .order_by(WorkflowTransition.sort)))
+        for t in by_state[rec.state_id]:
+            if not p.can(t.permission, rec):
+                continue
+            x = found.get(t.action)
+            if x is None:
+                found[t.action] = BulkAction(action=t.action, name_ar=t.name_ar, name_en=t.name_en,
+                                             requires_comment=t.requires_comment, style=t.style, count=1)
+            else:
+                x.count += 1
+                x.requires_comment = x.requires_comment or t.requires_comment
+    return sorted(found.values(), key=lambda x: (-x.count, x.action))
+
+
+@router.post("/records-bulk/transition", response_model=BulkResult)
+def bulk_transition(body: BulkTransitionIn, bg: BackgroundTasks, c: Ctx = Depends(ctx)):
+    """One action on many records: each goes through the same checks as on its own page; one that fails
+    (missing results, an unanswered checklist ...) is listed and the others go on."""
+    out = BulkResult(done=0, skipped=0)
+    for rec, a, rt, p in _bulk_records(c, body.ids):
+        t = c.db.scalar(select(WorkflowTransition).where(WorkflowTransition.from_state_id == rec.state_id,
+                                                         WorkflowTransition.action == body.action))
+        if t is None or not p.can(t.permission, rec):
+            out.skipped += 1
+            continue
+        try:
+            with c.db.begin_nested():
+                transition(rec.id, TransitionIn(action=body.action, comment=body.comment), bg, c)
+            out.done += 1
+        except HTTPException as e:
+            out.failed.append(BulkFailure(id=rec.id, number=f"{rec.number} R{rec.rev_no}", error=str(e.detail)))
+    out.skipped += len(body.ids) - out.done - out.skipped - len(out.failed)
+    return out
