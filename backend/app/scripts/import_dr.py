@@ -935,9 +935,7 @@ def fix_imported(db, data: dict, project) -> Counter:
             new = datetime.combine(fixed, local.time(), TZ)
             if model == "inspection.inspection" and rec.requested_for and rec.requested_for.astimezone(TZ).date() == day:
                 rec.requested_for = datetime.combine(fixed, rec.requested_for.astimezone(TZ).time(), TZ)
-            for e in db.scalars(select(RecordEvent).where(RecordEvent.record_id == rec.id, RecordEvent.channel == CHANNEL,
-                                                          RecordEvent.at == rec.submitted_at)):
-                e.at = new
+            # the history (record_events) is append-only by design: it keeps what the import wrote
             rec.submitted_at = new
             start = max(x for x in (new, rec.requested_for) if x)
             rec.due_at = add_period(start, periods(project, types[rec.record_type_id])[0], cal)
