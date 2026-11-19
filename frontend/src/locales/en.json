@@ -1157,6 +1157,9 @@
     "empty": "Nothing in this range.",
     "criticalPath": "Critical path",
     "critical": "On the critical path: any delay moves the project finish",
-    "float": "{{n}} days of float before the project finish moves"
+    "float": "{{n}} days of float before the project finish moves",
+    "critShort": "critical",
+    "floatShort": "float {{n}}d",
+    "critSummary": "Critical path: {{n}} of {{all}} cells in red — any delay there moves the project finish ({{end}}). The dashed line after a bar = its float."
   }
 }

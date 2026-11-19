@@ -83,9 +83,9 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
         <div style={{ position: 'relative', height: ROW, width: W }}>
           {p && <div style={{ position: 'absolute', insetInlineStart: x(p.start), width: w(p.start, p.finish), top: showActual ? 3 : 6, height: showActual ? 7 : 12,
             background: crit && isCrit(it) ? '#e03131' : showActual ? PLAN : 'var(--mantine-color-verqac-6)', borderRadius: 3,
-            opacity: crit && !isCrit(it) ? 0.3 : showActual ? 1 : 0.85 }} />}
+            opacity: crit && !isCrit(it) ? 0.6 : showActual ? 1 : 0.85 }} />}
           {crit && !isCrit(it) && p && it.float ? <div style={{ position: 'absolute', insetInlineStart: x(addDays(p.finish, 1)), width: w(addDays(p.finish, 1), addDays(p.finish, it.float)),
-            top: showActual ? 6 : 11, height: 1, borderTop: '1px dotted #868e96' }} /> : null}
+            top: showActual ? 5 : 10, height: 4, borderTop: '2px dashed #495057', borderInlineEnd: '2px solid #495057' }} /> : null}
           {it.base && <div style={{ position: 'absolute', insetInlineStart: x(it.base.start), width: w(it.base.start, it.base.finish), top: 2, height: showActual ? 9 : 14,
             border: '1px dashed #868e96', borderRadius: 3 }} />}
           {showActual && a?.start && aEnd && (
@@ -140,6 +140,13 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
         <Button size="compact-xs" variant="subtle" onClick={() => setClosed(Object.fromEntries(groups.map((g) => [g.key, true])))}>{t('gantt.collapse')}</Button>
         <Button size="compact-xs" variant="subtle" onClick={() => window.print()}>{t('gantt.print')}</Button>
       </Group>
+      {crit && (() => {
+        const cs = items.filter(isCrit);
+        const end = items.map((x) => x.plan?.finish).filter(Boolean).reduce((a, b) => (a! > b! ? a : b), '' as string);
+        return (
+          <Text size="xs" mb={6} c="red">{t('gantt.critSummary', { n: cs.length, all: items.filter((x) => x.plan).length, end: end ? fmtDate(end) : '' })}</Text>
+        );
+      })()}
       {showActual && (
         <Group gap="md" mb={6}>
           <Group gap={4}><span style={{ width: 18, height: 6, background: PLAN, display: 'inline-block', borderRadius: 2 }} /><Text size="xs">{t('progress.planned')}</Text></Group>
@@ -180,7 +187,9 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
                     {showActual && (() => { const st = it.actual?.status ?? 'not_due'; const hollow = st === 'not_due' || st === 'not_started';
                       return <span style={{ width: 8, height: 8, borderRadius: 8, background: hollow ? 'white' : COL[st], border: hollow ? `1.5px solid ${COL.not_due}` : undefined, flex: 'none' }} />; })()}
                     <Text size="xs" style={{ flex: 1 }} c={crit && isCrit(it) ? 'red' : undefined} fw={crit && isCrit(it) ? 600 : undefined} truncate>{by === 'floor' ? it.stageName : (it.locName ?? t('structure.whole'))}</Text>
-                    {showActual && <Text size="xs" c="dimmed">{it.actual?.pct ?? 0}%</Text>}
+                    {crit && it.float !== undefined && it.float !== null
+                      ? <Text size="xs" fw={600} c={isCrit(it) ? 'red' : 'dimmed'}>{isCrit(it) ? t('gantt.critShort') : t('gantt.floatShort', { n: it.float })}</Text>
+                      : showActual && <Text size="xs" c="dimmed">{it.actual?.pct ?? 0}%</Text>}
                   </div>
                   <div style={{ position: 'relative' }}>{lines}{bar(it)}</div>
                 </div>
