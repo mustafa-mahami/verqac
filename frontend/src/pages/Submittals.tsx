@@ -231,8 +231,8 @@ function sortRows(rows: RecordRow[], key: SortKey, dir: 'asc' | 'desc'): RecordR
   const sign = dir === 'asc' ? 1 : -1;
   return [...rows].sort((a, b) => {
     const x = sortValue(a, key), y = sortValue(b, key);
-    if (x === y) return 0;
-    if (x === null) return 1;
+    if (x === y) return key === 'number' ? 0 : sign * collator.compare(a.number, b.number);
+    if (x === null) return 1; // no value (a draft not submitted yet) at the end, either way
     if (y === null) return -1;
     return sign * (typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y)));
   });
@@ -281,13 +281,17 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
     put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('kind', f.kind, 'all'); put('stage', f.stage, 'all'); put('topic', f.topic, 'all'); put('loc', f.loc, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
     setParams(next, { replace: true });
   };
-  const sort = (params.get('sort') ?? 'number') as SortKey;
-  const dir = params.get('dir') === 'desc' ? 'desc' : 'asc';
+  // by default the newest submission first
+  const sort = (params.get('sort') ?? 'submitted') as SortKey;
+  const dir = (params.get('dir') ?? (params.get('sort') ? 'asc' : 'desc')) as 'asc' | 'desc';
   const onSort = (k: SortKey) => {
     const next = new URLSearchParams(params);
-    const nextDir = sort === k && dir === 'asc' ? 'desc' : 'asc';
-    k === 'number' && nextDir === 'asc' ? next.delete('sort') : next.set('sort', k);
-    nextDir === 'asc' ? next.delete('dir') : next.set('dir', nextDir);
+    const nextDir = sort === k ? (dir === 'asc' ? 'desc' : 'asc') : k === 'submitted' ? 'desc' : 'asc';
+    if (k === 'submitted' && nextDir === 'desc') {
+      next.delete('sort'); next.delete('dir');
+    } else {
+      next.set('sort', k); next.set('dir', nextDir);
+    }
     next.delete('pg');
     setParams(next, { replace: true });
   };
