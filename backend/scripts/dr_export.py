@@ -122,6 +122,7 @@ def main():
     data["meta"]["dr_version"] = mods[0].get("installed_version") or mods[0].get("latest_version") if mods else None
     ids_of = {}
     users = set()
+    denied = []
     for model, scope in MODELS:
         if not o.has_model(model):
             print(f"  {model:28} not in this database, skipped")
@@ -138,7 +139,13 @@ def main():
             domain = [(link, "in", ids_of.get(parent, []))]
         if "active" in info:
             domain = ["|", ("active", "=", True), ("active", "=", False)] + domain
-        rows = o.read_all(model, domain, list(keep))
+        try:
+            rows = o.read_all(model, domain, list(keep))
+        except xmlrpc.client.Fault as e:  # no access to this model: go on with the rest, say so at the end
+            msg = str(e.faultString).splitlines()[0][:160]
+            denied.append((model, msg))
+            print(f"  {model:28} NO ACCESS, skipped: {msg}")
+            continue
         ids_of[model] = [r["id"] for r in rows]
         data["models"][model] = rows
         data["fields"][model] = {k: {x: v.get(x) for x in ("type", "relation", "selection", "string")} for k, v in keep.items()}
@@ -149,6 +156,7 @@ def main():
                     if isinstance(x, list) and x and isinstance(x[0], int):
                         users.add(x[0])
         print(f"  {model:28} {len(rows):>6}")
+    data["meta"]["denied"] = denied
     if users:
         data["users"] = o.call("res.users", "read", sorted(users), fields=["id", "name", "login", "email", "active"],
                                context={"active_test": False})
@@ -176,6 +184,10 @@ def main():
                     print(f"  downloaded {n} / {len(data['attachments'])}")
         z.writestr("data.json", json.dumps(data, ensure_ascii=False, default=str))
     print(f"\nDone: {out}")
+    if denied:
+        print("\nSkipped (this user has no access; give the user the group named, or run as an administrator, then export again):")
+        for m, msg in denied:
+            print(f"  - {m}: {msg}")
 
 
 if __name__ == "__main__":
