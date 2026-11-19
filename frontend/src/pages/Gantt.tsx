@@ -12,6 +12,7 @@ export interface GanttItem {
   base: { start: string; finish: string } | null; // the baseline, when it differs
   actual: { start: string | null; finish: string | null; pct: number; status: CellStatus | 'late_start' | 'not_due' } | null;
   float?: number | null; // total float in days (critical path): 0 or less = critical
+  unlinked?: boolean; // its dates are fixed by hand, not computed from an earlier stage
 }
 
 const ZOOM = { week: 22, month: 5, quarter: 1.8 } as const;
@@ -144,7 +145,14 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
         const cs = items.filter(isCrit);
         const end = items.map((x) => x.plan?.finish).filter(Boolean).reduce((a, b) => (a! > b! ? a : b), '' as string);
         return (
-          <Text size="xs" mb={6} c="red">{t('gantt.critSummary', { n: cs.length, all: items.filter((x) => x.plan).length, end: end ? fmtDate(end) : '' })}</Text>
+          <>
+            <Text size="xs" mb={4} c="red">{t('gantt.critSummary', { n: cs.length, all: items.filter((x) => x.plan).length, end: end ? fmtDate(end) : '' })}</Text>
+            {(() => {
+              const loose = [...new Set(cs.filter((x) => x.unlinked).map((x) => x.stageName))];
+              return loose.length > 0 && cs.every((x) => x.unlinked)
+                ? <Text size="xs" mb={6} c="orange" fw={600}>{t('gantt.critLoose', { list: loose.join('، ') })}</Text> : null;
+            })()}
+          </>
         );
       })()}
       {showActual && (

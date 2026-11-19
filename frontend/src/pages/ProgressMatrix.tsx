@@ -139,6 +139,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
       base: c.base_start && c.base_finish ? { start: c.base_start, finish: c.base_finish } : null,
       actual: { start: c.started_on, finish: c.finished_on, pct: c.progress, status },
       float: floats ? floats.get(cellKey(c.stage_id, c.location_id)) ?? null : null,
+      unlinked: !!prg.data && !prg.data.cycles.find((x) => x.stage_id === c.stage_id && x.pred),
     };
   }).sort((a, b) => stages.findIndex((x) => x.id === a.stageId) - stages.findIndex((x) => x.id === b.stageId)
     || units.findIndex((u) => u.id === a.locId) - units.findIndex((u) => u.id === b.locId));

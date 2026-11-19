@@ -1167,6 +1167,7 @@
     "float": "{{n}} days of float before the project finish moves",
     "critShort": "critical",
     "floatShort": "float {{n}}d",
-    "critSummary": "Critical path: {{n}} of {{all}} cells in red — any delay there moves the project finish ({{end}}). The dashed line after a bar = its float."
+    "critSummary": "Critical path: {{n}} of {{all}} cells in red — any delay there moves the project finish ({{end}}). The dashed line after a bar = its float.",
+    "critLoose": "The critical path is only unlinked stages here ({{list}}): their dates are fixed by hand and end after everything else, so they alone set the finish and give the rest a false float. Link them to the stage that really comes before in the floor cycle to see the real path."
   }
 }

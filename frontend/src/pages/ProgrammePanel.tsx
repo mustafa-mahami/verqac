@@ -274,7 +274,8 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
     return { stageId: st.id!, stageName: pick(st, 'name'), locId: loc, locName: loc ? pick(units.find((u) => u.id === loc)!, 'name') : null,
       plan: l?.start && l.finish ? { start: l.start, finish: l.finish } : null, base: null,
       actual: hasActual ? { start: a?.started_on ?? null, finish: a?.finished_on ?? null, pct: a?.progress ?? 0, status } : null,
-      float: cycles.length ? floats.get(k) ?? null : null };
+      float: cycles.length ? floats.get(k) ?? null : null,
+      unlinked: !cycles.find((c) => c.stage_id === st.id && c.pred) };
   }));
   // how a stage was generated: its link to an earlier stage, days per floor and the stop between floors
   const linkText = (sid: string) => {
