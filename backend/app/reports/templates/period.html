@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if lang == 'ar' else 'ltr' }}">
+<head>
+<meta charset="utf-8">
+<style>
+{{ font_css }}
+* { box-sizing: border-box; }
+body { font-family: 'Plex Arabic', sans-serif; font-size: 9.5pt; color: #1a1a1a; margin: 0; line-height: 1.45; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1f3a5f; padding-bottom: 8px; }
+.org { font-size: 13pt; font-weight: 700; color: #1f3a5f; }
+.org small { display: block; font-size: 9pt; font-weight: 400; color: #555; }
+.doc { text-align: end; }
+.doc h1 { font-size: 15pt; margin: 0; }
+.doc .num { font-size: 10.5pt; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+th, td { border: 1px solid #c9ced6; padding: 3px 6px; text-align: start; vertical-align: top; word-wrap: break-word; }
+th { background: #eef2f7; font-weight: 600; }
+td.n, th.n { text-align: center; white-space: nowrap; }
+.section { margin-top: 14px; font-weight: 700; color: #1f3a5f; font-size: 11pt; break-after: avoid; page-break-after: avoid; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.kpi { border: 1px solid #c9ced6; border-radius: 4px; padding: 6px 8px; }
+.kpi b { display: block; font-size: 15pt; color: #1f3a5f; }
+.kpi span { font-size: 8pt; color: #555; }
+.kpi.bad b { color: #c92a2a; }
+.bar { position: relative; height: 9px; background: #edf0f3; border-radius: 2px; min-width: 70px; }
+.bar i { position: absolute; top: 0; bottom: 0; inset-inline-start: 0; background: #40c057; border-radius: 2px; }
+.bar i.prev { background: #2b5d8f; }
+.bar u { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #d9480f; }
+.up { color: #1f6f43; font-weight: 600; }
+.red { color: #c92a2a; font-weight: 600; }
+.muted { color: #666; font-size: 8pt; }
+.banner { display: block; width: 100%; max-height: 32mm; object-fit: contain; margin-bottom: 8px; }
+tr { break-inside: avoid; page-break-inside: avoid; }
+</style>
+</head>
+<body>
+  {% if header %}<img class="banner" src="{{ header }}" alt="">{% endif %}
+  <div class="head">
+    <div class="org">{% if not header %}{{ contractor }}{% endif %}<small>{{ project_name }} · <span class="ltr">{{ project_code }}</span></small></div>
+    <div class="doc">
+      <h1>{{ title }}</h1>
+      <div class="num"><span class="ltr">{{ o.start.isoformat() }}</span> — <span class="ltr">{{ o.end.isoformat() }}</span></div>
+      {% if o.upto < o.end %}<div class="muted">{{ t.upto }} <span class="ltr">{{ o.upto.isoformat() }}</span></div>{% endif %}
+    </div>
+  </div>
+  <table>
+    <tr><th style="width:18%">{{ party.contractor }}</th><td>{{ contractor }}</td><th style="width:18%">{{ t.consultant }}</th><td>{{ consultant }}</td></tr>
+    {% if owner %}<tr><th>{{ t.owner }}</th><td colspan="3">{{ owner }}</td></tr>{% endif %}
+  </table>
+
+  <div class="section">{{ t.summary }}</div>
+  <div class="kpis">
+    <div class="kpi"><b>{{ o.progress_end }}%</b><span>{{ t.p_end }}{% if o.planned_end is not none %} · {{ t.planned }} {{ o.planned_end }}%{% endif %}</span></div>
+    <div class="kpi"><b>+{{ '%.1f' % (o.progress_end - o.progress_start) }}%</b><span>{{ t.p_delta }}{% if o.planned_start is not none %} · {{ t.planned }} +{{ '%.1f' % (o.planned_end - o.planned_start) }}%{% endif %}</span></div>
+    <div class="kpi{% if o.spi is not none and o.spi < 0.95 %} bad{% endif %}"><b>{{ o.spi if o.spi is not none else '—' }}</b><span>{{ t.spi if o.spi is not none else t.no_prg }}</span></div>
+    <div class="kpi{% if o.missing %} bad{% endif %}"><b>{{ o.reports }} / {{ o.working_days }}</b><span>{{ t.reports }} / {{ t.working_days }}</span></div>
+  </div>
+  <table>
+    {% if o.missing %}<tr><th style="width:26%">{{ t.missing }} ({{ o.missing|length }})</th><td class="ltr red" style="text-align:start">{{ dates(o.missing) }}</td></tr>{% endif %}
+    {% if o.pending %}<tr><th style="width:26%">{{ t.pending }}</th><td>{{ o.pending }}</td></tr>{% endif %}
+    {% if o.stopped %}<tr><th>{{ t.stopped }} ({{ o.stopped|length }})</th><td class="ltr" style="text-align:start">{{ dates(o.stopped) }}</td></tr>{% endif %}
+    {% if o.partial %}<tr><th>{{ t.partial }} ({{ o.partial|length }})</th><td class="ltr" style="text-align:start">{{ dates(o.partial) }}</td></tr>{% endif %}
+    {% if weather %}<tr><th style="width:26%">{{ t.weather }}</th><td>{{ weather }}</td></tr>{% endif %}
+  </table>
+
+  <div class="section">{{ t.progress }}</div>
+  {% if o.stages %}
+  <table>
+    <tr><th>{{ t.stage }}</th><th class="n">{{ t.weight }}</th><th class="n">{{ t.p_start }}</th><th class="n">{{ t.p_end }}</th>
+      {% if o.planned_end is not none %}<th class="n">{{ t.planned }}</th>{% endif %}<th style="width:16%"></th><th>{{ t.where }}</th><th>{{ t.qty }}</th></tr>
+    {% for s in o.stages %}
+    <tr>
+      <td>{{ s['name_' + lang] }}</td><td class="n">{{ '%g' % s.weight }}</td><td class="n">{{ s.start }}%</td>
+      <td class="n">{{ s.end }}%{% if s.end > s.start %} <span class="up">+{{ '%.1f' % (s.end - s.start) }}</span>{% endif %}</td>
+      {% if o.planned_end is not none %}<td class="n{% if s.planned is not none and s.end + 10 < s.planned %} red{% endif %}">{{ s.planned if s.planned is not none else '' }}{% if s.planned is not none %}%{% endif %}</td>{% endif %}
+      <td><div class="bar"><i style="width:{{ s.end }}%"></i><i class="prev" style="width:{{ s.start }}%"></i>{% if s.planned is not none %}<u style="inset-inline-start:{{ s.planned }}%"></u>{% endif %}</div></td>
+      <td>{{ s['locations_' + lang]|join('، ' if lang == 'ar' else ', ') }}</td>
+      <td class="ltr" style="text-align:start">{{ qty(s.qty) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<div class="muted">{{ t.none }}</div>{% endif %}
+
+  {% if o.late %}
+  <div class="section red">{{ t.late }} ({{ o.late|length }})</div>
+  <table>
+    <tr><th>{{ t.stage }}</th><th>{{ D.where }}</th><th class="n">{{ t.planned }}</th><th class="n">{{ t.actual }}</th><th class="n">{{ t.finish }}</th></tr>
+    {% for r in o.late %}
+    <tr><td>{{ r['stage_' + lang] }}</td><td>{{ r['where_' + lang] }}</td><td class="n">{{ r.planned }}%</td><td class="n red">{{ r.actual }}%</td>
+      <td class="n ltr">{{ r.plan_finish.isoformat() if r.plan_finish else '' }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  <div class="section">{{ t.crew }}</div>
+  <table>
+    <tr><th></th><th class="n">{{ t.man_days }}</th><th class="n">{{ t.avg }}</th><th class="n">{{ t.peak }}</th></tr>
+    {% for g, x in o.crew_totals.items() %}
+    <tr><th>{{ groups[g] }}</th><td class="n">{{ x.man_days }}</td><td class="n">{{ x.avg }}</td><td class="n">{{ x.peak }}</td></tr>
+    {% endfor %}
+  </table>
+  {% if o.crew %}
+  <table>
+    <tr><th style="width:18%"></th><th>{{ t.sub }}</th><th>{{ t.name }}</th><th class="n">{{ t.man_days }}</th><th class="n">{{ t.days }}</th><th class="n">{{ t.peak }}</th></tr>
+    {% for r in o.crew %}
+    <tr><td>{{ groups[r.group] }}</td><td>{{ r.sub or '' }}</td><td>{{ (r.name_en or r.name) if lang == 'en' else r.name }}</td>
+      <td class="n">{{ r.man_days }}</td><td class="n">{{ r.days }}</td><td class="n">{{ r.peak }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  {% if o.equipment %}
+  <div class="section">{{ t.equipment }}</div>
+  <table>
+    <tr><th>{{ t.name }}</th><th class="n">{{ t.unit_days }}</th><th class="n">{{ t.days }}</th><th class="n">{{ t.hours }}</th><th class="n">{{ t.idle }}</th></tr>
+    {% for r in o.equipment %}
+    <tr><td>{{ r.name }}</td><td class="n">{{ r.unit_days }}</td><td class="n">{{ r.days }}</td><td class="n">{{ '%g' % r.hours }}</td>
+      <td class="n{% if r.idle_hours %} red{% endif %}">{{ '%g' % r.idle_hours }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  {% if o.delays %}
+  <div class="section">{{ t.delays }}</div>
+  <table>
+    <tr><th>{{ t.cause }}</th><th class="n">{{ t.count }}</th><th class="n">{{ t.hours }}</th></tr>
+    {% for r in o.delays %}<tr><td>{{ cause(r.cause) }}</td><td class="n">{{ r.count }}</td><td class="n">{{ '%g' % r.hours }}</td></tr>{% endfor %}
+  </table>
+  <table>
+    <tr><th class="n" style="width:12%">{{ t.date }}</th><th style="width:18%">{{ t.cause }}</th><th class="n" style="width:8%">{{ t.hours }}</th><th>{{ t.desc }}</th></tr>
+    {% for r in o.delay_items %}<tr><td class="n ltr">{{ r.day.isoformat() }}</td><td>{{ cause(r.cause) }}</td><td class="n">{{ '%g' % r.hours if r.hours is not none else '' }}</td><td>{{ r.description or '' }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+
+  <div class="section">{{ t.hse }}</div>
+  <table>
+    <tr><th>{{ D.incidents }}</th><td class="n{% if o.hse.incidents %} red{% endif %}">{{ o.hse.incidents }}</td><th>{{ D.near }}</th><td class="n">{{ o.hse.near_misses }}</td><th>{{ D.toolbox }}</th><td class="n">{{ o.hse.toolbox }}</td></tr>
+  </table>
+
+  <div class="section">{{ t.requests }}</div>
+  {% if o.requests %}
+  <table>
+    <tr><th>{{ t.type }}</th><th class="n">{{ t.submitted }}</th><th class="n">{{ t.answered }}</th><th class="n">{{ t.approved }}</th><th class="n">{{ t.returned }}</th><th class="n">{{ t.open }}</th><th class="n">{{ t.overdue }}</th></tr>
+    {% for r in o.requests %}
+    <tr><td>{{ r['name_' + lang] }}</td><td class="n">{{ r.submitted }}</td><td class="n">{{ r.answered }}</td><td class="n">{{ r.approved }}</td>
+      <td class="n">{{ r.returned }}</td><td class="n">{{ r.open }}</td><td class="n{% if r.overdue %} red{% endif %}">{{ r.overdue }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<div class="muted">{{ t.none }}</div>{% endif %}
+  {% if o.overdue %}
+  <table>
+    <tr><th style="width:22%">{{ t.number }}</th><th>{{ t.title }}</th><th class="n">{{ t.due }}</th><th class="n">{{ t.late_by }}</th></tr>
+    {% for r in o.overdue %}<tr><td class="ltr" style="text-align:start">{{ r.number }}</td><td>{{ r.title }}</td><td class="n ltr">{{ due(r.due_at) }}</td><td class="n red">{{ r.days }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+
+  {% if o.materials %}
+  <div class="section">{{ t.materials }}</div>
+  <table>
+    <tr><th class="n" style="width:12%">{{ t.date }}</th><th>{{ D.materials }}</th><th class="n">{{ D.qty }}</th><th>{{ t.supplier }}</th><th>{{ t.dn }}</th></tr>
+    {% for r in o.materials %}<tr><td class="n ltr">{{ r.day.isoformat() }}</td><td>{{ r.material }}</td><td class="n">{{ ('%g' % r.qty) if r.qty is not none else '' }} {{ r.unit or '' }}</td><td>{{ r.supplier or '' }}</td><td class="ltr" style="text-align:start">{{ r.delivery_note or '' }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+</body>
+</html>
