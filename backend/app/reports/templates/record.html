@@ -33,6 +33,7 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
 .banner { display: block; width: 100%; max-height: 32mm; object-fit: contain; margin-bottom: 8px; }
 .draft { color: #b00; font-weight: 700; }
 .check td { padding: 3px 6px; }
+.works td, .works th { font-size: 8.5pt; padding: 2px 5px; }
 .r-nc { color: #b42318; font-weight: 600; }
 .r-ok { color: #1f6f43; }
 .photos { display: flex; flex-wrap: wrap; gap: 3%; margin-top: 8px; }
@@ -100,7 +101,7 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
   {% if D.materials %}<div class="section">{{ D.t.materials }}</div>
   <table class="check">{% for x in D.materials %}<tr><td style="width:40%">{{ x.material }}</td><td class="ltr">{{ D.num(x.qty) }} {{ x.unit or '' }}</td><td>{{ x.supplier or '' }}</td><td class="ltr">{{ x.delivery_note or '' }}</td></tr>{% endfor %}</table>{% endif %}
   {% for key in ('works', 'planned') %}{% if D[key] %}<div class="section">{{ D.t[key] }}</div>
-  <table class="check"><tr><th style="width:24%">{{ D.t.stage }}</th><th style="width:20%">{{ D.t.where }}</th><th>{{ D.t.desc }}</th><th style="width:11%">{{ D.t.qty }}</th>{% if key == 'works' %}<th style="width:9%">{{ D.t.pct }}</th>{% endif %}</tr>
+  <table class="check works"><tr><th style="width:25%">{{ D.t.stage }}</th><th style="width:15%">{{ D.t.where }}</th><th style="width:{{ '46%' if key == 'works' else '53%' }}">{{ D.t.desc }}</th><th style="width:7%">{{ D.t.qty }}</th>{% if key == 'works' %}<th style="width:7%">{{ D.t.pct }}</th>{% endif %}</tr>
     {% for x in D[key] %}<tr><td>{{ x.stage }}</td><td>{{ x.where }}</td><td>{{ x.desc }}</td><td class="ltr">{{ x.qty }}</td>{% if key == 'works' %}<td class="ltr">{{ x.pct }}</td>{% endif %}</tr>{% endfor %}
   </table>{% endif %}{% endfor %}
   {% if D.delays %}<div class="section">{{ D.t.delays }}</div>
