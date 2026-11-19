@@ -1174,6 +1174,7 @@
     "critLoose": "The critical path is only unlinked stages here ({{list}}): their dates are fixed by hand and end after everything else, so they alone set the finish and give the rest a false float. Link them to the stage that really comes before in the floor cycle to see the real path.",
     "critList": "Critical cells",
     "byHand": "not linked",
-    "arrows": "Link arrows"
+    "arrows": "Link arrows",
+    "critArrows": "Critical path arrows only"
   }
 }

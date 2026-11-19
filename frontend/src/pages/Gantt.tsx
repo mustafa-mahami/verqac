@@ -40,6 +40,7 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
   const hasCpm = items.some((x) => x.float !== undefined && x.float !== null);
   const [crit, setCrit] = useState(false);
   const [arrows, setArrows] = useState(false);
+  const [critOnly, setCritOnly] = useState(false);
   const isCrit = (it: GanttItem) => it.float !== undefined && it.float !== null && it.float <= 0;
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const box = useRef<HTMLDivElement>(null);
@@ -164,6 +165,7 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
         const xa = e.on === 'F' ? x(addDays(a.plan.finish, 1)) : x(a.plan.start);
         const xb = x(b.plan.start);
         const red = crit && isCrit(a) && isCrit(b);
+        if (critOnly && !red) return null;
         const kind = red ? 'r' : e.crew ? 'c' : 'n';
         const turn = Math.max(xa + 5, Math.min(xb - 5, xa + 5));
         const y1 = ya + mid, y2 = yb + mid;
@@ -188,6 +190,10 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
         <TextInput size="xs" type="date" w={140} value={to} onChange={(e) => setTo(e.currentTarget.value)} aria-label={t('gantt.to')} leftSection={<Text size="xs">{t('gantt.to')}</Text>} leftSectionWidth={36} />
         {hasCpm && <Checkbox size="xs" color="red" label={t('gantt.criticalPath')} checked={crit} onChange={(e) => setCrit(e.currentTarget.checked)} />}
         {links.length > 0 && <Checkbox size="xs" label={t('gantt.arrows')} checked={arrows} onChange={(e) => setArrows(e.currentTarget.checked)} />}
+        {links.length > 0 && arrows && hasCpm && (
+          <Checkbox size="xs" color="red" label={t('gantt.critArrows')} checked={critOnly}
+            onChange={(e) => { setCritOnly(e.currentTarget.checked); if (e.currentTarget.checked) setCrit(true); }} />
+        )}
         {showActual && <Checkbox size="xs" label={t('gantt.onlyLate')} checked={onlyLate} onChange={(e) => setOnlyLate(e.currentTarget.checked)} />}
         <Button size="compact-xs" variant="subtle" onClick={() => setClosed({})}>{t('gantt.expand')}</Button>
         <Button size="compact-xs" variant="subtle" onClick={() => setClosed(Object.fromEntries(groups.map((g) => [g.key, true])))}>{t('gantt.collapse')}</Button>
