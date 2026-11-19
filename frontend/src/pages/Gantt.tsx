@@ -1,5 +1,5 @@
 import { ActionIcon, Badge, Button, Checkbox, Group, ScrollArea, SegmentedControl, Text, TextInput, Tooltip } from '@mantine/core';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CellStatus } from '../daily';
 import { fmtDate } from '../format';
@@ -42,6 +42,15 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
   const isCrit = (it: GanttItem) => it.float !== undefined && it.float !== null && it.float <= 0;
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const box = useRef<HTMLDivElement>(null);
+  const [boxW, setBoxW] = useState(0);
+  useEffect(() => {  // "fit" follows the real width of the chart, also when the window or the page layout changes
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBoxW(el.clientWidth));
+    ro.observe(el);
+    setBoxW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
   const now = today();
 
   const shown = items.filter((x) => (x.plan || x.actual?.start) && (!onlyLate || ['late', 'late_start'].includes(x.actual?.status ?? '') || (crit && isCrit(x))));
@@ -49,7 +58,7 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
   const lo = from || (dates.length ? addDays(dates.reduce((a, b) => (a < b ? a : b)), -7) : now);
   const hi = to || (dates.length ? addDays(dates.reduce((a, b) => (a > b ? a : b)), 14) : addDays(now, 30));
   const span = Math.max(1, daysBetween(lo, hi) + 1);
-  const width = box.current?.clientWidth ?? 1100;
+  const width = boxW || 1100;
   const px = zoom === 'fit' ? Math.max(0.5, (width - LABEL_W - 20) / span) : ZOOM[zoom];
   const W = Math.ceil(span * px);
   const x = (d: string) => Math.min(Math.max(daysBetween(lo, d), 0), span) * px;
@@ -172,7 +181,8 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
               <Text size="xs" fw={600}>{by === 'floor' ? t('gantt.floorStage') : t('gantt.stageFloor')}</Text>
             </div>
             <div style={{ position: 'relative', width: W, height: zoom === 'week' ? 40 : 26 }}>
-              {months.filter((m, k) => m >= lo || (k === 0 && (months[1] ? x(months[1]) > 70 : true))).map((m) => (
+              {months.filter((m, k) => m >= lo || (k === 0 && (months[1] ? x(months[1]) > 70 : true)))
+                .filter((_, k) => k % Math.max(1, Math.ceil(70 / (30 * px))) === 0).map((m) => (
                 <Text key={m} size="xs" fw={600} style={{ position: 'absolute', insetInlineStart: x(m) + 4, top: 5, whiteSpace: 'nowrap' }}>{fmtM(m)}</Text>
               ))}
               {weeks.map((d) => <Text key={d} size="10px" c="dimmed" style={{ position: 'absolute', insetInlineStart: x(d) + 2, top: 24 }}>{d.slice(8, 10)}</Text>)}
