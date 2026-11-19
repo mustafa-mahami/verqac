@@ -202,7 +202,11 @@ def _at(history: list, day: date) -> dict:
     return cells
 
 
-def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date) -> PeriodOut:
+MAX_DAYS = 400  # a custom period: up to a little over a year
+
+
+def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date, until: date | None = None) -> PeriodOut:
+    """kind week | month: the period around `day`; custom: from `day` to `until`, previous / next of the same length."""
     from app.api.programme import programmes
     from app.api.records import Perms, can_see
     from app.core.programme import cell_planned, plan_cells, planned_at
@@ -211,10 +215,14 @@ def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date) -> PeriodOut:
     a = project_access(c, project_id)
     db, project = c.db, a.project
     cal = calendar_for(db, project)
-    start, end = period(kind, day, cal.weekend)
     today = datetime.now(TZ).date()
+    if kind == "custom":
+        start, end = day, until
+        prev = start - timedelta(days=(end - start).days + 1)
+    else:
+        start, end = period(kind, day, cal.weekend)
+        prev = period(kind, start - timedelta(days=1), cal.weekend)[0]
     upto = min(end, today)
-    prev = period(kind, start - timedelta(days=1), cal.weekend)[0]
     nxt = end + timedelta(days=1)
 
     stages = list(db.scalars(select(ProjectStage).where(ProjectStage.project_id == project_id, ProjectStage.is_active)
@@ -390,22 +398,30 @@ def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date) -> PeriodOut:
     return out
 
 
-def _args(kind: str, day: date | None) -> date:
-    if kind not in ("week", "month"):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_period")
-    return day or datetime.now(TZ).date()
+def _args(kind: str, day: date | None, start: date | None, end: date | None) -> tuple[date, date | None]:
+    if kind == "custom":
+        if start is None or end is None or end < start or (end - start).days >= MAX_DAYS:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_period")
+        if start > datetime.now(TZ).date():
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_period")
+        return start, end
+    return day or datetime.now(TZ).date(), None
+
+
+Kind = Literal["week", "month", "custom"]
 
 
 @router.get("/projects/{project_id}/period-report", response_model=PeriodOut)
-def get_period(project_id: uuid.UUID, kind: Literal["week", "month"] = "week", day: date | None = None, c: Ctx = Depends(ctx)):
-    return build(c, project_id, kind, _args(kind, day))
+def get_period(project_id: uuid.UUID, kind: Kind = "week", day: date | None = None, start: date | None = None,
+               end: date | None = None, c: Ctx = Depends(ctx)):
+    return build(c, project_id, kind, *_args(kind, day, start, end))
 
 
 @router.get("/projects/{project_id}/period-report/pdf")
-def period_pdf(project_id: uuid.UUID, kind: Literal["week", "month"] = "week", day: date | None = None,
-               lang: Literal["ar", "en"] = Query("ar"), c: Ctx = Depends(ctx)):
+def period_pdf(project_id: uuid.UUID, kind: Kind = "week", day: date | None = None, start: date | None = None,
+               end: date | None = None, lang: Literal["ar", "en"] = Query("ar"), c: Ctx = Depends(ctx)):
     from app.reports.period_pdf import render_period_pdf
-    out = build(c, project_id, kind, _args(kind, day))
+    out = build(c, project_id, kind, *_args(kind, day, start, end))
     pdf = render_period_pdf(c, project_access(c, project_id), out, lang)
-    name = f"{'weekly' if kind == 'week' else 'monthly'}-{out.start.isoformat()}.pdf"
+    name = f"{ {'week': 'weekly', 'month': 'monthly'}.get(kind, 'period') }-{out.start.isoformat()}.pdf"
     return Response(pdf, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}"'})

@@ -10,7 +10,7 @@ from app.reports.pdf import html_to_pdf, render_html
 from app.reports.record_pdf import DAY_T, PARTY, _n, header_image
 
 P_T = {
-    "ar": {"week": "التقرير الأسبوعي", "month": "التقرير الشهري", "period": "الفترة", "upto": "محسوب حتى",
+    "ar": {"week": "التقرير الأسبوعي", "month": "التقرير الشهري", "custom": "تقرير الفترة", "period": "الفترة", "upto": "محسوب حتى",
            "consultant": "الاستشاري", "owner": "المالك", "summary": "الملخص", "working_days": "أيام العمل في الفترة",
            "reports": "التقارير اليومية المعتمدة", "pending": "بانتظار الاعتماد (غير محسوبة)", "missing": "أيام عمل بلا تقرير",
            "stopped": "أيام توقف", "partial": "أيام عمل جزئي", "weather": "الطقس",
@@ -25,7 +25,7 @@ P_T = {
            "requests": "سجلات الجودة (الطلبات)", "type": "النوع", "submitted": "قُدّم", "answered": "أُجيب", "approved": "معتمد",
            "returned": "مُعاد / مرفوض", "open": "مفتوح", "overdue": "متأخر الرد", "number": "الرقم", "title": "الموضوع",
            "due": "موعد الرد", "late_by": "متأخر (يوم)", "none": "لا يوجد"},
-    "en": {"week": "Weekly report", "month": "Monthly report", "period": "Period", "upto": "Counted up to",
+    "en": {"week": "Weekly report", "month": "Monthly report", "custom": "Period report", "period": "Period", "upto": "Counted up to",
            "consultant": "Consultant", "owner": "Owner", "summary": "Summary", "working_days": "Working days in the period",
            "reports": "Approved daily reports", "pending": "Awaiting approval (not counted)", "missing": "Working days without a report",
            "stopped": "Days stopped", "partial": "Days of partial work", "weather": "Weather",

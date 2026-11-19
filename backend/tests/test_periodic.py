@@ -90,3 +90,18 @@ def test_requests_this_week(client, site):
     row = next(x for x in o["requests"] if x["code"] == "submittal")
     assert (row["submitted"], row["open"], row["answered"], row["approved"]) == (1, 0, 1, 1)
     assert client.get(f"/api/v1/projects/{pid}/period-report", headers=site["hk"], params={"kind": "year"}).status_code == 422
+
+
+def test_custom_period(client, site):
+    pid = site["pid"]
+    a, b = date.today() - timedelta(days=20), date.today() - timedelta(days=11)
+    o = client.get(f"/api/v1/projects/{pid}/period-report", headers=site["hk"],
+                   params={"kind": "custom", "start": a.isoformat(), "end": b.isoformat()}).json()
+    assert (o["start"], o["end"], o["kind"]) == (a.isoformat(), b.isoformat(), "custom")
+    assert o["prev"] == (a - timedelta(days=10)).isoformat() and o["next"] == (b + timedelta(days=1)).isoformat()
+    for bad in ({"start": b.isoformat(), "end": a.isoformat()}, {"start": a.isoformat()},
+                {"start": (a - timedelta(days=500)).isoformat(), "end": b.isoformat()}):
+        assert client.get(f"/api/v1/projects/{pid}/period-report", headers=site["hk"], params={"kind": "custom", **bad}).status_code == 422
+    pdf = client.get(f"/api/v1/projects/{pid}/period-report/pdf", headers=site["hk"],
+                     params={"kind": "custom", "start": a.isoformat(), "end": b.isoformat()})
+    assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"

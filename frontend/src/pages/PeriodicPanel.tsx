@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Group, Progress, ScrollArea, SegmentedControl, SimpleGrid, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
+import { Alert, Badge, Button, Card, Group, Progress, ScrollArea, SegmentedControl, SimpleGrid, Stack, Table, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,12 +6,13 @@ import { useNavigate } from 'react-router-dom';
 import { api, openProtected } from '../api';
 import { fmtDate } from '../format';
 import { pick } from '../i18n';
+import { addDays, daysBetween } from '../programme';
 
 type Named = { name_ar: string; name_en: string };
 interface StageRow extends Named { stage_id: string; weight: number; start: number; end: number; planned: number | null;
   locations_ar: string[]; locations_en: string[]; days: number; qty: { qty: number; unit: string }[] }
 interface PeriodOut {
-  kind: 'week' | 'month'; start: string; end: string; upto: string; prev: string; next: string | null;
+  kind: Kind; start: string; end: string; upto: string; prev: string; next: string | null;
   working_days: number; reports: number; pending: number; missing: string[]; stopped: string[]; partial: string[];
   weather: Record<string, number>; progress_start: number; progress_end: number; planned_end: number | null;
   planned_start: number | null; spi: number | null; stages: StageRow[];
@@ -27,6 +28,7 @@ interface PeriodOut {
   overdue: { id: string; number: string; title: string; code: string; due_at: string; days: number }[];
 }
 
+type Kind = 'week' | 'month' | 'custom';
 const GROUPS = ['supervision', 'contractor', 'labour'];
 const f1 = (v: number) => (Math.round(v * 10) / 10).toString();
 
@@ -52,34 +54,51 @@ function Section({ title, children, extra }: { title: string; children: React.Re
 export default function PeriodicPanel({ projectId }: { projectId: string }) {
   const { t, i18n } = useTranslation();
   const nav = useNavigate();
-  const [kind, setKind] = useState<'week' | 'month'>('week');
+  const [kind, setKind] = useState<Kind>('week');
   const [day, setDay] = useState<string | null>(null);
+  const [range, setRange] = useState<{ from: string; to: string }>({ from: '', to: '' });
+  const valid = kind !== 'custom' || (!!range.from && !!range.to && range.to >= range.from && daysBetween(range.from, range.to) < 400);
+  const qs = kind === 'custom' ? `kind=custom&start=${range.from}&end=${range.to}` : `kind=${kind}${day ? `&day=${day}` : ''}`;
   const q = useQuery({
-    queryKey: ['period', projectId, kind, day],
-    queryFn: () => api<PeriodOut>(`/projects/${projectId}/period-report?kind=${kind}${day ? `&day=${day}` : ''}`),
+    queryKey: ['period', projectId, qs],
+    queryFn: () => api<PeriodOut>(`/projects/${projectId}/period-report?${qs}`),
+    enabled: valid, placeholderData: (prev) => prev,
   });
-  const o = q.data;
+  const o = valid ? q.data : undefined;
+  const len = o ? daysBetween(o.start, o.end) + 1 : 0;
+  const go = (to: string) => (kind === 'custom' ? setRange({ from: to, to: addDays(to, len - 1) }) : setDay(to));
   const lang = i18n.language === 'en' ? 'en' : 'ar';
   const dates = (xs: string[]) => xs.map((d) => fmtDate(d)).join(' · ');
-  const pdf = (l: string) => openProtected(`/projects/${projectId}/period-report/pdf?kind=${kind}&day=${o?.start ?? ''}&lang=${l}`,
-    `${kind === 'week' ? 'weekly' : 'monthly'}-${o?.start}.pdf`, true);
+  const pdf = (l: string) => openProtected(`/projects/${projectId}/period-report/pdf?${kind === 'custom' ? qs : `kind=${kind}&day=${o?.start ?? ''}`}&lang=${l}`,
+    `${kind === 'week' ? 'weekly' : kind === 'month' ? 'monthly' : 'period'}-${o?.start}.pdf`, true);
 
   return (
     <Stack>
       <Group justify="space-between">
         <Group gap="xs">
-          <SegmentedControl size="xs" value={kind} onChange={(v) => { setKind(v as 'week' | 'month'); setDay(null); }}
-            data={[{ value: 'week', label: t('per.week') }, { value: 'month', label: t('per.month') }]} />
-          <Button size="xs" variant="default" disabled={!o} onClick={() => o && setDay(o.prev)}>{t('per.prev')}</Button>
-          <Text fw={600} size="sm">{o ? `${fmtDate(o.start)} — ${fmtDate(o.end)}` : ''}</Text>
-          <Button size="xs" variant="default" disabled={!o?.next} onClick={() => o?.next && setDay(o.next)}>{t('per.next')}</Button>
-          {day && <Button size="xs" variant="subtle" onClick={() => setDay(null)}>{t('per.current')}</Button>}
+          <SegmentedControl size="xs" value={kind} onChange={(v) => {
+            if (v === 'custom' && o) setRange({ from: o.start, to: o.end });
+            setKind(v as Kind); setDay(null);
+          }}
+            data={[{ value: 'week', label: t('per.week') }, { value: 'month', label: t('per.month') }, { value: 'custom', label: t('per.custom') }]} />
+          <Button size="xs" variant="default" disabled={!o} onClick={() => o && go(o.prev)}>{t('per.prev')}</Button>
+          {kind === 'custom' ? (
+            <>
+              <TextInput size="xs" type="date" w={150} value={range.from} error={!valid} max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setRange({ ...range, from: e.currentTarget.value })} leftSection={<Text size="xs">{t('gantt.from')}</Text>} leftSectionWidth={36} />
+              <TextInput size="xs" type="date" w={150} value={range.to} error={!valid}
+                onChange={(e) => setRange({ ...range, to: e.currentTarget.value })} leftSection={<Text size="xs">{t('gantt.to')}</Text>} leftSectionWidth={36} />
+            </>
+          ) : <Text fw={600} size="sm">{o ? `${fmtDate(o.start)} — ${fmtDate(o.end)}` : ''}</Text>}
+          <Button size="xs" variant="default" disabled={!o?.next} onClick={() => o?.next && go(o.next)}>{t('per.next')}</Button>
+          {day && kind !== 'custom' && <Button size="xs" variant="subtle" onClick={() => setDay(null)}>{t('per.current')}</Button>}
         </Group>
         <Group gap="xs">
           <Button size="xs" variant="light" disabled={!o} onClick={() => pdf('ar')}>PDF عربي</Button>
           <Button size="xs" variant="light" disabled={!o} onClick={() => pdf('en')}>PDF English</Button>
         </Group>
       </Group>
+      {!valid && <Text size="xs" c="red">{t('per.badRange')}</Text>}
       {o && o.upto < o.end && <Text size="xs" c="dimmed">{t('per.upto', { date: fmtDate(o.upto) })}</Text>}
       <Text size="xs" c="dimmed">{t('per.hint')}</Text>
       {o && (

@@ -163,7 +163,8 @@
     "dr_actual_start_range": "The actual start must be between the project start and the report date.",
     "dr_actual_finish_needs_100": "An actual finish needs 100%.",
     "dr_actual_finish_range": "The actual finish must be after the start and not after the report date.",
-    "stage_scope_locked": "This stage's scope cannot change: approved daily reports gave it progress. Switch it off and add a new stage with the right scope."
+    "stage_scope_locked": "This stage's scope cannot change: approved daily reports gave it progress. Switch it off and add a new stage with the right scope.",
+    "invalid_period": "Choose a valid start and end (end after start, under 400 days)."
   },
   "common": {
     "cancel": "Cancel",
@@ -1254,6 +1255,8 @@
     "due": "Reply due",
     "lateBy": "Late (days)",
     "materials": "Materials delivered",
-    "date": "Date"
+    "date": "Date",
+    "custom": "Custom",
+    "badRange": "Choose a valid start and end (end after start, under 400 days)."
   }
 }
