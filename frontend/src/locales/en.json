@@ -825,7 +825,8 @@
     "strengthDiff": "The certificate states {{grade}} = {{cert}} MPa, but the strength used is {{fck}} MPa — check the class.",
     "certs": "The file holds {{count}} certificates",
     "page": "Page",
-    "certsHint": "Pick this test's certificate. Read the others into their own tests from the same file."
+    "certsHint": "Pick this test's certificate. Read the others into their own tests from the same file.",
+    "saveDecision": "Save decision"
   },
   "labt": {
     "hint": "Test templates used in all the organization's projects: parameters, units, test methods and acceptance limits. A new test takes its template; limits can be adjusted on the test.",

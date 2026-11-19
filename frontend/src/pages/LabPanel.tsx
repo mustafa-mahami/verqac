@@ -314,7 +314,7 @@ export default function LabPanel({ rec }: { rec: RecordDetail }) {
                 onChange={(v) => setDecision({ ...decision, d: v })} />
               <Textarea size="xs" autosize minRows={2} placeholder={t('lab.decisionNote')} value={decision.note}
                 onChange={(e) => setDecision({ ...decision, note: e.currentTarget.value })} />
-              <Group><Button size="xs" loading={decide.isPending} onClick={() => decide.mutate()}>{t('lab.save')}</Button></Group>
+              <Group><Button size="xs" loading={decide.isPending} onClick={() => decide.mutate()}>{t('lab.saveDecision')}</Button></Group>
             </Stack>
           ) : (
             <Text size="sm">{t(`lab.d.${lab.decision}`)}{lab.decision_note ? ` — ${lab.decision_note}` : ''}
