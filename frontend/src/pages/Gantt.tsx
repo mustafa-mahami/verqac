@@ -156,6 +156,9 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
         return (
           <>
             <Text size="xs" mb={4} c="red">{t('gantt.critSummary', { n: cs.length, all: items.filter((x) => x.plan).length, end: end ? fmtDate(end) : '' })}</Text>
+            {cs.length > 0 && cs.length <= 12 && (
+              <Text size="xs" mb={4} c="red">{t('gantt.critList')}: {cs.map((x) => `${x.stageName}${x.locName ? ' — ' + x.locName : ''}${x.unlinked ? ' (' + t('gantt.byHand') + ')' : ''}`).join(' ← ')}</Text>
+            )}
             {(() => {
               const loose = [...new Set(cs.filter((x) => x.unlinked).map((x) => x.stageName))];
               return loose.length > 0 && cs.every((x) => x.unlinked)
