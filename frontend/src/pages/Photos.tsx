@@ -45,7 +45,7 @@ function Thumb({ a, onOpen, onRemove, onCaption }: { a: Attachment; onOpen: () =
               style={{ background: 'var(--mantine-color-gray-1)', border: '1px solid var(--mantine-color-gray-3)' }} />
           : <Skeleton h={170} radius="sm" />}
       </UnstyledButton>
-      <Badge size="xs" tt="none" variant="white" color={a.kind === 'response' ? 'teal' : 'gray'}
+      <Badge size="xs" tt="none" variant="white" color={a.kind === 'response' ? 'teal' : a.kind === 'signed' ? 'grape' : 'gray'}
         style={{ position: 'absolute', top: 4, insetInlineStart: 4 }}>{t(`rec.kind.${a.kind}`)}</Badge>
       {onRemove && (
         <ActionIcon size="sm" color="red" variant="filled" radius="xl" aria-label="remove" onClick={onRemove}

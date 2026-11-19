@@ -456,3 +456,20 @@ def test_bulk_actions(client, site):
     assert (r["done"], r["skipped"], r["failed"]) == (2, 1, [])
     assert client.get(f"/api/v1/records/{a['id']}", headers=site["hce"]).json()["state"]["category"] == "approved"
     assert client.get(f"/api/v1/records/{c3['id']}", headers=site["hk"]).json()["state"]["category"] == "submitted"
+
+
+def test_signed_copy_after_the_answer(client, site):
+    rec = submit(client, site, new_sub(client, site))
+    rid = rec["id"]
+    assert "signed" not in client.get(f"/api/v1/records/{rid}", headers=site["hce"]).json()["can_attach"]
+    assert attach(client, site["hce"], rid, kind="signed").status_code == 403  # not before the answer
+    assert act(client, site["hce"], rid, "approve").status_code == 200
+    for h in (site["hce"], site["hqa"]):  # the answering engineer, and the issuer, may add the signed paper copy
+        assert "signed" in client.get(f"/api/v1/records/{rid}", headers=h).json()["can_attach"]
+    r = attach(client, site["hce"], rid, kind="signed", name="signed.pdf")
+    assert r.status_code == 201, r.text
+    signed = next(a for a in r.json()["attachments"] if a["kind"] == "signed")
+    assert signed["party_kind"] == "consultant"
+    # the other party cannot remove it; its own party can
+    assert client.delete(f"/api/v1/records/{rid}/attachments/{signed['id']}", headers=site["hqa"]).status_code == 403
+    assert client.delete(f"/api/v1/records/{rid}/attachments/{signed['id']}", headers=site["hce"]).status_code == 200

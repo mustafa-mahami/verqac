@@ -275,6 +275,8 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
         attach.append("response")
     if rec.state_category == "responded" and p.can("submit", rec):
         attach.append("photo")  # the issuer's photos when verifying (an NCR's corrective action on site)
+    if rec.state_category not in ("draft", "submitted", "cancelled") and (p.can("respond", rec) or p.can("submit", rec)):
+        attach.append("signed")  # the paper copy signed by hand, added once answered (also to records brought from Odoo)
     can_assign = bool(rec.state_category == "submitted" and a.role and a.role.act_on_behalf and p.can("respond", rec))
     candidates = []
     if can_assign:

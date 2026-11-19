@@ -220,7 +220,7 @@ class StoredFile(Base):
 
 class Attachment(Base):
     __tablename__ = "attachments"
-    __table_args__ = (CheckConstraint("kind IN ('submission', 'response', 'photo', 'other')", name="kind_valid"),)
+    __table_args__ = (CheckConstraint("kind IN ('submission', 'response', 'photo', 'signed', 'other')", name="kind_valid"),)
 
     id: Mapped[uuid.UUID] = pk()
     record_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("records.id", ondelete="CASCADE"), nullable=False, index=True)

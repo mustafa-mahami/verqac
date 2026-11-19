@@ -586,7 +586,7 @@ export default function RecordPage() {
                   {r.attachments.filter((a) => !isPhoto(a)).map((a) => (
                     <Group key={a.id} justify="space-between" wrap="nowrap">
                       <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
-                        <Badge size="sm" tt="none" variant="outline" color={a.kind === 'response' ? 'teal' : 'gray'}>{t(`rec.kind.${a.kind}`)}</Badge>
+                        <Badge size="sm" tt="none" variant="outline" color={a.kind === 'response' ? 'teal' : a.kind === 'signed' ? 'grape' : 'gray'}>{t(`rec.kind.${a.kind}`)}</Badge>
                         <Anchor size="sm" dir="ltr" truncate onClick={() => (a.content_type === 'application/pdf' || a.filename.toLowerCase().endsWith('.pdf')
                           ? setPdf(a) : openProtected(`/files/${a.file_id}`, a.filename))}>
                           {a.filename}
