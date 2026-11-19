@@ -1003,7 +1003,11 @@
     },
     "lateTitle": "Behind the programme ({{n}})",
     "gap": "Gap",
-    "viewGantt": "Gantt chart"
+    "viewGantt": "Gantt chart",
+    "fcFinish": "Forecast finish from actual progress: {{d}}",
+    "fcLate": "{{n}} days behind the programme",
+    "fcEarly": "{{n}} days ahead",
+    "fcOnTime": "on the programme date"
   },
   "dset": {
     "title": "Daily report",
@@ -1186,6 +1190,8 @@
     "critList": "Critical cells",
     "byHand": "not linked",
     "arrows": "Link arrows",
-    "critArrows": "Critical path arrows only"
+    "critArrows": "Critical path arrows only",
+    "fcToggle": "Forecast from actual",
+    "fc": "Forecast"
   }
 }

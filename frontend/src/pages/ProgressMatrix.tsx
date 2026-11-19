@@ -7,7 +7,8 @@ import { api, type ProjectSettings } from '../api';
 import type { CellStatus, ProgressCell, ProgressOut } from '../daily';
 import { fmtDate } from '../format';
 import { pick } from '../i18n';
-import { cellKey, cpm, lineLinks, type ProgrammeOut, type ProgrammeSummary } from '../programme';
+import { cellKey, cpm, daysBetween, forecast, lineLinks, type ProgrammeOut, type ProgrammeSummary } from '../programme';
+import type { DailySettings } from '../daily';
 import { useStructure } from './Structure';
 import Gantt, { type GanttItem } from './Gantt';
 
@@ -90,6 +91,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
   const qc = useQueryClient();
   const prg = useQuery({ queryKey: ['programme', q.data?.programme_id], enabled: !!q.data?.programme_id,
     queryFn: () => api<ProgrammeOut>(`/records/${q.data!.programme_id}/programme`) });
+  const dset = useQuery({ queryKey: ['dailySettings', projectId], queryFn: () => api<DailySettings>(`/projects/${projectId}/daily-settings`) });
   const [view, setView] = useState<'actual' | 'status' | 'gantt'>('actual');
   const settings = useQuery({ queryKey: ['settings', projectId], queryFn: () => api<ProjectSettings>(`/projects/${projectId}/settings`) });
   const rebuild = useMutation({
@@ -128,6 +130,13 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
   const now = new Date().toISOString().slice(0, 10);
   const wholeSet = new Set(stages.filter((x) => x.scope === 'whole' || !units.length).map((x) => x.id!));
   const floats = prg.data?.cycles.length ? cpm(prg.data.lines, prg.data.cycles, units.map((u) => u.id!), wholeSet) : null;
+  // forecast from the actual progress (project setting): dates, finish, and its own critical path
+  const today = new Date().toISOString().slice(0, 10);
+  const fcLines = dset.data?.forecast && prg.data?.lines.length ? forecast(prg.data.lines, prg.data.cycles, units.map((u) => u.id!), wholeSet,
+    new Map(p.cells.map((c) => [cellKey(c.stage_id, c.location_id), { start: c.started_on, finish: c.finished_on, pct: c.progress }])), today) : null;
+  const fcBy = new Map((fcLines ?? []).map((l) => [cellKey(l.stage_id, l.location_id), l]));
+  const fcFinish = fcLines?.length ? fcLines.map((l) => l.finish).reduce((a, b) => (a > b ? a : b)) : null;
+  const fcFloats = fcLines && prg.data ? cpm(fcLines, prg.data.cycles, units.map((u) => u.id!), wholeSet) : null;
   const ganttItems: GanttItem[] = p.cells.filter((c) => stages.some((x) => x.id === c.stage_id)).map((c) => {
     const st = stages.find((x) => x.id === c.stage_id)!;
     const started = c.progress > 0 || !!c.started_on;
@@ -139,6 +148,8 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
       base: c.base_start && c.base_finish ? { start: c.base_start, finish: c.base_finish } : null,
       actual: { start: c.started_on, finish: c.finished_on, pct: c.progress, status },
       float: floats ? floats.get(cellKey(c.stage_id, c.location_id)) ?? null : null,
+      fc: fcBy.get(cellKey(c.stage_id, c.location_id)) ?? null,
+      fcFloat: fcFloats ? fcFloats.get(cellKey(c.stage_id, c.location_id)) ?? null : null,
       unlinked: !!prg.data && !prg.data.cycles.find((x) => x.stage_id === c.stage_id && x.pred),
     };
   }).sort((a, b) => stages.findIndex((x) => x.id === a.stageId) - stages.findIndex((x) => x.id === b.stageId)
@@ -166,6 +177,14 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
               </SimpleGrid>
             )}
             {p.planned_baseline !== null && <Text size="xs" c="dimmed" mt={4}>{t('progress.plannedBaseline', { v: p.planned_baseline })}</Text>}
+            {fcFinish && p.plan_finish && (() => {
+              const late = daysBetween(p.plan_finish, fcFinish);
+              return (
+                <Text size="sm" mt={6} fw={600} c={late > 0 ? 'red' : 'green'}>
+                  {t('progress.fcFinish', { d: fmtDate(fcFinish) })} — {late > 0 ? t('progress.fcLate', { n: late }) : late < 0 ? t('progress.fcEarly', { n: -late }) : t('progress.fcOnTime')}
+                </Text>
+              );
+            })()}
             <Text size="xs" c="dimmed" mt={4}>{t('progress.hint')}</Text>
           </div>
           <div style={{ flex: 1, minWidth: 260 }}>

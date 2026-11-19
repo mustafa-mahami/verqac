@@ -166,3 +166,49 @@ export function lineLinks(lines: PLine[], cycles: PCycle[], units: string[], who
   const nodes = new Map(lines.filter((l) => l.start && l.finish).map((l) => [cellKey(l.stage_id, l.location_id), { s: day(l.start), f: day(l.finish) }]));
   return links(nodes, cycles, units, whole);
 }
+
+/** Forecast from actual progress (status date = today): finished cells keep their dates, running ones finish after
+ * their remaining days, and cells not started yet move through the links (never before today). */
+export function forecast(lines: PLine[], cycles: PCycle[], units: string[], whole: Set<string>,
+  actual: Map<string, { start: string | null; finish: string | null; pct: number }>, today: string): PLine[] {
+  const day = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / 86_400_000);
+  const iso = (n: number) => new Date(n * 86_400_000).toISOString().slice(0, 10);
+  const T = day(today);
+  type N = { s: number; f: number; d: number; fixed: boolean; base: number; stage: string; loc: string | null };
+  const nodes = new Map<string, N>();
+  for (const l of lines) {
+    if (!l.start || !l.finish) continue;
+    const s = day(l.start), f = day(l.finish), d = f - s + 1;
+    const a = actual.get(cellKey(l.stage_id, l.location_id));
+    let n: N;
+    if (a && a.pct >= 100) {
+      const fs = a.start ? day(a.start) : s, ff = a.finish ? day(a.finish) : Math.max(fs, Math.min(f, T));
+      n = { s: fs, f: Math.max(fs, ff), d, fixed: true, base: fs, stage: l.stage_id, loc: l.location_id };
+    } else if (a && (a.pct > 0 || a.start)) {
+      const fs = a.start ? day(a.start) : Math.min(s, T);
+      const left = Math.max(1, Math.ceil(d * (1 - a.pct / 100)));
+      n = { s: fs, f: Math.max(T, fs) + left - 1, d, fixed: true, base: fs, stage: l.stage_id, loc: l.location_id };
+    } else {
+      n = { s: Math.max(s, T), f: Math.max(s, T) + d - 1, d, fixed: false, base: T, stage: l.stage_id, loc: l.location_id };
+    }
+    nodes.set(cellKey(l.stage_id, l.location_id), n);
+  }
+  const edges = links(new Map([...nodes].map(([k, n]) => [k, { s: n.s, f: n.f }])), cycles, units, whole);
+  const into = new Map<string, NetLink[]>();
+  for (const e of edges) into.set(e.s, [...(into.get(e.s) ?? []), e]);
+  // a cell with no link keeps its planned start (but not before today)
+  for (const [k, n] of nodes) if (!n.fixed && !into.has(k)) { n.base = Math.max(n.s, T); n.s = n.base; n.f = n.s + n.d - 1; }
+  for (let pass = 0, changed = true; changed && pass < 500; pass++) {
+    changed = false;
+    for (const [k, n] of nodes) {
+      if (n.fixed || !into.has(k)) continue;
+      let es = T;
+      for (const e of into.get(k)!) {
+        const p = nodes.get(e.p)!;
+        es = Math.max(es, (e.on === 'F' ? p.f : p.s) + e.k);
+      }
+      if (es !== n.s) { n.s = es; n.f = es + n.d - 1; changed = true; }
+    }
+  }
+  return [...nodes.values()].map((n) => ({ stage_id: n.stage, location_id: n.loc, start: iso(n.s), finish: iso(n.f) }));
+}

@@ -13,6 +13,8 @@ export interface GanttItem {
   actual: { start: string | null; finish: string | null; pct: number; status: CellStatus | 'late_start' | 'not_due' } | null;
   float?: number | null; // total float in days (critical path): 0 or less = critical
   unlinked?: boolean; // its dates are fixed by hand, not computed from an earlier stage
+  fc?: { start: string; finish: string } | null; // forecast from actual progress
+  fcFloat?: number | null;
 }
 
 const ZOOM = { week: 22, month: 5, quarter: 1.8 } as const;
@@ -38,10 +40,14 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
   const [to, setTo] = useState('');
   const [onlyLate, setOnlyLate] = useState(false);
   const hasCpm = items.some((x) => x.float !== undefined && x.float !== null);
+  const [fcOn, setFcOn] = useState(false);
   const [crit, setCrit] = useState(false);
   const [arrows, setArrows] = useState(false);
   const [critOnly, setCritOnly] = useState(false);
-  const isCrit = (it: GanttItem) => it.float !== undefined && it.float !== null && it.float <= 0;
+  const hasFc = items.some((x) => x.fc);
+  const useFc = hasFc && fcOn;
+  const fl = (it: GanttItem) => (useFc ? it.fcFloat : it.float);
+  const isCrit = (it: GanttItem) => { const f = hasFc && fcOn ? it.fcFloat : it.float; return f !== undefined && f !== null && f <= 0; };
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const box = useRef<HTMLDivElement>(null);
   const [boxW, setBoxW] = useState(0);
@@ -56,7 +62,7 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
   const now = today();
 
   const shown = items.filter((x) => (x.plan || x.actual?.start) && (!onlyLate || ['late', 'late_start'].includes(x.actual?.status ?? '') || (crit && isCrit(x))));
-  const dates = shown.flatMap((x) => [x.plan?.start, x.plan?.finish, x.base?.start, x.base?.finish, x.actual?.start, x.actual?.finish].filter(Boolean) as string[]);
+  const dates = shown.flatMap((x) => [x.plan?.start, x.plan?.finish, x.base?.start, x.base?.finish, x.actual?.start, x.actual?.finish, fcOn ? x.fc?.finish : null].filter(Boolean) as string[]);
   const lo = from || (dates.length ? addDays(dates.reduce((a, b) => (a < b ? a : b)), -7) : now);
   const hi = to || (dates.length ? addDays(dates.reduce((a, b) => (a > b ? a : b)), 14) : addDays(now, 30));
   const span = Math.max(1, daysBetween(lo, hi) + 1);
@@ -87,7 +93,8 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
       it.base && `${t('progress.baseline')}: ${fmtDate(it.base.start)} → ${fmtDate(it.base.finish)}`,
       a?.start && `${t('progress.actual')}: ${fmtDate(a.start)} → ${a.finish ? fmtDate(a.finish) : '…'} (${a.pct}%)`,
       a && t(`gantt.st.${a.status}`),
-      it.float !== undefined && it.float !== null && (it.float <= 0 ? t('gantt.critical') : t('gantt.float', { n: it.float })),
+      useFc && it.fc && `${t('gantt.fc')}: ${fmtDate(it.fc.start)} → ${fmtDate(it.fc.finish)}`,
+      fl(it) !== undefined && fl(it) !== null && (fl(it)! <= 0 ? t('gantt.critical') : t('gantt.float', { n: fl(it) })),
     ].filter(Boolean).join('\n');
     const aEnd = a?.start ? (a.finish ?? (a.pct > 0 ? (now > a.start ? now : a.start) : a.start)) : null;
     return (
@@ -96,7 +103,9 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
           {p && <div style={{ position: 'absolute', insetInlineStart: x(p.start), width: w(p.start, p.finish), top: showActual ? 3 : 6, height: showActual ? 7 : 12,
             background: crit && isCrit(it) ? '#e03131' : showActual ? PLAN : 'var(--mantine-color-verqac-6)', borderRadius: 3,
             opacity: crit && !isCrit(it) ? 0.6 : showActual ? 1 : 0.85 }} />}
-          {crit && !isCrit(it) && p && it.float ? <div style={{ position: 'absolute', insetInlineStart: x(addDays(p.finish, 1)), width: w(addDays(p.finish, 1), addDays(p.finish, it.float)),
+          {useFc && it.fc && <div style={{ position: 'absolute', insetInlineStart: x(it.fc.start), width: w(it.fc.start, it.fc.finish), top: showActual ? 21 : 19, height: 3,
+            background: crit && isCrit(it) ? '#e03131' : '#7048e8', borderRadius: 2 }} />}
+          {crit && !isCrit(it) && p && fl(it) && !useFc ? <div style={{ position: 'absolute', insetInlineStart: x(addDays(p.finish, 1)), width: w(addDays(p.finish, 1), addDays(p.finish, fl(it)!)),
             top: showActual ? 5 : 10, height: 4, borderTop: '2px dashed #495057', borderInlineEnd: '2px solid #495057' }} /> : null}
           {it.base && <div style={{ position: 'absolute', insetInlineStart: x(it.base.start), width: w(it.base.start, it.base.finish), top: 2, height: showActual ? 9 : 14,
             border: '1px dashed #868e96', borderRadius: 3 }} />}
@@ -188,6 +197,7 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
           data={(['week', 'month', 'quarter', 'fit'] as Zoom[]).map((z) => ({ value: z, label: t(`gantt.z.${z}`) }))} />
         <TextInput size="xs" type="date" w={140} value={from} onChange={(e) => setFrom(e.currentTarget.value)} aria-label={t('gantt.from')} leftSection={<Text size="xs">{t('gantt.from')}</Text>} leftSectionWidth={36} />
         <TextInput size="xs" type="date" w={140} value={to} onChange={(e) => setTo(e.currentTarget.value)} aria-label={t('gantt.to')} leftSection={<Text size="xs">{t('gantt.to')}</Text>} leftSectionWidth={36} />
+        {hasFc && <Checkbox size="xs" color="grape" label={t('gantt.fcToggle')} checked={fcOn} onChange={(e) => setFcOn(e.currentTarget.checked)} />}
         {hasCpm && <Checkbox size="xs" color="red" label={t('gantt.criticalPath')} checked={crit} onChange={(e) => setCrit(e.currentTarget.checked)} />}
         {links.length > 0 && <Checkbox size="xs" label={t('gantt.arrows')} checked={arrows} onChange={(e) => setArrows(e.currentTarget.checked)} />}
         {links.length > 0 && arrows && hasCpm && (
@@ -201,7 +211,7 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
       </Group>
       {crit && (() => {
         const cs = items.filter(isCrit);
-        const end = items.map((x) => x.plan?.finish).filter(Boolean).reduce((a, b) => (a! > b! ? a : b), '' as string);
+        const end = items.map((x) => (useFc ? x.fc?.finish : x.plan?.finish)).filter(Boolean).reduce((a, b) => (a! > b! ? a : b), '' as string);
         return (
           <>
             <Text size="xs" mb={4} c="red">{t('gantt.critSummary', { n: cs.length, all: items.filter((x) => x.plan).length, end: end ? fmtDate(end) : '' })}</Text>
@@ -220,6 +230,7 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
         <Group gap="md" mb={6}>
           <Group gap={4}><span style={{ width: 18, height: 6, background: PLAN, display: 'inline-block', borderRadius: 2 }} /><Text size="xs">{t('progress.planned')}</Text></Group>
           <Group gap={4}><span style={{ width: 18, height: 8, border: '1px dashed #868e96', display: 'inline-block' }} /><Text size="xs">{t('progress.baseline')}</Text></Group>
+          {useFc && <Group gap={4}><span style={{ width: 18, height: 3, background: '#7048e8', display: 'inline-block' }} /><Text size="xs">{t('gantt.fc')}</Text></Group>}
           {(['done', 'on_track', 'late', 'late_start', 'not_due'] as const).map((k) => (
             <Group key={k} gap={4}><span style={{ width: 18, height: 8, background: k === 'not_due' ? 'white' : COL[k], border: k === 'not_due' ? `1.5px solid ${COL.not_due}` : undefined, display: 'inline-block', borderRadius: 2 }} /><Text size="xs">{t(`gantt.st.${k}`)}</Text></Group>
           ))}
@@ -258,8 +269,8 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
                     {showActual && (() => { const st = it.actual?.status ?? 'not_due'; const hollow = st === 'not_due' || st === 'not_started';
                       return <span style={{ width: 8, height: 8, borderRadius: 8, background: hollow ? 'white' : COL[st], border: hollow ? `1.5px solid ${COL.not_due}` : undefined, flex: 'none' }} />; })()}
                     <Text size="xs" style={{ flex: 1 }} c={crit && isCrit(it) ? 'red' : undefined} fw={crit && isCrit(it) ? 600 : undefined} truncate>{by === 'floor' ? it.stageName : (it.locName ?? t('structure.whole'))}</Text>
-                    {crit && it.float !== undefined && it.float !== null
-                      ? <Text size="xs" fw={600} c={isCrit(it) ? 'red' : 'dimmed'}>{isCrit(it) ? t('gantt.critShort') : t('gantt.floatShort', { n: it.float })}</Text>
+                    {crit && fl(it) !== undefined && fl(it) !== null
+                      ? <Text size="xs" fw={600} c={isCrit(it) ? 'red' : 'dimmed'}>{isCrit(it) ? t('gantt.critShort') : t('gantt.floatShort', { n: fl(it) })}</Text>
                       : showActual && <Text size="xs" c="dimmed">{it.actual?.pct ?? 0}%</Text>}
                   </div>
                   <div style={{ position: 'relative' }}>{lines}{bar(it)}</div>
