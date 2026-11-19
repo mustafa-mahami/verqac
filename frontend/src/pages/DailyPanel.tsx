@@ -1,9 +1,9 @@
 import {
-  ActionIcon, Alert, Anchor, Autocomplete, Badge, Button, Card, Checkbox, Group, MultiSelect, NumberInput, ScrollArea, Select, SimpleGrid, Stack, Table, Tabs,
+  ActionIcon, Alert, Anchor, Autocomplete, Badge, Button, Card, Group, MultiSelect, NumberInput, ScrollArea, Select, SimpleGrid, Stack, Table, Tabs,
   Text, Textarea, TextInput, Title, Tooltip,
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type LinkedRef, type RecordDetail } from '../api';
@@ -25,6 +25,7 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
 }) {
   const { t } = useTranslation();
   const s = useStructure(projectId).data;
+  const [dates, setDates] = useState<Record<number, boolean>>({});
   if (!s) return null;
   const set = (i: number, p: Partial<WorkLine>) => onChange(lines.map((x, j) => (j === i ? { ...x, ...p } : x)));
   const stages = s.stages.filter((x) => x.is_active).map((x) => ({ value: x.id!, label: pick(x, 'name') }));
@@ -41,54 +42,103 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
     const lo = Math.min(...vals), hi = Math.max(...vals);
     return lo === hi ? `${lo}%` : `${lo}–${hi}%`;
   };
+  const ALL = '__all__';
   return (
-    <Stack gap={6}>
-      {lines.map((w, i) => {
-        const st = s.stages.find((x) => x.id === w.stage_id);
-        const whole = st?.scope === 'whole';
-        return (
-          <Card key={i} withBorder p="xs">
-            <SimpleGrid cols={{ base: 1, sm: 4 }} spacing="xs">
-              <Select size="xs" label={t('structure.stage')} data={stages} value={w.stage_id} disabled={!editable} searchable clearable
-                onChange={(v) => set(i, { stage_id: v, topic_id: null })} />
-              <Select size="xs" label={t('structure.topic')} disabled={!editable || !st} clearable searchable value={w.topic_id}
-                data={(st?.topics ?? []).filter((x) => x.id && x.is_active !== false).map((x) => ({ value: x.id!, label: pick(x, 'name') }))}
-                onChange={(v) => set(i, { topic_id: v })} />
-              {whole ? <Text size="xs" c="dimmed" pt={24}>{t('daily.wholeStage')}</Text> : (
-                <Stack gap={2} style={{ gridColumn: 'span 2' }}>
-                  <MultiSelect size="xs" label={t('structure.location')} searchable clearable data={locs as never} value={w.location_ids}
-                    disabled={!editable || w.all_locations} onChange={(v) => set(i, { location_ids: v })} />
-                  <Checkbox size="xs" label={t('structure.wholeProject')} checked={w.all_locations} disabled={!editable}
-                    onChange={(e) => set(i, { all_locations: e.currentTarget.checked, location_ids: [] })} />
-                </Stack>
-              )}
-            </SimpleGrid>
-            <Group gap="xs" mt={6} align="flex-end" wrap="nowrap">
-              <TextInput size="xs" style={{ flex: 1 }} label={t('daily.desc')} value={w.description ?? ''} disabled={!editable}
-                onChange={(e) => set(i, { description: e.currentTarget.value || null })} />
-              <NumberInput size="xs" w={80} hideControls label={t('daily.qty')} value={w.qty ?? ''} disabled={!editable} onChange={(v) => set(i, { qty: num(v) })} />
-              <TextInput size="xs" w={70} label={t('daily.unit')} dir="ltr" value={w.unit ?? ''} disabled={!editable} onChange={(e) => set(i, { unit: e.currentTarget.value || null })} />
-              <NumberInput size="xs" w={70} hideControls label={t('daily.crewN')} value={w.crew ?? ''} disabled={!editable} onChange={(v) => set(i, { crew: num(v) })} />
-              {withProgress && (
-                <NumberInput size="xs" w={110} label={t('daily.progress')} description={st ? `${t('daily.was')}: ${was(w) ?? '0%'}` : undefined}
-                  min={0} max={100} suffix="%" value={w.progress ?? ''} disabled={!editable || !st} onChange={(v) => set(i, { progress: num(v) })} />
-              )}
-              {editable && <Del onClick={() => onChange(lines.filter((_, j) => j !== i))} />}
-            </Group>
-            {withProgress && actualDates && st && (
-              <Group gap="xs" mt={6} align="flex-end">
-                <TextInput size="xs" type="date" w={150} label={t('daily.actualStart')} value={w.actual_start ?? ''} disabled={!editable}
-                  onChange={(e) => set(i, { actual_start: e.currentTarget.value || null })} />
-                <Tooltip label={t('daily.actualFinishHint')}>
-                  <TextInput size="xs" type="date" w={150} label={t('daily.actualFinish')} value={w.actual_finish ?? ''} disabled={!editable || (w.progress ?? 0) < 100}
-                    onChange={(e) => set(i, { actual_finish: e.currentTarget.value || null })} />
-                </Tooltip>
-                <Text size="xs" c="dimmed" pb={6}>{t('daily.actualHint')}</Text>
-              </Group>
-            )}
-          </Card>
-        );
-      })}
+    <Stack gap={4}>
+      <Table.ScrollContainer minWidth={820}>
+        <Table verticalSpacing={3} horizontalSpacing={4} withRowBorders striped style={{ tableLayout: 'fixed' }}>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th w={180}>{t('structure.stage')}</Table.Th>
+              <Table.Th w={190}>{t('structure.location')}</Table.Th>
+              <Table.Th>{t('daily.desc')}</Table.Th>
+              <Table.Th w={58}>{t('daily.qty')}</Table.Th>
+              <Table.Th w={48}>{t('daily.unit')}</Table.Th>
+              <Table.Th w={46}>{t('daily.crewN')}</Table.Th>
+              {withProgress && <Table.Th w={70}>%</Table.Th>}
+              {(editable || actualDates) && <Table.Th w={editable ? 56 : 30} />}
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {lines.map((w, i) => {
+              const st = s.stages.find((x) => x.id === w.stage_id);
+              const whole = st?.scope === 'whole';
+              const topics = (st?.topics ?? []).filter((x) => x.id && x.is_active !== false).map((x) => ({ value: x.id!, label: pick(x, 'name') }));
+              const hasDates = !!(w.actual_start || w.actual_finish);
+              const showDates = withProgress && actualDates && !!st && (dates[i] ?? hasDates);
+              return (
+                <Fragment key={i}>
+                  <Table.Tr>
+                    <Table.Td>
+                      <Select size="xs" data={stages} value={w.stage_id} disabled={!editable} searchable clearable placeholder={t('structure.stage')}
+                        onChange={(v) => set(i, { stage_id: v, topic_id: null })} />
+                      {topics.length > 0 && (
+                        <Select size="xs" mt={2} data={topics} value={w.topic_id} disabled={!editable} clearable searchable placeholder={t('structure.topic')}
+                          onChange={(v) => set(i, { topic_id: v })} />
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      {whole ? <Text size="xs" c="dimmed">{t('daily.wholeStage')}</Text> : (
+                        <MultiSelect size="xs" searchable clearable disabled={!editable}
+                          placeholder={w.all_locations || w.location_ids.length ? undefined : t('structure.location')}
+                          styles={{ inputField: { minWidth: 20, flex: '1 0 20px' } }}
+                          data={[{ value: ALL, label: t('structure.wholeProject') }, ...(locs as never[])] as never}
+                          value={w.all_locations ? [ALL] : w.location_ids}
+                          onChange={(v) => (v.includes(ALL) && !w.all_locations ? set(i, { all_locations: true, location_ids: [] })
+                            : set(i, { all_locations: false, location_ids: v.filter((x) => x !== ALL) }))} />
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <TextInput size="xs" value={w.description ?? ''} disabled={!editable} onChange={(e) => set(i, { description: e.currentTarget.value || null })} />
+                    </Table.Td>
+                    <Table.Td><NumberInput size="xs" hideControls value={w.qty ?? ''} disabled={!editable} onChange={(v) => set(i, { qty: num(v) })} /></Table.Td>
+                    <Table.Td><TextInput size="xs" dir="ltr" value={w.unit ?? ''} disabled={!editable} onChange={(e) => set(i, { unit: e.currentTarget.value || null })} /></Table.Td>
+                    <Table.Td><NumberInput size="xs" hideControls value={w.crew ?? ''} disabled={!editable} onChange={(v) => set(i, { crew: num(v) })} /></Table.Td>
+                    {withProgress && (
+                      <Table.Td>
+                        <Tooltip label={`${t('daily.was')}: ${was(w) ?? '0%'}`} disabled={!st}>
+                          <NumberInput size="xs" hideControls min={0} max={100} suffix="%" placeholder={st ? was(w) ?? '0%' : ''}
+                            value={w.progress ?? ''} disabled={!editable || !st} onChange={(v) => set(i, { progress: num(v) })} />
+                        </Tooltip>
+                      </Table.Td>
+                    )}
+                    {(editable || actualDates) && (
+                      <Table.Td>
+                        <Group gap={0} wrap="nowrap">
+                          {withProgress && actualDates && st && (
+                            <Tooltip label={t('daily.actualHint')}>
+                              <ActionIcon size="sm" variant={hasDates ? 'light' : 'subtle'} color={hasDates ? 'blue' : 'gray'} aria-label="dates"
+                                onClick={() => setDates({ ...dates, [i]: !showDates })}>📅</ActionIcon>
+                            </Tooltip>
+                          )}
+                          {editable && <Del onClick={() => onChange(lines.filter((_, j) => j !== i))} />}
+                        </Group>
+                      </Table.Td>
+                    )}
+                  </Table.Tr>
+                  {showDates && (
+                    <Table.Tr>
+                      <Table.Td colSpan={8}>
+                        <Group gap="xs" align="center">
+                          <TextInput size="xs" type="date" w={190} value={w.actual_start ?? ''} disabled={!editable}
+                            leftSection={<Text size="xs">{t('daily.actualStart')}</Text>} leftSectionWidth={110}
+                            onChange={(e) => set(i, { actual_start: e.currentTarget.value || null })} />
+                          <Tooltip label={t('daily.actualFinishHint')}>
+                            <TextInput size="xs" type="date" w={200} value={w.actual_finish ?? ''} disabled={!editable || (w.progress ?? 0) < 100}
+                              leftSection={<Text size="xs">{t('daily.actualFinish')}</Text>} leftSectionWidth={120}
+                              onChange={(e) => set(i, { actual_finish: e.currentTarget.value || null })} />
+                          </Tooltip>
+                          <Text size="xs" c="dimmed">{t('daily.actualHint')}</Text>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
       {editable && <Group><Button size="compact-xs" variant="subtle" onClick={() => onChange([...lines, blankWork()])}>+ {t('daily.addWork')}</Button></Group>}
     </Stack>
   );

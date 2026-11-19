@@ -392,7 +392,7 @@ export default function RecordPage() {
   const responses = r.transitions.filter((x) => x.effect === 'respond');
   const others = r.transitions.filter((x) => x.effect !== 'respond');
 
-  const wide = r.record_type.code === 'programme'; // the programme and its Gantt take the full width
+  const wide = ['programme', 'daily_report'].includes(r.record_type.code); // the programme / the daily report tables take the full width
   return (
     <Stack maw={wide ? '100%' : 1200} mx="auto">
       <BackButton to={`/projects/${r.project_id}?tab=${profile(r.record_type.code).tab}`}
