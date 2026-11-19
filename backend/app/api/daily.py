@@ -344,15 +344,67 @@ def check_works(db, rec: Record) -> None:
 
 
 def rebuild_progress(db, project_id) -> None:
-    """Start again from the approved reports, oldest first: after the stages or locations changed."""
+    """Start again from the approved reports, oldest first: after the stages or locations changed.
+    The same rules as apply_progress, replayed in memory and written once (hundreds of reports in a second)."""
     db.execute(delete(ProgressCell).where(ProgressCell.project_id == project_id))
     db.execute(delete(ProgressSnapshot).where(ProgressSnapshot.project_id == project_id))
     db.flush()
-    recs = db.scalars(select(Record).join(DailyReport, DailyReport.record_id == Record.id)
+    stages_all = {str(s.id): s for s in db.scalars(select(ProjectStage).where(ProjectStage.project_id == project_id))}
+    active = [s for s in stages_all.values() if s.is_active]
+    units = _units(db, project_id)
+    total_w = sum(float(s.weight) for s in active) or 0
+    cells: dict = {}  # (stage_id, location_id) -> dict
+    snaps: dict = {}
+
+    def covered(line) -> list:
+        st = stages_all.get(str(line.get("stage_id")))
+        if st is None:
+            return []
+        if st.scope == "whole":
+            return [(st.id, None)]
+        su = stage_units(st, units)
+        if line.get("all_locations"):
+            return [(st.id, u.id) for u in su]
+        ids = {str(x) for x in line.get("location_ids") or []}
+        return [(st.id, u.id) for u in su if str(u.id) in ids or str(u.parent_id) in ids]
+
+    def pct() -> float:
+        if not total_w:
+            return 0.0
+        out = 0.0
+        for st in active:
+            su = stage_units(st, units)
+            if st.scope == "whole" or not su:
+                v = cells.get((st.id, None), {}).get("progress", 0.0)
+            else:
+                v = sum(cells.get((st.id, u.id), {}).get("progress", 0.0) for u in su) / len(su)
+            out += float(st.weight) * v / total_w
+        return round(out, 1)
+
+    rows = db.execute(select(Record.id, DailyReport).join(DailyReport, DailyReport.record_id == Record.id)
                       .where(Record.project_id == project_id, Record.state_category == "approved")
-                      .order_by(DailyReport.report_date))
-    for rec in recs:
-        apply_progress(db, rec)
+                      .order_by(DailyReport.report_date)).all()
+    for rid, d in rows:
+        for line in d.works:
+            for key in covered(line):
+                c = cells.setdefault(key, {"progress": 0.0, "progress_on": None, "record_id": None, "started_on": None,
+                                           "finished_on": None})
+                began = date.fromisoformat(line["actual_start"]) if line.get("actual_start") else d.report_date
+                if c["started_on"] is None or c["started_on"] > began:
+                    c["started_on"] = began
+                p = line.get("progress")
+                if p is None or (c["progress_on"] and c["progress_on"] > d.report_date):
+                    continue
+                ended = date.fromisoformat(line["actual_finish"]) if line.get("actual_finish") else d.report_date
+                c.update(progress=float(p), progress_on=d.report_date, record_id=rid, finished_on=ended if p >= 100 else None)
+        snaps[d.report_date] = pct()
+    if cells:
+        db.execute(insert(ProgressCell), [{"project_id": project_id, "stage_id": k[0], "location_id": k[1],
+                                           **{**v, "progress": Decimal(str(v["progress"]))}} for k, v in cells.items()])
+    if snaps:
+        db.execute(insert(ProgressSnapshot), [{"project_id": project_id, "day": k, "actual": Decimal(str(v))}
+                                              for k, v in snaps.items()])
+    db.flush()
 
 
 def apply_progress(db, rec: Record) -> None:
