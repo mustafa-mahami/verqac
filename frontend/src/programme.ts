@@ -36,7 +36,9 @@ const anchor = (c: PCycle, p: { start: string; finish: string }) => {
 /** Dates of every stage in the cycle, in dependency order. A linked stage starts from its predecessor on the same
  * floor, but its crew never starts a floor before its own cycle allows (the later of the two wins). A predecessor
  * outside the cycle is read from the lines already entered. */
-export function schedule(cs: PCycle[], units: string[], whole: Set<string>, existing: PLine[]): { lines: PLine[]; error: string | null; missing: string[] } {
+export function schedule(cs: PCycle[], allUnits: string[], whole: Set<string>, existing: PLine[], floorsOf?: Map<string, string[]>): { lines: PLine[]; error: string | null; missing: string[] } {
+  // a stage limited to some floors runs on those only (floorsOf: stage -> its floors; absent = all)
+  const unitsOf = (id: string) => { const f = floorsOf?.get(id); return f?.length ? allUnits.filter((u) => f.includes(u)) : allUnits; };
   const by = new Map(cs.map((c) => [c.stage_id, c]));
   const done = new Map<string, PLine[]>();
   for (const l of existing) if (!by.has(l.stage_id)) done.set(l.stage_id, [...(done.get(l.stage_id) ?? []), l]);
@@ -53,6 +55,7 @@ export function schedule(cs: PCycle[], units: string[], whole: Set<string>, exis
     if (c.pred && !pl?.length) missing.push(id);
     const predWhole = !!c.pred && whole.has(c.pred);
     const out: PLine[] = [];
+    const units = unitsOf(id);
     if (whole.has(id) || !units.length) {
       const st = pl?.length ? anchor(c, span(pl)) : c.start;
       if (st) out.push({ stage_id: id, location_id: null, start: st, finish: addDays(st, c.duration - 1) });
@@ -63,6 +66,7 @@ export function schedule(cs: PCycle[], units: string[], whole: Set<string>, exis
         if (pl?.length) {
           const same = predWhole ? (i === 0 ? pl[0] : null) : pl.find((l) => l.location_id === u);
           if (same) st = anchor(c, same);
+          else if (i === 0 && !predWhole) st = anchor(c, pl[0]);  // the predecessor is not on this stage's first floor
         } else if (i === 0) st = c.start;
         if (prev) {
           const own = addDays(prev, (c.link ?? 'fs') === 'fs' ? c.duration + c.lag : c.lag);

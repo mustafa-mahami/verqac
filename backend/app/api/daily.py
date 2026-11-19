@@ -17,7 +17,7 @@ from app.core.deps import Ctx, ctx
 from app.models.core import Project
 from app.models.daily import DailyReport, ProgressCell, ProgressSnapshot
 from app.models.records import Record, RecordType
-from app.models.structure import ProjectLocation, ProjectStage
+from app.models.structure import ProjectLocation, ProjectStage, stage_units
 
 router = APIRouter(tags=["daily"])
 TZ = ZoneInfo("Asia/Hebron")
@@ -250,7 +250,7 @@ def _cells_of(db, project_id, line: dict, stages: dict) -> list[tuple]:
         return []
     if st.scope == "whole":
         return [(st.id, None)]
-    units = _units(db, project_id)
+    units = stage_units(st, _units(db, project_id))
     if line.get("all_locations"):
         return [(st.id, u.id) for u in units]
     ids = {str(x) for x in line.get("location_ids") or []}
@@ -266,10 +266,11 @@ def project_progress(db, project_id) -> ProgressOut:
     total_w = sum(float(s.weight) for s in stages) or 0
     project = 0.0
     for s in stages:
-        if s.scope == "whole" or not units:
+        su = stage_units(s, units)
+        if s.scope == "whole" or not su:
             pct = by.get((s.id, None), 0.0)
         else:
-            pct = sum(by.get((s.id, u.id), 0.0) for u in units) / len(units)
+            pct = sum(by.get((s.id, u.id), 0.0) for u in su) / len(su)
         stage_pct[str(s.id)] = round(pct, 1)
         if total_w:
             project += float(s.weight) * pct / total_w
@@ -309,7 +310,7 @@ def _with_plan(db, project_id, out: ProgressOut, stages, units, actual: dict) ->
             out.baseline_finish = max(f for _, f in bplan.values())
     # every cell of the matrix, worked on or not: planned today and its status
     keys = [(s.id, None) if s.scope == "whole" or not units else (s.id, u.id) for s in stages
-            for u in ([None] if s.scope == "whole" or not units else units)]
+            for u in ([None] if s.scope == "whole" or not units else stage_units(s, units))]
     have = {(c.stage_id, c.location_id): c for c in out.cells}
     cells, late = [], []
     from app.core.programme import cell_planned
@@ -369,6 +370,7 @@ def apply_progress(db, rec: Record) -> None:
             if cell is None:
                 cell = ProgressCell(project_id=d.project_id, stage_id=stage_id, location_id=loc_id, progress=Decimal(0))
                 db.add(cell)
+                db.flush()  # a second line of the report on the same cell must find it
             began = date.fromisoformat(line["actual_start"]) if line.get("actual_start") else d.report_date
             if cell.started_on is None or cell.started_on > began:
                 cell.started_on = began  # work on the cell, with or without a % (or the real start, when given)

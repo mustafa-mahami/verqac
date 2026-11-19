@@ -1,5 +1,5 @@
 import {
-  ActionIcon, Alert, Badge, Button, Checkbox, Group, Modal, MultiSelect, NumberInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip,
+  ActionIcon, Alert, Badge, Button, Checkbox, Group, Modal, MultiSelect, NumberInput, Popover, ScrollArea, Select, Stack, Switch, Table, Text, TextInput, Tooltip,
 } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useState } from 'react';
@@ -107,9 +107,39 @@ function TopicsEditor({ topics, onChange, editable, withActive, checklists }: {
   );
 }
 
+/** The floors a per-location stage applies to (none ticked = all of them). */
+function StageFloors({ units, value, onChange, editable }: {
+  units: { value: string; label: string }[]; value: string[]; onChange: (ids: string[]) => void; editable: boolean;
+}) {
+  const { t } = useTranslation();
+  const mine = value.filter((v) => units.some((u) => u.value === v));
+  const all = !mine.length || mine.length === units.length;
+  return (
+    <Popover width={260} position="bottom-start" shadow="md">
+      <Popover.Target>
+        <Button size="compact-xs" variant="subtle" color={all ? 'gray' : 'orange'} mt={2}>
+          {all ? t('structure.allFloors') : t('structure.someFloors', { n: mine.length, of: units.length })} ▾
+        </Button>
+      </Popover.Target>
+      <Popover.Dropdown>
+        <Text size="xs" c="dimmed" mb={6}>{t('structure.floorsHint')}</Text>
+        <Group gap={6} mb={6}>
+          <Button size="compact-xs" variant="light" disabled={!editable} onClick={() => onChange([])}>{t('structure.allFloors')}</Button>
+        </Group>
+        <ScrollArea.Autosize mah={260}>
+          <Checkbox.Group value={all ? units.map((u) => u.value) : mine} onChange={(v) => onChange(v)}>
+            <Stack gap={4}>{units.map((u) => <Checkbox key={u.value} size="xs" value={u.value} label={u.label} disabled={!editable} />)}</Stack>
+          </Checkbox.Group>
+        </ScrollArea.Autosize>
+      </Popover.Dropdown>
+    </Popover>
+  );
+}
+
 /** Rows of stages with name, scope, weight and their subjects; for type templates and a project's own stages. */
-export function StagesEditor<S extends TemplateStage & { is_active?: boolean; used?: boolean; scope_locked?: boolean }>({ stages, onChange, editable, blank, checklists = true }: {
+export function StagesEditor<S extends TemplateStage & { is_active?: boolean; used?: boolean; scope_locked?: boolean; location_ids?: string[] | null }>({ stages, onChange, editable, blank, checklists = true, units }: {
   stages: S[]; onChange: (s: S[]) => void; editable: boolean; blank: S; checklists?: boolean;
+  units?: { value: string; label: string }[]; // a project's floors: a per-location stage can be limited to some
 }) {
   const { t } = useTranslation();
   const set = (i: number, patch: Partial<S>) => onChange(stages.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -141,6 +171,10 @@ export function StagesEditor<S extends TemplateStage & { is_active?: boolean; us
                       data={[{ value: 'per_location', label: t('structure.perLocation') }, { value: 'whole', label: t('structure.whole') }]}
                       onChange={(v) => set(i, { scope: (v ?? 'per_location') as StageScope } as Partial<S>)} /></div>
                   </Tooltip>
+                  {units && units.length > 1 && s.scope === 'per_location' && (
+                    <StageFloors units={units} value={s.location_ids ?? []} editable={editable}
+                      onChange={(ids) => set(i, { location_ids: ids.length && ids.length < units.length ? ids : null } as Partial<S>)} />
+                  )}
                 </Table.Td>
                 <Table.Td>
                   <NumberInput size="xs" min={0} max={100} decimalScale={2} hideControls disabled={!editable} rightSection="%"

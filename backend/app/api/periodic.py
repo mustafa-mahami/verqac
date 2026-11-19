@@ -156,6 +156,11 @@ def period(kind: str, day: date, weekend: set[int]) -> tuple[date, date]:
     return start, start + timedelta(days=6)
 
 
+def _su(st, unit_ids: list) -> list:
+    ids = {str(x) for x in (st.location_ids or [])}
+    return [u for u in unit_ids if u in ids] if ids else unit_ids
+
+
 def _replay(reports: list, stages: dict, unit_ids: list, groups: dict) -> list[tuple[date, dict]]:
     """The cells after each approved report, oldest first (the same rules as the live matrix)."""
     cells: dict = {}
@@ -169,10 +174,10 @@ def _replay(reports: list, stages: dict, unit_ids: list, groups: dict) -> list[t
             if st.scope == "whole" or not unit_ids:
                 keys = [(str(st.id), None)]
             elif line.get("all_locations"):
-                keys = [(str(st.id), u) for u in unit_ids]
+                keys = [(str(st.id), u) for u in _su(st, unit_ids)]
             else:
                 ids = {str(x) for x in line.get("location_ids") or []}
-                keys = [(str(st.id), u) for u in unit_ids if u in ids or groups.get(u) in ids]
+                keys = [(str(st.id), u) for u in _su(st, unit_ids) if u in ids or groups.get(u) in ids]
             for k in keys:
                 cells[k] = float(pct)
         out.append((d.report_date, dict(cells)))
@@ -184,10 +189,11 @@ def _pct(cells: dict, stages: list, unit_ids: list) -> tuple[float, dict[str, fl
     project, per = 0.0, {}
     for s in stages:
         sid = str(s.id)
-        if s.scope == "whole" or not unit_ids:
+        su = _su(s, unit_ids)
+        if s.scope == "whole" or not su:
             pct = cells.get((sid, None), 0.0)
         else:
-            pct = sum(cells.get((sid, u), 0.0) for u in unit_ids) / len(unit_ids)
+            pct = sum(cells.get((sid, u), 0.0) for u in su) / len(su)
         per[sid] = round(pct, 1)
         if total_w:
             project += float(s.weight) * pct / total_w

@@ -90,7 +90,9 @@ export default function ProjectStructure({ projectId }: { projectId: string }) {
           </div>
           {s.project_type && <Text size="sm" c="dimmed">{t('structure.projectType')}: {pick(s.project_type, 'name')}</Text>}
         </Group>
-        <StagesEditor stages={stages} onChange={setStages} editable={editable} blank={blankStage} checklists={s.checklists} />
+        <StagesEditor stages={stages} onChange={setStages} editable={editable} blank={blankStage} checklists={s.checklists}
+          units={s.locations.filter((g) => g.is_active).flatMap((g) => g.units.filter((u) => u.is_active && u.id)
+            .map((u) => ({ value: u.id!, label: s.locations.filter((x) => x.is_active).length > 1 ? `${pick(g, 'name')} – ${pick(u, 'name')}` : pick(u, 'name') })))} />
         {note('stages')}
         {editable && <Button mt="md" variant="light" loading={save.isPending}
           onClick={() => save.mutate({ at: 'stages', path: 'stages', body: stages })}>{t('rec.save')}</Button>}

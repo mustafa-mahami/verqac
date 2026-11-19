@@ -551,7 +551,10 @@
     "pickTopic": "Pick the subject",
     "filterTopic": "Subject:",
     "topic": "Topic",
-    "scopeLocked": "The scope is locked: approved daily reports gave this stage progress, and changing it would drop or move that progress. To change it, switch the stage off and add a new one with the right scope."
+    "scopeLocked": "The scope is locked: approved daily reports gave this stage progress, and changing it would drop or move that progress. To change it, switch the stage off and add a new one with the right scope.",
+    "allFloors": "All floors",
+    "someFloors": "{{n}} of {{of}} floors",
+    "floorsHint": "The floors this stage applies to. Its % is counted on them only (e.g. finishes on the fitted-out floors)."
   },
   "account": {
     "title": "My account",
@@ -1011,7 +1014,8 @@
     "fcFinish": "Forecast finish from actual progress: {{d}}",
     "fcLate": "{{n}} days behind the programme",
     "fcEarly": "{{n}} days ahead",
-    "fcOnTime": "on the programme date"
+    "fcOnTime": "on the programme date",
+    "notApplicable": "The stage does not apply to this floor"
   },
   "dset": {
     "title": "Daily report",

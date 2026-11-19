@@ -253,7 +253,10 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
                       <Text size="xs" fw={700} c={hasPlan && pl !== undefined && a + 10 < pl ? 'red' : undefined}>{a}%</Text>
                     </Table.Td>
                     {hasPlan && <Table.Td ta="center"><Text size="xs" c="dimmed">{pl !== undefined ? `${pl}%` : ''}</Text></Table.Td>}
-                    {st.scope === 'whole' || !units.length ? td(cell(st.id!, null), units.length || 1) : units.map((u) => <Fragment key={u.id}>{td(cell(st.id!, u.id!))}</Fragment>)}
+                    {st.scope === 'whole' || !units.length ? td(cell(st.id!, null), units.length || 1) : units.map((u) => <Fragment key={u.id}>{
+                      st.location_ids?.length && !st.location_ids.includes(u.id!)
+                        ? <Tooltip label={t('progress.notApplicable')}><Table.Td ta="center" c="dimmed" style={{ background: 'repeating-linear-gradient(45deg, #f1f3f5, #f1f3f5 4px, #fff 4px, #fff 8px)' }}>–</Table.Td></Tooltip>
+                        : td(cell(st.id!, u.id!))}</Fragment>)}
                   </Table.Tr>
                 );
               })}

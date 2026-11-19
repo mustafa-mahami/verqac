@@ -68,6 +68,7 @@ class StageIO(BaseModel):
     is_active: bool = True
     used: bool = False  # output only: records point at it, so it can be switched off but not deleted
     scope_locked: bool = False  # output only: approved daily reports gave it a %, so its scope stays
+    location_ids: list[UUID] | None = None  # per-location stage limited to these units (empty = all)
     topics: list[TopicIO] = []
 
 

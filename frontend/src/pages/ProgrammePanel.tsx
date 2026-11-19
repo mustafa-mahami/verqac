@@ -16,8 +16,8 @@ import Gantt, { type GanttItem } from './Gantt';
 const errText = (e: unknown) => i18n.t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, { defaultValue: i18n.t('errors.generic') });
 
 /** Floor cycle: per stage a start, days per floor and days until the next floor starts. */
-function CycleModal({ opened, onClose, cycles, onApply, stages, units, existing, storeKey }: {
-  storeKey: string; opened: boolean; onClose: () => void; cycles: PCycle[]; onApply: (c: PCycle[]) => void;
+function CycleModal({ opened, onClose, cycles, onApply, stages, units, existing, storeKey, floorsOf }: {
+  storeKey: string; opened: boolean; onClose: () => void; cycles: PCycle[]; onApply: (c: PCycle[]) => void; floorsOf: Map<string, string[]>;
   stages: { id: string; name: string; whole: boolean }[]; units: { id: string; name: string }[]; existing: PLine[];
 }) {
   const unitCount = units.length;
@@ -38,7 +38,7 @@ function CycleModal({ opened, onClose, cycles, onApply, stages, units, existing,
   };
   const whole = useMemo(() => new Set(stages.filter((s) => s.whole).map((s) => s.id)), [stages]);
   const ok = rows.filter((r) => r.on && r.duration > 0 && (r.pred || r.start));
-  const plan = useMemo(() => schedule(ok.map(({ on: _on, ...c }) => c), units.map((u) => u.id), whole, existing), [ok, units, whole, existing]);
+  const plan = useMemo(() => schedule(ok.map(({ on: _on, ...c }) => c), units.map((u) => u.id), whole, existing, floorsOf), [ok, units, whole, existing, floorsOf]);
   const byStage = useMemo(() => {
     const m = new Map<string, PLine[]>();
     for (const l of plan.lines) m.set(l.stage_id, [...(m.get(l.stage_id) ?? []), l]);
@@ -212,6 +212,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const stages = useMemo(() => (s?.stages ?? []).filter((x) => x.is_active && x.id), [s]);
   const units = useMemo(() => (s?.locations ?? []).filter((g) => g.is_active).flatMap((g) => g.units.filter((u) => u.is_active && u.id)), [s]);
   const whole = useMemo(() => new Set(stages.filter((x) => x.scope === 'whole' || !units.length).map((x) => x.id!)), [stages, units]);
+  const floorsOf = useMemo(() => new Map(stages.filter((x) => x.location_ids?.length).map((x) => [x.id!, x.location_ids!])), [stages]);
   const byKey = useMemo(() => new Map(lines.map((l) => [cellKey(l.stage_id, l.location_id), l])), [lines]);
   const save = useMutation({
     mutationFn: () => {
@@ -241,7 +242,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   };
   const generate = (cs: PCycle[]) => {
     const ids = new Set(cs.map((c) => c.stage_id));
-    const gen = schedule(cs, units.map((u) => u.id!), whole, lines).lines;
+    const gen = schedule(cs, units.map((u) => u.id!), whole, lines, floorsOf).lines;
     setCycles([...cycles.filter((c) => !ids.has(c.stage_id)), ...cs]);
     change([...lines.filter((l) => !ids.has(l.stage_id)), ...gen], 'cycle');
     setCycleOpen(false);
@@ -263,7 +264,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   // cells whose saved dates no longer follow their links (edited by hand, shifted, or generated in parts)
   const drift = (() => {
     if (!cycles.length) return [] as string[];
-    const want = new Map(schedule(cycles, units.map((u) => u.id!), whole, lines).lines.map((l) => [cellKey(l.stage_id, l.location_id), l.start]));
+    const want = new Map(schedule(cycles, units.map((u) => u.id!), whole, lines, floorsOf).lines.map((l) => [cellKey(l.stage_id, l.location_id), l.start]));
     const names = new Set<string>();
     for (const l of lines) {
       const w = want.get(cellKey(l.stage_id, l.location_id));
@@ -274,7 +275,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const today = new Date().toISOString().slice(0, 10);
   const done = new Map((prog.data?.cells ?? []).map((c) => [cellKey(c.stage_id, c.location_id), c]));
   const hasActual = (prog.data?.cells ?? []).some((c) => c.progress > 0 || c.started_on);
-  const gItems: GanttItem[] = stages.flatMap((st) => (whole.has(st.id!) ? [null] : units.map((u) => u.id!)).map((loc) => {
+  const gItems: GanttItem[] = stages.flatMap((st) => (whole.has(st.id!) ? [null] : units.map((u) => u.id!).filter((u) => !floorsOf.get(st.id!) || floorsOf.get(st.id!)!.includes(u))).map((loc) => {
     const k = cellKey(st.id!, loc);
     const l = byKey.get(k);
     const a = done.get(k);
@@ -352,7 +353,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
           <Text size="sm">{t('prg.drift', { list: drift.join('، ') })}</Text>
           {edit && <Button mt="xs" size="xs" variant="light" color="orange" onClick={() => {
             const ids = new Set(cycles.map((c) => c.stage_id));
-            change([...lines.filter((l) => !ids.has(l.stage_id)), ...schedule(cycles, units.map((u) => u.id!), whole, lines).lines], 'cycle');
+            change([...lines.filter((l) => !ids.has(l.stage_id)), ...schedule(cycles, units.map((u) => u.id!), whole, lines, floorsOf).lines], 'cycle');
           }}>{t('prg.driftFix')}</Button>}
         </Alert>
       )}
@@ -388,14 +389,14 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
                   <Table.Tr style={{ cursor: 'pointer' }} onClick={() => setOpen({ ...open, [sid]: !open[sid] })}>
                     <Table.Td fw={600}>
                       <ActionIcon size="xs" variant="subtle" me={4}>{open[sid] ? '▾' : '▸'}</ActionIcon>
-                      {pick(st, 'name')} <Text span size="xs" c="dimmed">({sp?.n ?? 0}/{units.length})</Text>
+                      {pick(st, 'name')} <Text span size="xs" c="dimmed">({sp?.n ?? 0}/{floorsOf.get(sid)?.length ?? units.length})</Text>
                     </Table.Td>
                     <Table.Td><Text size="xs">{sp ? fmtDate(sp.start) : '—'}</Text></Table.Td>
                     <Table.Td><Text size="xs">{sp ? fmtDate(sp.finish) : '—'}</Text></Table.Td>
                     <Table.Td><Text size="xs" c="dimmed">{sp ? `${daysBetween(sp.start, sp.finish) + 1} ${t('prg.days')}` : ''}</Text></Table.Td>
                     <Table.Td>{linkText(sid)}</Table.Td>
                   </Table.Tr>
-                  {open[sid] && units.map((u) => (
+                  {open[sid] && units.filter((u) => !floorsOf.get(sid) || floorsOf.get(sid)!.includes(u.id!)).map((u) => (
                     <Table.Tr key={`${sid}${u.id}`} bg="var(--mantine-color-gray-0)">
                       <Table.Td ps={36}><Text size="xs">{pick(u, 'name')}</Text></Table.Td>
                       <Table.Td>{dateIn(sid, u.id!, 'start')}</Table.Td><Table.Td>{dateIn(sid, u.id!, 'finish')}</Table.Td>
@@ -427,7 +428,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
           </Stack>
         )}
       </Modal>
-      <CycleModal storeKey={`verqac:prg-cycle:${rec.id}`} opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} existing={lines}
+      <CycleModal floorsOf={floorsOf} storeKey={`verqac:prg-cycle:${rec.id}`} opened={cycleOpen} onClose={() => setCycleOpen(false)} cycles={cycles} onApply={generate} existing={lines}
         units={units.map((u) => ({ id: u.id!, name: pick(u, 'name') }))}
         stages={stages.map((x) => ({ id: x.id!, name: pick(x, 'name'), whole: whole.has(x.id!) }))} />
       <ImportModal rows={rows} onClose={() => setRows(null)} onApply={imported} whole={whole}

@@ -179,7 +179,7 @@ export interface ProjectTypeT {
   id: string | null; name_ar: string; name_en: string; group_label_ar: string; group_label_en: string;
   unit_label_ar: string; unit_label_en: string; stages: TemplateStage[]; units: { name_ar: string; name_en: string }[]; is_active: boolean;
 }
-export interface StageT extends TemplateStage { id: string | null; is_active: boolean; used: boolean; scope_locked?: boolean }
+export interface StageT extends TemplateStage { id: string | null; is_active: boolean; used: boolean; scope_locked?: boolean; location_ids?: string[] | null }
 export interface UnitT { id: string | null; name_ar: string; name_en: string; is_active: boolean; used: boolean }
 export interface GroupT extends UnitT { units: UnitT[] }
 export interface TypeRef { id: string; name_ar: string; name_en: string }

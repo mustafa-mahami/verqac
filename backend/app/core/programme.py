@@ -67,11 +67,13 @@ def planned_at(cells: dict, stages: list, units: list, day: date) -> tuple[float
     project, per_stage = 0.0, {}
     for s in stages:
         sid = str(s.id)
-        if s.scope == "whole" or not units:
+        from app.models.structure import stage_units
+        su = stage_units(s, units)
+        if s.scope == "whole" or not su:
             c = cells.get((sid, None))
             pct = cell_planned(*c, day) if c else 0.0
         else:
-            vals = [cell_planned(*cells[(sid, str(u.id))], day) if (sid, str(u.id)) in cells else 0.0 for u in units]
+            vals = [cell_planned(*cells[(sid, str(u.id))], day) if (sid, str(u.id)) in cells else 0.0 for u in su]
             pct = sum(vals) / len(vals)
         per_stage[sid] = round(pct, 1)
         if total_w:

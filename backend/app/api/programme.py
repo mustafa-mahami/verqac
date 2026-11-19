@@ -239,7 +239,8 @@ def template(project_id: uuid.UUID, lang: str = "ar", c: Ctx = Depends(ctx)):
         if s.scope == "whole" or not units:
             ws.append([name, "كل المشروع" if ar else "Whole project", None, None])
         else:
-            for u in units:
+            from app.models.structure import stage_units
+            for u in stage_units(s, units):
                 ws.append([name, u.name_ar if ar else u.name_en, None, None])
     for col, w in zip("ABCD", (34, 22, 14, 14)):
         ws.column_dimensions[col].width = w

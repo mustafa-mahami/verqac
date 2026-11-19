@@ -8,7 +8,7 @@ import uuid
 from decimal import Decimal
 
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, Numeric, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.core import Base, pk
@@ -51,6 +51,14 @@ class ProjectStage(Base):
     weight: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False, server_default="0")
     sort: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # per-location stage: the floors it applies to (empty = all), e.g. finishes on the fitted-out floors only
+    location_ids: Mapped[list[uuid.UUID] | None] = mapped_column(ARRAY(UUID(as_uuid=True)))
+
+
+def stage_units(stage, units: list) -> list:
+    """The units a stage is counted on: all of them, or the ones it is limited to."""
+    ids = {str(x) for x in (getattr(stage, "location_ids", None) or [])}
+    return [u for u in units if str(u.id) in ids] if ids else units
 
 
 class ProjectStageTopic(Base):

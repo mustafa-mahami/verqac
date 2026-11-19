@@ -151,7 +151,7 @@ def structure_of(c: Ctx, project: Project, can_edit: bool) -> StructureOut:
                     checklist=tp.checklist or []))
     stages = [StageIO(id=s.id, name_ar=s.name_ar, name_en=s.name_en, scope=s.scope, weight=s.weight,
                       is_active=s.is_active, used=s.id in used_stages or s.id in locked or any(t.used for t in topics.get(s.id, [])),
-                      scope_locked=s.id in locked, topics=topics.get(s.id, []))
+                      scope_locked=s.id in locked, location_ids=s.location_ids or None, topics=topics.get(s.id, []))
               for s in c.db.scalars(select(ProjectStage).where(ProjectStage.project_id == project.id)
                                     .order_by(ProjectStage.sort))]
     rows = c.db.scalars(select(ProjectLocation).where(ProjectLocation.project_id == project.id)
@@ -253,6 +253,8 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
     if removed & progress_stages(project_id):
         raise HTTPException(status.HTTP_409_CONFLICT, "stage_in_use")
     rescope = bool(rescoped)
+    units = set(c.db.scalars(select(ProjectLocation.id).where(ProjectLocation.project_id == project_id,
+                                                              ProjectLocation.kind == "unit")))
     for i, x in enumerate(body):
         s = old.get(x.id) if x.id else None
         if x.id and s is None:
@@ -262,6 +264,8 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
             c.db.add(s)
         s.name_ar, s.name_en = _names(x)
         s.scope, s.weight, s.is_active, s.sort = x.scope, x.weight, x.is_active, (i + 1) * 10
+        s.location_ids = [u for u in (x.location_ids or []) if u in units] if x.scope == "per_location" else None
+        s.location_ids = s.location_ids or None
         c.db.flush()
         for j, tp in enumerate(x.topics):
             r = old_topics.get(tp.id) if tp.id else None
