@@ -1,5 +1,5 @@
 import {
-  Alert, Badge, Button, Card, Checkbox, FileInput, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, Textarea,
+  ActionIcon, Alert, Badge, Button, Card, Checkbox, FileInput, Group, Modal, MultiSelect, Select, SimpleGrid, Stack, Switch, Table, Text, Textarea,
   TextInput, UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
@@ -253,6 +253,8 @@ function SortTh({ label, k, sort, dir, onSort }: {
   );
 }
 
+const PAGE = 80;
+
 export default function Submittals({ projectId, type = 'submittal' }: { projectId: string; type?: RegisterType }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -275,6 +277,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
   const setFilter = (f: StatsFilter) => {
     const next = new URLSearchParams(params);
     const put = (k: string, v: string | undefined, empty = '') => (v && v !== empty ? next.set(k, v) : next.delete(k));
+    next.delete('pg'); // a new filter starts on the first page
     put('st', f.status, 'all'); put('disc', f.discipline, 'all'); put('kind', f.kind, 'all'); put('stage', f.stage, 'all'); put('topic', f.topic, 'all'); put('loc', f.loc, 'all'); put('q', f.q); put('from', f.from); put('to', f.to);
     setParams(next, { replace: true });
   };
@@ -285,6 +288,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
     const nextDir = sort === k && dir === 'asc' ? 'desc' : 'asc';
     k === 'number' && nextDir === 'asc' ? next.delete('sort') : next.set('sort', k);
     nextDir === 'asc' ? next.delete('dir') : next.set('dir', nextDir);
+    next.delete('pg');
     setParams(next, { replace: true });
   };
   const shown = useMemo(() => sortRows(applyFilter(rows.data ?? [], filter, false, structure.data), sort, dir),
@@ -293,9 +297,26 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
   // bulk actions: tick records, then run an action they allow (as in Odoo)
   const [sel, setSel] = useState<Set<string>>(new Set());
   useEffect(() => setSel(new Set()), [type, projectId]);
+  // a page at a time (as in Odoo): a list of thousands of rows is slow to draw
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE));
+  const page = Math.min(pages, Math.max(1, Number(params.get('pg')) || 1));
+  const pageRows = useMemo(() => shown.slice((page - 1) * PAGE, page * PAGE), [shown, page]);
+  const goPage = (n: number) => {
+    const next = new URLSearchParams(params);
+    n <= 1 ? next.delete('pg') : next.set('pg', String(n));
+    setParams(next, { replace: true });
+  };
   const visible = new Set(shown.map((r) => r.id));
   const chosen = [...sel].filter((id) => visible.has(id));
+  const pageOn = pageRows.length > 0 && pageRows.every((r) => sel.has(r.id));
   const allOn = shown.length > 0 && chosen.length === shown.length;
+  const pager = pages > 1 && (
+    <Group gap={4} wrap="nowrap">
+      <Text size="sm" c="dimmed" dir="ltr">{(page - 1) * PAGE + 1}-{Math.min(page * PAGE, shown.length)} / {shown.length}</Text>
+      <ActionIcon variant="subtle" aria-label={t('rec.prevPage')} disabled={page <= 1} onClick={() => goPage(page - 1)}>{document.documentElement.dir === 'rtl' ? '›' : '‹'}</ActionIcon>
+      <ActionIcon variant="subtle" aria-label={t('rec.nextPage')} disabled={page >= pages} onClick={() => goPage(page + 1)}>{document.documentElement.dir === 'rtl' ? '‹' : '›'}</ActionIcon>
+    </Group>
+  );
   const toggle = (id: string) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); setSel(n); };
 
   return (
@@ -323,6 +344,14 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
           structure={structure.data} states={meta.data?.states} />
       )}
       {chosen.length > 0 && <BulkBar ids={chosen} projectId={projectId} onDone={() => setSel(new Set())} />}
+      {(pager || (pageOn && !allOn)) && (
+        <Group justify="space-between">
+          <div>{pageOn && !allOn && (
+            <Button size="compact-sm" variant="subtle" onClick={() => setSel(new Set(shown.map((r) => r.id)))}>{t('bulk.selectAll', { n: shown.length })}</Button>
+          )}</div>
+          {pager}
+        </Group>
+      )}
       {rows.isSuccess && shown.length === 0 ? <Text c="dimmed">{rows.data.length ? t('stats.noneHere') : typeText(type, 'empty', 'rec.empty')}</Text> : (
         <Card withBorder p={0}>
           <Table.ScrollContainer minWidth={760}>
@@ -330,8 +359,12 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th w={36}>
-                    <Checkbox size="xs" aria-label={t('bulk.all')} checked={allOn} indeterminate={chosen.length > 0 && !allOn}
-                      onChange={() => setSel(allOn ? new Set() : new Set(shown.map((r) => r.id)))} />
+                    <Checkbox size="xs" aria-label={t('bulk.all')} checked={pageOn} indeterminate={chosen.length > 0 && !pageOn}
+                      onChange={() => {
+                        const n = new Set(sel);
+                        pageRows.forEach((r) => (pageOn ? n.delete(r.id) : n.add(r.id)));
+                        setSel(n);
+                      }} />
                   </Table.Th>
                   <SortTh label={t('rec.number')} k="number" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={t('rec.title')} k="title" sort={sort} dir={dir} onSort={onSort} />
@@ -343,7 +376,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {shown.map((r) => (
+                {pageRows.map((r) => (
                   <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => { saveNav(shown.map((x) => x.id), location.pathname + location.search); navigate(`/records/${r.id}`); }}>
                     <Table.Td onClick={(e) => e.stopPropagation()}>
                       <Checkbox size="xs" aria-label={r.number} checked={sel.has(r.id)} onChange={() => toggle(r.id)} />
@@ -393,6 +426,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
           </Table.ScrollContainer>
         </Card>
       )}
+      {pager && <Group justify="flex-end">{pager}</Group>}
       <Modal opened={open} onClose={() => setOpen(false)} title={typeText(type, 'new', 'rec.new')} size={type === 'daily_report' ? 'sm' : 'xl'}>
         {type === 'daily_report' ? <NewDaily projectId={projectId} onClose={() => setOpen(false)} />
           : meta.data && <NewSubmittal projectId={projectId} meta={meta.data} type={type} onClose={() => setOpen(false)} />}

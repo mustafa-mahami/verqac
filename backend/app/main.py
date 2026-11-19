@@ -33,6 +33,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class JsonGzip:
+    """Compress the API's JSON (a register of thousands of records is ~1 MB, ~10x smaller gzipped);
+    files and PDFs go as they are (already compressed, and streamed)."""
+
+    def __init__(self, app):
+        from starlette.middleware.gzip import GZipMiddleware
+        self.plain, self.gzip = app, GZipMiddleware(app, minimum_size=2048, compresslevel=5)
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "") if scope["type"] == "http" else ""
+        skip = not path.startswith("/api/") or path.startswith("/api/v1/files/") or path.endswith("/pdf")
+        await (self.plain if skip else self.gzip)(scope, receive, send)
+
+
+app.add_middleware(JsonGzip)
+
 for r in (auth.router, account.router, push.router, projects.router, team.router, orgs.router, invitations.router, records.router, notifications.router, meta.router, verify.router, structure.router, lab.router, daily.router, programme.router, periodic.router):
     app.include_router(r, prefix="/api/v1")
 

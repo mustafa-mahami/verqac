@@ -370,7 +370,9 @@
     "caption": "Caption",
     "captionHint": "e.g. 8th floor – painting work",
     "noCaption": "No caption",
-    "download": "Download"
+    "download": "Download",
+    "prevPage": "Previous page",
+    "nextPage": "Next page"
   },
   "back": {
     "projects": "All projects",
@@ -1285,6 +1287,7 @@
     "clear": "Clear selection",
     "result": "Done on {{done}}; {{skipped}} skipped (the action does not apply).",
     "confirm": "It will run on {{n}} of the {{of}} selected records; the rest do not allow this action in their current state.",
-    "comment": "Comment (written on every record)"
+    "comment": "Comment (written on every record)",
+    "selectAll": "Select all {{n}} records"
   }
 }
