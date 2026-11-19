@@ -1,7 +1,7 @@
 import { ActionIcon, Alert, Button, Card, Group, NumberInput, Select, Stack, Switch, Tabs, Text, TextInput, Title, Tooltip } from '@mantine/core';
 import { useSearchParams } from 'react-router-dom';
 
-const SECTIONS = ['general', 'structure', 'roles', 'requests', 'calendar', 'daily', 'lab'] as const;
+const SECTIONS = ['general', 'structure', 'roles', 'requests', 'calendar', 'daily', 'lab', 'kpi'] as const;
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import { pick } from '../i18n';
 import ProjectHeader from './ProjectHeader';
 import ConcreteClasses from './ConcreteClasses';
 import DailySettingsCard from './DailySettingsCard';
+import KpiSettingsCard from './KpiSettingsCard';
 import { TYPE_TABS } from '../recordTypes';
 import { cleanHolidays, HolidaysEditor, holidayText, WeekendPicker } from './Calendar';
 import ProjectStructure from './ProjectStructure';
@@ -243,6 +244,7 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
       </>)}
       {enabled.includes('daily_report') && panel('daily', <DailySettingsCard projectId={projectId} editable={editable} />)}
       {enabled.includes('test') && panel('lab', <ConcreteClasses projectId={projectId} editable={editable} />)}
+      {panel('kpi', <KpiSettingsCard projectId={projectId} />)}
     </Tabs>
   );
 }

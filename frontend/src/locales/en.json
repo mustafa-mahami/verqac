@@ -166,7 +166,10 @@
     "stage_scope_locked": "This stage's scope cannot change: approved daily reports gave it progress. Switch it off and add a new stage with the right scope.",
     "invalid_period": "Choose a valid start and end: end after start, start not in the future.",
     "answered_on_range": "The actual answer date must be between the submission and today.",
-    "answered_on_imported_only": "An actual answer date is for imported records only."
+    "answered_on_imported_only": "An actual answer date is for imported records only.",
+    "kpi_target_required": "Enter the green and amber targets of every active KPI.",
+    "kpi_amber_order": "Amber must be past green (lower for “higher is better”, higher for “lower is better”).",
+    "invalid_range": "The start date is after the end date."
   },
   "common": {
     "cancel": "Cancel",
@@ -270,7 +273,8 @@
       "tests": "Lab tests",
       "daily": "Daily reports",
       "progress": "Progress",
-      "reports": "Periodic reports"
+      "reports": "Periodic reports",
+      "kpi": "QA KPIs"
     }
   },
   "rec": {
@@ -431,7 +435,8 @@
       "requests": "Requests & periods",
       "calendar": "Calendar & hours",
       "daily": "Daily report",
-      "lab": "Laboratory"
+      "lab": "Laboratory",
+      "kpi": "KPIs"
     }
   },
   "resp": {
@@ -1289,5 +1294,77 @@
     "confirm": "It will run on {{n}} of the {{of}} selected records; the rest do not allow this action in their current state.",
     "comment": "Comment (written on every record)",
     "selectAll": "Select all {{n}} records"
+  },
+  "kpi": {
+    "days": "{{n}} d",
+    "dayUnit": "d",
+    "info": "Info",
+    "from": "Submitted from",
+    "to": "to",
+    "allDisc": "All disciplines",
+    "onTarget": "On target",
+    "watch": "Watch",
+    "offTarget": "Off target",
+    "hint": "Computed from submitted records (drafts and cancelled excluded). Hover a KPI's name for how it is worked out. Targets: Project settings › KPIs.",
+    "sec": {
+      "submittal": "Submittals",
+      "inspection": "Inspection requests",
+      "test": "Laboratory tests",
+      "ncr": "Non-conformance",
+      "rfi": "RFIs"
+    },
+    "uniqueOf": "{{n}} requests · {{r}} revisions",
+    "tests": "{{n}} tests",
+    "issued": "{{n}} issued",
+    "kpi": "KPI",
+    "actual": "Actual",
+    "target": "Target",
+    "status": "Status",
+    "st": {
+      "green": "On target",
+      "amber": "Watch",
+      "red": "Off target"
+    },
+    "byDisc": "By discipline",
+    "byMaterial": "By material",
+    "byClass": "Concrete by class",
+    "openFailed": "Failed tests without a decision",
+    "c": {
+      "unique": "Requests",
+      "records": "Revisions",
+      "firstPass": "First pass",
+      "approved": "Approved",
+      "returned": "Returned",
+      "pending": "Pending",
+      "supDays": "Superv. d",
+      "conDays": "Contr. d",
+      "issued": "Issued",
+      "open": "Open",
+      "closeDays": "Close d",
+      "respDays": "Response d",
+      "material": "Material",
+      "tests": "Tests",
+      "pass": "Pass",
+      "fail": "Fail",
+      "passPct": "Pass %",
+      "class": "Class",
+      "reports": "Reports",
+      "failed": "Failed",
+      "below": "Below fck",
+      "other": "Other"
+    },
+    "settingsTitle": "QA/QC KPIs",
+    "settingsHint": "Each KPI has two thresholds: green (on target) and amber (watch); beyond them it is red. The QMP reference shows next to it. Turn off what the project does not need.",
+    "ncrCloseDays": "NCR closure period (days)",
+    "ncrCloseHint": "For “closed on time” and “overdue open NCRs”",
+    "on": "On",
+    "green": "Green",
+    "amber": "Amber",
+    "qmp": "QMP ref",
+    "higher": "Higher is better",
+    "lower": "Lower is better",
+    "noTarget": "No target (information)",
+    "legend": "E.g. “higher is better” with green ≥ 75 and amber ≥ 60: 80 is green, 65 amber, 50 red.",
+    "resetDefaults": "Restore defaults"
   }
 }

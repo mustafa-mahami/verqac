@@ -813,6 +813,8 @@ class Importer:
         self.tests()
         self.daily()
         self.progress_from_schedule()
+        if kpi_targets(self.data, self.p):
+            self.report["KPI targets"] += 1
         first = min(self.dr_by_day) if self.dr_by_day else None
         start = d(self.data["projects"][0].get("date_start")) if self.data.get("projects") else None
         if self.p.start_date is None and (start or first):
@@ -825,6 +827,32 @@ class Importer:
 IMAGE = ("image/jpeg", "image/png", "image/webp", "image/gif")
 FIELD_NAMES = {"pdf_file", "file_field", "pdf_file_answer", "photo", "image", "datas"}
 SKIP_FIELDS = {"logo_image"}  # the letterhead Odoo kept on every record: not a document of the record
+
+
+def kpi_targets(data: dict, project) -> bool:
+    """The KPI targets set in Odoo (dr.qa.kpi.target: the company's, overridden by the project's) become the project's,
+    unless the project already has its own."""
+    from app.core import kpi
+    if (project.settings or {}).get("kpi"):
+        return False
+    rows = data["models"].get("dr.qa.kpi.target", [])
+    if not rows:
+        return False
+    odoo_pid = (data.get("meta", {}).get("projects") or [None])[0]
+    pick = {}
+    for r in sorted(rows, key=lambda r: bool(r.get("project_id"))):  # the project's line wins over the company's
+        if r.get("project_id") and m2o_id(r["project_id"]) != odoo_pid:
+            continue
+        if r.get("code") in kpi.DEF:
+            pick[r["code"]] = r
+    targets = {}
+    for code, r in pick.items():
+        info = kpi.DEF[code][3] == "info"
+        targets[code] = {"green": None if info else r.get("green_threshold"), "amber": None if info else r.get("amber_threshold"),
+                         "qmp_ref": (txt(r.get("qmp_ref"), 60) or kpi.DEF[code][6]), "active": bool(r.get("active", True))}
+    close = int(((data.get("projects") or [{}])[0]).get("qa_ncr_close_days") or kpi.DEFAULT_NCR_CLOSE_DAYS)
+    project.settings = {**(project.settings or {}), "kpi": {"targets": targets, "ncr_close_days": close}}
+    return True
 
 
 def labour_of(lines: list[dict]) -> list[dict]:
@@ -1034,6 +1062,8 @@ def fix_imported(db, data: dict, project, paths: list | None = None) -> Counter:
         lists["labour_desc"] = list(lists.get("labour_desc", [])) + [
             {"ar": n, "en": n, "role_ar": None, "role_en": None, "active": True} for n in sorted(names - have)]
         project.settings = {**(project.settings or {}), "daily": {**ds, "lists": lists}}
+    if kpi_targets(data, project):
+        rep["KPI targets from Odoo"] += 1
     # the letterhead Odoo kept on every record came in as a photo: take it out (file and all)
     from app.core import storage
     from app.models.records import Attachment

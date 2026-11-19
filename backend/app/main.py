@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import account, auth, daily, programme, lab, push, invitations, meta, notifications, orgs, periodic, projects, records, structure, team, verify
+from app.api import account, auth, daily, kpi, programme, lab, push, invitations, meta, notifications, orgs, periodic, projects, records, structure, team, verify
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -49,7 +49,7 @@ class JsonGzip:
 
 app.add_middleware(JsonGzip)
 
-for r in (auth.router, account.router, push.router, projects.router, team.router, orgs.router, invitations.router, records.router, notifications.router, meta.router, verify.router, structure.router, lab.router, daily.router, programme.router, periodic.router):
+for r in (auth.router, account.router, push.router, projects.router, team.router, orgs.router, invitations.router, records.router, notifications.router, meta.router, verify.router, structure.router, lab.router, daily.router, programme.router, periodic.router, kpi.router):
     app.include_router(r, prefix="/api/v1")
 
 

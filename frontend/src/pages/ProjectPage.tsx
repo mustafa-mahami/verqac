@@ -10,6 +10,7 @@ import ProjectTeam from './ProjectTeam';
 import Submittals from './Submittals';
 import ProgressMatrix from './ProgressMatrix';
 import PeriodicPanel from './PeriodicPanel';
+import KpiPanel from './KpiPanel';
 import { TYPE_TABS } from '../recordTypes';
 
 export default function ProjectPage() {
@@ -35,6 +36,7 @@ export default function ProjectPage() {
           {tabs.map(([, tabKey]) => <Tabs.Tab key={tabKey} value={tabKey}>{t(`project.tabs.${tabKey}`)}</Tabs.Tab>)}
           <Tabs.Tab value="progress">{t('project.tabs.progress')}</Tabs.Tab>
           <Tabs.Tab value="reports">{t('project.tabs.reports')}</Tabs.Tab>
+          <Tabs.Tab value="kpi">{t('project.tabs.kpi')}</Tabs.Tab>
           <Tabs.Tab value="team">{t('project.tabs.team')}</Tabs.Tab>
           <Tabs.Tab value="settings">{t('project.tabs.settings')}</Tabs.Tab>
         </Tabs.List>
@@ -43,6 +45,7 @@ export default function ProjectPage() {
         ))}
         <Tabs.Panel value="progress" pt="md"><ProgressMatrix projectId={id} /></Tabs.Panel>
         <Tabs.Panel value="reports" pt="md"><PeriodicPanel projectId={id} /></Tabs.Panel>
+        <Tabs.Panel value="kpi" pt="md"><KpiPanel projectId={id} /></Tabs.Panel>
         <Tabs.Panel value="team" pt="md"><ProjectTeam /></Tabs.Panel>
         <Tabs.Panel value="settings" pt="md"><ProjectSettings projectId={id} /></Tabs.Panel>
       </Tabs>
