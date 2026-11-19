@@ -81,3 +81,13 @@ def test_actual_dates(client, site):
     cell = next(c for c in client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["cells"]
                 if c["location_id"] == floor["id"] and c["stage_id"] == stg["id"])
     assert cell["started_on"] == began.isoformat() and cell["finished_on"] == ended.isoformat()
+
+
+def test_forecast_basis_setting(client, site):
+    pid = site["pid"]
+    s = client.get(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"]).json()
+    assert s["forecast_basis"] == "planned"
+    s.update(forecast=True, forecast_basis="pace")
+    assert client.put(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"], json=s).json()["forecast_basis"] == "pace"
+    s["forecast_basis"] = "magic"
+    assert client.put(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"], json=s).status_code == 422

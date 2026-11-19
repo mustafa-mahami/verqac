@@ -133,7 +133,8 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
   // forecast from the actual progress (project setting): dates, finish, and its own critical path
   const today = new Date().toISOString().slice(0, 10);
   const fcLines = dset.data?.forecast && prg.data?.lines.length ? forecast(prg.data.lines, prg.data.cycles, units.map((u) => u.id!), wholeSet,
-    new Map(p.cells.map((c) => [cellKey(c.stage_id, c.location_id), { start: c.started_on, finish: c.finished_on, pct: c.progress }])), today) : null;
+    new Map(p.cells.map((c) => [cellKey(c.stage_id, c.location_id), { start: c.started_on, finish: c.finished_on, pct: c.progress, on: c.progress_on }])),
+    today, dset.data?.forecast_basis === 'pace') : null;
   const fcBy = new Map((fcLines ?? []).map((l) => [cellKey(l.stage_id, l.location_id), l]));
   const fcFinish = fcLines?.length ? fcLines.map((l) => l.finish).reduce((a, b) => (a > b ? a : b)) : null;
   const fcFloats = fcLines && prg.data ? cpm(fcLines, prg.data.cycles, units.map((u) => u.id!), wholeSet) : null;
@@ -181,7 +182,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
               const late = daysBetween(p.plan_finish, fcFinish);
               return (
                 <Text size="sm" mt={6} fw={600} c={late > 0 ? 'red' : 'green'}>
-                  {t('progress.fcFinish', { d: fmtDate(fcFinish) })} — {late > 0 ? t('progress.fcLate', { n: late }) : late < 0 ? t('progress.fcEarly', { n: -late }) : t('progress.fcOnTime')}
+                  {t('progress.fcFinish', { d: fmtDate(fcFinish) })} — {late > 0 ? t('progress.fcLate', { n: late }) : late < 0 ? t('progress.fcEarly', { n: -late }) : t('progress.fcOnTime')} <Text span size="xs" c="dimmed">({dset.data?.forecast_basis === 'pace' ? t('dset.basisPace') : t('dset.basisPlanned')})</Text>
                 </Text>
               );
             })()}

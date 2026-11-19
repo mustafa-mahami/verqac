@@ -1,4 +1,4 @@
-import { ActionIcon, Alert, Button, Card, Group, SegmentedControl, Select, SimpleGrid, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Alert, Button, Card, Group, Radio, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -99,6 +99,15 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
         onChange={(e) => setS({ ...s, actual_dates: e.currentTarget.checked })} />
       <Switch mt="md" label={t('dset.forecast')} description={t('dset.forecastHint')} disabled={!editable} checked={!!s.forecast}
         onChange={(e) => setS({ ...s, forecast: e.currentTarget.checked })} />
+      {s.forecast && (
+        <Radio.Group mt="xs" ms="xl" label={t('dset.basis')} value={s.forecast_basis ?? 'planned'}
+          onChange={(v) => setS({ ...s, forecast_basis: v as 'planned' | 'pace' })}>
+          <Stack gap={6} mt={4}>
+            <Radio disabled={!editable} value="planned" label={t('dset.basisPlanned')} description={t('dset.basisPlannedHint')} />
+            <Radio disabled={!editable} value="pace" label={t('dset.basisPace')} description={t('dset.basisPaceHint')} />
+          </Stack>
+        </Radio.Group>
+      )}
       {msg && <Alert mt="sm" color={msg.ok ? 'green' : 'red'}>{msg.text}</Alert>}
       {editable && <Group mt="md"><Button variant="light" loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button></Group>}
     </Card>

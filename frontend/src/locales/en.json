@@ -1053,7 +1053,12 @@
     "actualDates": "Enter actual start and finish dates of work",
     "actualDatesHint": "For running projects taken over mid-way: work lines show the actual start, and the finish with 100%. Switch it off once running work is recorded; the dates stay.",
     "forecast": "Forecast from actual progress",
-    "forecastHint": "In the progress tab and the Gantt: a forecast finish and critical path, from actual progress and delays to date through the approved programme's links."
+    "forecastHint": "In the progress tab and the Gantt: a forecast finish and critical path, from actual progress and delays to date through the approved programme's links.",
+    "basis": "Forecast basis",
+    "basisPlanned": "Planned duration",
+    "basisPlannedHint": "What is left of each work takes its planned time (left = duration × (1 − % done)).",
+    "basisPace": "Actual pace",
+    "basisPaceHint": "Running work finishes at its pace so far (days spent ÷ % done); work not started takes its planned duration times its stage's actual pace on the locations already worked."
   },
   "roleHint": {
     "contractor_pm": "Everything in all disciplines: create, submit, cancel and delete all requests, manage the project and team, answer NCRs.",

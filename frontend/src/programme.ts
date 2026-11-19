@@ -169,29 +169,59 @@ export function lineLinks(lines: PLine[], cycles: PCycle[], units: string[], who
 
 /** Forecast from actual progress (status date = today): finished cells keep their dates, running ones finish after
  * their remaining days, and cells not started yet move through the links (never before today). */
+export type Actual = { start: string | null; finish: string | null; pct: number; on?: string | null };
+
+/** Forecast dates. pace = false: what is left takes the planned time. pace = true: the actual speed —
+ * a running cell finishes at its own pace so far (days spent / % done), and a cell not started yet takes
+ * its planned duration times the stage's pace on the cells already worked (finished or running). */
 export function forecast(lines: PLine[], cycles: PCycle[], units: string[], whole: Set<string>,
-  actual: Map<string, { start: string | null; finish: string | null; pct: number }>, today: string): PLine[] {
+  actual: Map<string, Actual>, today: string, pace = false): PLine[] {
   const day = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / 86_400_000);
   const iso = (n: number) => new Date(n * 86_400_000).toISOString().slice(0, 10);
   const T = day(today);
+  // the stage's pace: actual (or projected) duration / planned duration, over its worked cells
+  const ratios = new Map<string, number[]>();
+  const own = new Map<string, number>(); // running cells: days still needed at their own pace
+  for (const l of lines) {
+    if (!l.start || !l.finish) continue;
+    const d = day(l.finish) - day(l.start) + 1;
+    const a = actual.get(cellKey(l.stage_id, l.location_id));
+    if (!a || !a.start) continue;
+    const fs = day(a.start);
+    let r: number | null = null;
+    if (a.pct >= 100 && a.finish) r = (day(a.finish) - fs + 1) / d;
+    else if (a.pct > 0 && a.pct < 100) {
+      const spent = Math.max(1, (a.on ? day(a.on) : T) - fs + 1);
+      r = spent / (a.pct / 100) / d;
+      own.set(cellKey(l.stage_id, l.location_id), Math.max(1, Math.ceil(spent * (1 - a.pct / 100) / (a.pct / 100))));
+    }
+    if (r !== null && Number.isFinite(r)) ratios.set(l.stage_id, [...(ratios.get(l.stage_id) ?? []), r]);
+  }
+  const factor = (stage: string) => {
+    const rs = ratios.get(stage);
+    if (!pace || !rs?.length) return 1;
+    return Math.min(4, Math.max(0.25, rs.reduce((x, y) => x + y, 0) / rs.length));
+  };
   type N = { s: number; f: number; d: number; fixed: boolean; base: number; stage: string; loc: string | null };
   const nodes = new Map<string, N>();
   for (const l of lines) {
     if (!l.start || !l.finish) continue;
-    const s = day(l.start), f = day(l.finish), d = f - s + 1;
-    const a = actual.get(cellKey(l.stage_id, l.location_id));
+    const s = day(l.start), f = day(l.finish), d0 = f - s + 1;
+    const d = Math.max(1, Math.round(d0 * factor(l.stage_id)));
+    const key = cellKey(l.stage_id, l.location_id);
+    const a = actual.get(key);
     let n: N;
     if (a && a.pct >= 100) {
       const fs = a.start ? day(a.start) : s, ff = a.finish ? day(a.finish) : Math.max(fs, Math.min(f, T));
       n = { s: fs, f: Math.max(fs, ff), d, fixed: true, base: fs, stage: l.stage_id, loc: l.location_id };
     } else if (a && (a.pct > 0 || a.start)) {
       const fs = a.start ? day(a.start) : Math.min(s, T);
-      const left = Math.max(1, Math.ceil(d * (1 - a.pct / 100)));
+      const left = pace && own.has(key) ? own.get(key)! : Math.max(1, Math.ceil(d * (1 - a.pct / 100)));
       n = { s: fs, f: Math.max(T, fs) + left - 1, d, fixed: true, base: fs, stage: l.stage_id, loc: l.location_id };
     } else {
       n = { s: Math.max(s, T), f: Math.max(s, T) + d - 1, d, fixed: false, base: T, stage: l.stage_id, loc: l.location_id };
     }
-    nodes.set(cellKey(l.stage_id, l.location_id), n);
+    nodes.set(key, n);
   }
   const edges = links(new Map([...nodes].map(([k, n]) => [k, { s: n.s, f: n.f }])), cycles, units, whole);
   const into = new Map<string, NetLink[]>();
