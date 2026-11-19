@@ -361,7 +361,9 @@
     "addressedTo": "Submitted to",
     "addressedToHint": "The consultant engineer this request goes to",
     "answeredLate": "Answered after the deadline",
-    "addPhotos": "Add photos"
+    "addPhotos": "Add photos",
+    "prev": "Previous record",
+    "next": "Next record"
   },
   "back": {
     "projects": "All projects",

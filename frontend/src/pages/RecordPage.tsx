@@ -1,10 +1,11 @@
 import {
   ActionIcon, Alert, Anchor, Badge, Button, Card, FileButton, Grid, Group, Modal, MultiSelect, SegmentedControl, Select, SimpleGrid, Stack, Switch,
-  Text, Textarea, TextInput, Timeline, Title,
+  Text, Textarea, TextInput, Timeline, Title, Tooltip,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { loadNav } from '../recordNav';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -352,6 +353,21 @@ export default function RecordPage() {
   const [comment, setComment] = useState('');
   const [internal, setInternal] = useState(false);
   const rec = useQuery({ queryKey: ['record', id], queryFn: () => api<RecordDetail>(`/records/${id}`) });
+  // previous / next record of the list it was opened from (Alt+P / Alt+N)
+  const nav = loadNav(id);
+  const go = (step: number) => {
+    const to = nav?.ids[nav.index + step];
+    if (to) { setEditing(false); navigate(`/records/${to}`); }
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || !nav) return;
+      if (e.key.toLowerCase() === 'n') { e.preventDefault(); go(1); }
+      if (e.key.toLowerCase() === 'p') { e.preventDefault(); go(-1); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
   const put = (r: RecordDetail) => {
     qc.setQueryData(['record', r.id], r);
     qc.invalidateQueries({ queryKey: ['records', r.project_id] });
@@ -395,8 +411,23 @@ export default function RecordPage() {
   const wide = ['programme', 'daily_report'].includes(r.record_type.code); // the programme / the daily report tables take the full width
   return (
     <Stack maw={wide ? '100%' : 1200} mx="auto">
-      <BackButton to={`/projects/${r.project_id}?tab=${profile(r.record_type.code).tab}`}
-        label={typeText(r.record_type.code, 'back', 'back.submittals')} />
+      <Group justify="space-between" wrap="nowrap">
+        <BackButton to={nav?.back ?? `/projects/${r.project_id}?tab=${profile(r.record_type.code).tab}`}
+          label={typeText(r.record_type.code, 'back', 'back.submittals')} />
+        {nav && nav.ids.length > 1 && (
+          <Group gap={4} wrap="nowrap">
+            <Tooltip label={`${t('rec.prev')} (Alt+P)`}>
+              <ActionIcon variant="default" disabled={nav.index === 0} aria-label={t('rec.prev')}
+                onClick={() => go(-1)}>{i18n.dir() === 'rtl' ? '›' : '‹'}</ActionIcon>
+            </Tooltip>
+            <Text size="sm" c="dimmed" dir="ltr" miw={70} ta="center">{nav.index + 1} / {nav.ids.length}</Text>
+            <Tooltip label={`${t('rec.next')} (Alt+N)`}>
+              <ActionIcon variant="default" disabled={nav.index === nav.ids.length - 1} aria-label={t('rec.next')}
+                onClick={() => go(1)}>{i18n.dir() === 'rtl' ? '‹' : '›'}</ActionIcon>
+            </Tooltip>
+          </Group>
+        )}
+      </Group>
       <Group justify="space-between" align="flex-start">
         <div>
           <Group gap="xs">

@@ -6,7 +6,8 @@ import { useForm } from '@mantine/form';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { saveNav } from '../recordNav';
 import { api, ApiError, type LinkedRef, type Place, type RecordDetail, type RecordMeta, type RecordRow, type User } from '../api';
 import { fmtDate, requiredColor, stateColor } from '../format';
 import { pick } from '../i18n';
@@ -264,6 +265,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
   });
   // the dashboard filter lives in the URL, so "back" from a record returns to the same view
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
   const structure = useStructure(projectId);
   const filter: StatsFilter = {
     status: params.get('st') ?? 'all', discipline: params.get('disc') ?? 'all', kind: params.get('kind') ?? 'all',
@@ -330,7 +332,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
               </Table.Thead>
               <Table.Tbody>
                 {shown.map((r) => (
-                  <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/records/${r.id}`)}>
+                  <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => { saveNav(shown.map((x) => x.id), location.pathname + location.search); navigate(`/records/${r.id}`); }}>
                     <Table.Td><Text size="sm" fw={500} dir="ltr" ta="start" style={{ whiteSpace: 'nowrap' }}>{r.number} · R{r.rev_no}</Text></Table.Td>
                     <Table.Td>
                       <Text size="sm" lineClamp={2}>{rowTitle(structure.data, r)}</Text>

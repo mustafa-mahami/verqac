@@ -282,11 +282,13 @@ class Importer:
             if cat:
                 discs[key].add(DISC.get(cat, "G"))
 
-        for m, by, to in (("submit.submit", "submitby", ("submitto", "submitalrcvanswerby")),
-                          ("inspection.inspection", "inspectionsubmitby", ("inspectionsubmitto", "inspectionrcvanswerby")),
-                          ("rfi.rfi", "rfisubmitby", ("rfisubmitto", "rfircvanswerby")),
-                          ("quality.quality", "submitby", ("submitto", "submitalrcvanswerby")),
-                          ("dr.dr", "submitby", ("submitto", "submitalrcvanswerby"))):
+        # "Submitted to" is the supervision engineer who answers; "Recv Answer By" is the contractor's
+        # employee who received the answer, so it is not used
+        for m, by, to in (("submit.submit", "submitby", ("submitto",)),
+                          ("inspection.inspection", "inspectionsubmitby", ("inspectionsubmitto",)),
+                          ("rfi.rfi", "rfisubmitby", ("rfisubmitto",)),
+                          ("quality.quality", "submitby", ("submitto",)),
+                          ("dr.dr", "submitby", ("submitto",))):
             for r in self.M.get(m, []):
                 vote(r.get(by), "contractor", r.get("category"))
                 for f in to:
@@ -323,10 +325,13 @@ class Importer:
             self.users[key] = uid
             pt = self.contractor if party == "contractor" else self.consultant
             dmap = self.disc if party == "contractor" else self.kdisc
-            if db.scalar(select(ProjectMember.id).where(ProjectMember.project_id == self.p.id, ProjectMember.user_id == uid)) is None:
-                db.add(ProjectMember(project_id=self.p.id, user_id=uid, party_id=pt.id, is_active=False,
-                                     role_id=roles["qa_engineer" if party == "contractor" else "consultant_engineer"],
-                                     discipline_ids=[dmap[c] for c in sorted(discs[key]) if c in dmap]))
+            role = roles["qa_engineer" if party == "contractor" else "consultant_engineer"]
+            ds = [dmap[c] for c in sorted(discs[key]) if c in dmap]
+            m = db.scalar(select(ProjectMember).where(ProjectMember.project_id == self.p.id, ProjectMember.user_id == uid))
+            if m is None:
+                db.add(ProjectMember(project_id=self.p.id, user_id=uid, party_id=pt.id, is_active=False, role_id=role, discipline_ids=ds))
+            elif not m.is_active:  # a placeholder from an earlier import: follow this one
+                m.party_id, m.role_id, m.discipline_ids = pt.id, role, ds
         db.flush()
         self.report["people (placeholders)"] = made
 
@@ -443,7 +448,7 @@ class Importer:
                     by_name[kind_name.lower()] = kind
             sub = at(d(r.get("submitaldate")) or d(r.get("date")), clock(r.get("submitaltime")))
             ans = at(d(r.get("submitalanswerdate")), clock(r.get("submitalanswertime")), time(12, 0))
-            by, to = self.uid(r.get("submitby")), self.uid(r.get("submitalrcvanswerby")) or self.uid(r.get("submitto"))
+            by, to = self.uid(r.get("submitby")), self.uid(r.get("submitto"))
             rec = self._record("submittal", n, k, txt(r.get("submitalname")) or txt(r.get("submitalitdescrip")), REVIEW[r["status"]],
                                discipline=r.get("category"), description=txt(r.get("submitalnote")), by=by, to=to,
                                submitted=sub, answered=ans, response=txt(r.get("submitalsupervnote")),
@@ -481,7 +486,7 @@ class Importer:
             floor_txt = m2o_name(r.get("floorselect")) if unit is None and m2o(r.get("floorselect")) else None
             desc = "\n".join(x for x in (txt(r.get("inspectionnote")), txt(r.get("inspectiondescrip")),
                                          f"الموقع: {place}" if place else None, f"الطابق (Odoo): {floor_txt}" if floor_txt else None) if x)
-            by, to = self.uid(r.get("inspectionsubmitby")), self.uid(r.get("inspectionrcvanswerby")) or self.uid(r.get("inspectionsubmitto"))
+            by, to = self.uid(r.get("inspectionsubmitby")), self.uid(r.get("inspectionsubmitto"))
             state = INSPECTION[r["status"]]
             rec = self._record("inspection", n, k, txt(r.get("inspectionname")) or txt(r.get("inspectiondescrip")) or m2o_name(r.get("inspectionitem")),
                                state, discipline=r.get("category"), description=desc or None, by=by, to=to, submitted=sub,
@@ -514,7 +519,7 @@ class Importer:
             sub = at(d(r.get("rfidate")) or d(r.get("date")), clock(r.get("rfitime")))
             ans = at(d(r.get("rfianswerdate")) or d(r.get("rfidate2")), clock(r.get("rfianswertime")), time(12, 0))
             state = {"answered": "answered", "submitted": "submitted", "draft": "draft"}.get(r.get("status"), "submitted")
-            by, to = self.uid(r.get("rfisubmitby")), self.uid(r.get("rfircvanswerby")) or self.uid(r.get("rfisubmitto"))
+            by, to = self.uid(r.get("rfisubmitby")), self.uid(r.get("rfisubmitto"))
             rec = self._record("rfi", n, 0, txt(r.get("rfisubject")) or n, state, discipline=r.get("category"),
                                description=txt(r.get("rfidescrip")), by=by, to=to, submitted=sub, answered=ans,
                                response=txt(r.get("rfisupervnote")), legacy=f"odoo:rfi.rfi:{r['id']}")
@@ -586,7 +591,7 @@ class Importer:
             state = "accepted" if res == "pass" else "retest" if res == "fail" else "submitted"
             ans = at(d(r.get("submitalanswerdate")) or d(r.get("decision_date")) or (d(r.get("submitaldate")) or d(r.get("date"))), None, time(14, 0)) \
                 if state != "submitted" else None
-            by, to = self.uid(r.get("submitby")), self.uid(r.get("submitalrcvanswerby")) or self.uid(r.get("submitto"))
+            by, to = self.uid(r.get("submitby")), self.uid(r.get("submitto"))
             rec = self._record("test", n, k, txt(r.get("qsubmitalitdescrip")) or m2o_name(r.get("qsubmitaltye")) or n, state,
                                discipline=r.get("category"), description=txt(r.get("submitalnote")), by=by, to=to, submitted=sub,
                                answered=ans, response=txt(r.get("submitalsupervnote")) or txt(r.get("decision_note")),
@@ -685,7 +690,7 @@ class Importer:
             state = "approved" if r.get("status") in APPROVED_DR else "draft"
             sub = at(d(r.get("submitaldate")) or day, clock(r.get("submitaltime")), time(16, 0))
             ans = at(d(r.get("submitalanswerdate")) or day + timedelta(days=1), clock(r.get("submitalanswertime")), time(9, 0))
-            by, to = self.uid(r.get("submitby")), self.uid(r.get("submitalrcvanswerby")) or self.uid(r.get("submitto"))
+            by, to = self.uid(r.get("submitby")), self.uid(r.get("submitto"))
             notes = "\n".join(x for x in (txt(r.get("description")), txt(r.get("submitalnote"))) if x) or None
             rec = self._record("daily_report", f"DR-{day_s}", 0, f"التقرير اليومي {day_s}", state, by=by, to=to,
                                submitted=sub, answered=ans, response=txt(r.get("submitalsupervnote")), legacy=f"odoo:dr.dr:{r['id']}",
