@@ -18,6 +18,7 @@ const ZOOM = { week: 22, month: 5, quarter: 1.8 } as const;
 type Zoom = keyof typeof ZOOM | 'fit';
 const COL = { done: '#2f9e44', on_track: '#1c7ed6', ahead: '#1c7ed6', late: '#e03131', late_start: '#f76707', not_due: '#adb5bd', not_started: '#adb5bd' } as const;
 const LABEL_W = 270, ROW = 24;
+const PLAN = '#d6c7a1'; // planned bars: a sand tone, apart from the grey of "not due" and the status colours
 
 const today = () => new Date().toISOString().slice(0, 10);
 const monthStarts = (from: string, to: string) => {
@@ -81,7 +82,7 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
       <Tooltip.Floating label={tip} multiline w={300} style={{ whiteSpace: 'pre-line' }}>
         <div style={{ position: 'relative', height: ROW, width: W }}>
           {p && <div style={{ position: 'absolute', insetInlineStart: x(p.start), width: w(p.start, p.finish), top: showActual ? 3 : 6, height: showActual ? 7 : 12,
-            background: crit && isCrit(it) ? '#e03131' : showActual ? '#ced4da' : 'var(--mantine-color-verqac-6)', borderRadius: 3,
+            background: crit && isCrit(it) ? '#e03131' : showActual ? PLAN : 'var(--mantine-color-verqac-6)', borderRadius: 3,
             opacity: crit && !isCrit(it) ? 0.3 : showActual ? 1 : 0.85 }} />}
           {crit && !isCrit(it) && p && it.float ? <div style={{ position: 'absolute', insetInlineStart: x(addDays(p.finish, 1)), width: w(addDays(p.finish, 1), addDays(p.finish, it.float)),
             top: showActual ? 6 : 11, height: 1, borderTop: '1px dotted #868e96' }} /> : null}
@@ -141,10 +142,10 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
       </Group>
       {showActual && (
         <Group gap="md" mb={6}>
-          <Group gap={4}><span style={{ width: 18, height: 6, background: '#ced4da', display: 'inline-block' }} /><Text size="xs">{t('progress.planned')}</Text></Group>
+          <Group gap={4}><span style={{ width: 18, height: 6, background: PLAN, display: 'inline-block', borderRadius: 2 }} /><Text size="xs">{t('progress.planned')}</Text></Group>
           <Group gap={4}><span style={{ width: 18, height: 8, border: '1px dashed #868e96', display: 'inline-block' }} /><Text size="xs">{t('progress.baseline')}</Text></Group>
           {(['done', 'on_track', 'late', 'late_start', 'not_due'] as const).map((k) => (
-            <Group key={k} gap={4}><span style={{ width: 18, height: 8, background: COL[k], display: 'inline-block', borderRadius: 2 }} /><Text size="xs">{t(`gantt.st.${k}`)}</Text></Group>
+            <Group key={k} gap={4}><span style={{ width: 18, height: 8, background: k === 'not_due' ? 'white' : COL[k], border: k === 'not_due' ? `1.5px solid ${COL.not_due}` : undefined, display: 'inline-block', borderRadius: 2 }} /><Text size="xs">{t(`gantt.st.${k}`)}</Text></Group>
           ))}
           <Text size="xs" c="dimmed">{t('gantt.darkPart')}</Text>
         </Group>
@@ -176,7 +177,8 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
               {!closed[g.key] && g.rows.map((it) => (
                 <div key={`${it.stageId}${it.locId}`} style={{ display: 'flex', position: 'relative', borderTop: '1px solid #f1f3f5' }}>
                   <div style={{ ...cell, paddingInlineStart: 28 }}>
-                    {showActual && <span style={{ width: 8, height: 8, borderRadius: 8, background: COL[it.actual?.status ?? 'not_due'], flex: 'none' }} />}
+                    {showActual && (() => { const st = it.actual?.status ?? 'not_due'; const hollow = st === 'not_due' || st === 'not_started';
+                      return <span style={{ width: 8, height: 8, borderRadius: 8, background: hollow ? 'white' : COL[st], border: hollow ? `1.5px solid ${COL.not_due}` : undefined, flex: 'none' }} />; })()}
                     <Text size="xs" style={{ flex: 1 }} c={crit && isCrit(it) ? 'red' : undefined} fw={crit && isCrit(it) ? 600 : undefined} truncate>{by === 'floor' ? it.stageName : (it.locName ?? t('structure.whole'))}</Text>
                     {showActual && <Text size="xs" c="dimmed">{it.actual?.pct ?? 0}%</Text>}
                   </div>
