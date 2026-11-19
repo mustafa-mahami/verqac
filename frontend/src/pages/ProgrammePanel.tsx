@@ -276,6 +276,18 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
       actual: hasActual ? { start: a?.started_on ?? null, finish: a?.finished_on ?? null, pct: a?.progress ?? 0, status } : null,
       float: cycles.length ? floats.get(k) ?? null : null };
   }));
+  // how a stage was generated: its link to an earlier stage, days per floor and the stop between floors
+  const linkText = (sid: string) => {
+    const c = cycles.find((x) => x.stage_id === sid);
+    if (!c) return <Text size="xs" c="dimmed">{t('prg.byHand')}</Text>;
+    const pred = c.pred ? stages.find((x) => x.id === c.pred) : null;
+    const parts = [
+      pred ? t('prg.linkTxt', { rel: t(`prg.rel.${c.rel ?? 'after_end'}`), stage: pick(pred, 'name'), n: c.pred_days ?? 0 }) : c.start ? t('prg.startTxt', { d: fmtDate(c.start) }) : null,
+      c.duration ? t('prg.durTxt', { n: c.duration }) : null,
+      !whole.has(sid) ? ((c.link ?? 'fs') === 'fs' ? t('prg.gapTxt', { n: c.lag }) : t('prg.ssTxt', { n: c.lag })) : null,
+    ].filter(Boolean);
+    return <Text size="xs" c={pred ? 'blue' : undefined}>{parts.join(' · ')}</Text>;
+  };
   const dateIn = (stage: string, loc: string | null, f: 'start' | 'finish') => (
     <TextInput size="xs" type="date" w={140} disabled={!edit} value={byKey.get(cellKey(stage, loc))?.[f] ?? ''}
       onChange={(e) => setCell(stage, loc, { [f]: e.currentTarget.value })} />
@@ -337,7 +349,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
         <Table verticalSpacing={4} fz="sm">
           <Table.Thead><Table.Tr>
             <Table.Th>{t('structure.stage')}</Table.Th><Table.Th w={150}>{t('prg.start')}</Table.Th><Table.Th w={150}>{t('prg.finish')}</Table.Th>
-            <Table.Th w={90}>{t('prg.duration')}</Table.Th>
+            <Table.Th w={90}>{t('prg.duration')}</Table.Th><Table.Th>{t('prg.linkCol')}</Table.Th>
           </Table.Tr></Table.Thead>
           <Table.Tbody>
             {spans.map(({ st, sp }) => {
@@ -347,6 +359,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
                   <Table.Td fw={600}>{pick(st, 'name')} <Badge size="xs" variant="light">{t('structure.whole')}</Badge></Table.Td>
                   <Table.Td>{dateIn(sid, null, 'start')}</Table.Td><Table.Td>{dateIn(sid, null, 'finish')}</Table.Td>
                   <Table.Td><Text size="xs" c="dimmed">{dur(sid, null)}</Text></Table.Td>
+                  <Table.Td>{linkText(sid)}</Table.Td>
                 </Table.Tr>
               );
               return (
@@ -359,12 +372,14 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
                     <Table.Td><Text size="xs">{sp ? fmtDate(sp.start) : '—'}</Text></Table.Td>
                     <Table.Td><Text size="xs">{sp ? fmtDate(sp.finish) : '—'}</Text></Table.Td>
                     <Table.Td><Text size="xs" c="dimmed">{sp ? `${daysBetween(sp.start, sp.finish) + 1} ${t('prg.days')}` : ''}</Text></Table.Td>
+                    <Table.Td>{linkText(sid)}</Table.Td>
                   </Table.Tr>
                   {open[sid] && units.map((u) => (
                     <Table.Tr key={`${sid}${u.id}`} bg="var(--mantine-color-gray-0)">
                       <Table.Td ps={36}><Text size="xs">{pick(u, 'name')}</Text></Table.Td>
                       <Table.Td>{dateIn(sid, u.id!, 'start')}</Table.Td><Table.Td>{dateIn(sid, u.id!, 'finish')}</Table.Td>
                       <Table.Td><Text size="xs" c="dimmed">{dur(sid, u.id!)}</Text></Table.Td>
+                      <Table.Td />
                     </Table.Tr>
                   ))}
                 </Fragment>
