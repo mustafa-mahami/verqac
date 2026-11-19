@@ -24,7 +24,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 TZ = ZoneInfo("Asia/Hebron")
 CHANNEL = "import"
@@ -116,6 +116,19 @@ def clock(v) -> time | None:
 
 def at(day: date | None, t: time | None = None, default: time = time(10, 0)) -> datetime | None:
     return datetime.combine(day, t or default, TZ) if day else None
+
+
+def true_day(r: dict, day: date | None, answered: date | None) -> date | None:
+    """The submission day, unless Odoo's date was edited afterwards: a request never answered whose date is days
+    after the record was created, or an answer older than the date, was submitted on the day it was created."""
+    made = d(r.get("create_date"))
+    if day is None or made is None or (day - made).days <= 3:
+        return day
+    if answered is None and r.get("status") in ("submitted", None):
+        return made
+    if answered is not None and answered < day:
+        return min(made, answered)
+    return day
 
 
 def num(v) -> float | None:
@@ -385,10 +398,9 @@ class Importer:
         from app.core.workcal import add_period
         if start is None:
             return
-        reply, resub = periods(self.p, self.types[code])
+        reply, _ = periods(self.p, self.types[code])
         rec.due_at = add_period(start, reply, self.cal)
-        if rec.answered_at and rec.state_category in ("revise_and_resubmit", "rejected"):
-            rec.resubmit_due_at = add_period(rec.answered_at, resub, self.cal)
+        # no resubmission deadline: what Odoo left unresubmitted is history, not a debt to chase now
 
     def _comments(self, rec, r, author):
         from app.models.records import RecordComment
@@ -449,7 +461,8 @@ class Importer:
                     kind = slug(kind_name)
                     kinds.append({"code": kind, "name_ar": kind_name, "name_en": kind_name, "active": True})
                     by_name[kind_name.lower()] = kind
-            sub = at(d(r.get("submitaldate")) or d(r.get("date")), clock(r.get("submitaltime")))
+            sub = at(true_day(r, d(r.get("submitaldate")) or d(r.get("date")), d(r.get("submitalanswerdate"))),
+                     clock(r.get("submitaltime")))
             ans = at(d(r.get("submitalanswerdate")), clock(r.get("submitalanswertime")), time(12, 0))
             by, to = self.uid(r.get("submitby")), self.uid(r.get("submitto"))
             rec = self._record("submittal", n, k, txt(r.get("submitalname")) or txt(r.get("submitalitdescrip")), REVIEW[r["status"]],
@@ -475,9 +488,14 @@ class Importer:
         recs = []
         for n, k, g, r in self._groups("inspection", rows, lambda r: r["name"].strip(), lambda r: rev_of(r.get("inspectionrev")),
                                        lambda r: r.get("status") == "cancelled"):
-            day = d(r.get("inspectiondate")) or d(r.get("date"))
+            answered = d(r.get("inspectionanswerdate"))
+            rday = d(r.get("date"))
+            fixed = true_day(r, rday, answered)
+            day = d(r.get("inspectiondate")) or rday
+            if fixed != rday and day == rday:  # the inspection date was edited together with the record date
+                day = fixed
             asked = at(day, clock(r.get("inspectiontime")), time(9, 0))
-            sub = at(d(r.get("date")) or day, None, time(8, 0))
+            sub = at(fixed or day, None, time(8, 0))
             if asked and sub and sub > asked:
                 sub = asked
             ans = at(d(r.get("inspectionanswerdate")), clock(r.get("inspectionanswertime")), time(13, 0))
@@ -519,7 +537,7 @@ class Importer:
             k = rev_of(r.get("rfirev"))
             return r["name"].strip() + (f"-R{k}" if k else "")
         for n, _k, _g, r in self._groups("rfi", self.M.get("rfi.rfi", []), number, lambda r: 0, lambda r: False):
-            sub = at(d(r.get("rfidate")) or d(r.get("date")), clock(r.get("rfitime")))
+            sub = at(true_day(r, d(r.get("rfidate")) or d(r.get("date")), d(r.get("rfianswerdate"))), clock(r.get("rfitime")))
             ans = at(d(r.get("rfianswerdate")) or d(r.get("rfidate2")), clock(r.get("rfianswertime")), time(12, 0))
             state = {"answered": "answered", "submitted": "submitted", "draft": "draft"}.get(r.get("status"), "submitted")
             by, to = self.uid(r.get("rfisubmitby")), self.uid(r.get("rfisubmitto"))
@@ -801,6 +819,18 @@ class Importer:
 
 
 IMAGE = ("image/jpeg", "image/png", "image/webp", "image/gif")
+FIELD_NAMES = {"pdf_file", "file_field", "pdf_file_answer", "photo", "image", "datas"}
+EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
+
+
+def file_name(att: dict, rec) -> str:
+    """Odoo names a file kept in a record field after the field ('pdf_file'): use the record's number instead."""
+    name = (att.get("name") or "").strip()
+    if name and name not in FIELD_NAMES:
+        return name[:255]
+    ext = EXT.get(att.get("mimetype") or "", "")
+    tail = "-answer" if att.get("res_field") == "pdf_file_answer" else ""
+    return f"{rec.number}-R{rec.rev_no}{tail}{ext}" if rec is not None else (name or "file") + ext
 
 
 def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Counter:
@@ -831,6 +861,7 @@ def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Cou
         if rec_id is None:
             rep["no record (not imported)"] += 1
             continue
+        rec = rec or db.get(Record, rec_id)
         key = f"{project.id}/odoo-{att['id']}"
         dest = store / key
         f = db.scalar(select(StoredFile).where(StoredFile.storage_key == key))
@@ -850,13 +881,16 @@ def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Cou
             if commit and path != str(dest):
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(path, dest)  # same volume: a rename, nothing is copied
-            f = StoredFile(id=uuid.uuid4(), project_id=project.id, storage_key=key, filename=(att.get("name") or "file")[:255],
+            f = StoredFile(id=uuid.uuid4(), project_id=project.id, storage_key=key, filename=file_name(att, rec),
                            content_type=(att.get("mimetype") or "application/octet-stream")[:120], size=size,
                            sha256=h.hexdigest(), uploaded_by=actor.id)
             db.add(f)
             db.flush()
             rep["files"] += 1
             rep["MB"] += round(size / 1048576)
+        if f.filename in FIELD_NAMES or "." not in f.filename:
+            f.filename = file_name(att, rec)
+            rep["files renamed"] += 1
         if (rec_id, f.id) in have:
             rep["already attached"] += 1
             continue
@@ -875,6 +909,65 @@ def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Cou
     return rep
 
 
+def fix_imported(db, data: dict, project) -> Counter:
+    """Correct an import in place (nothing else is touched, so work done since stays):
+    submission dates Odoo had edited afterwards, no resubmission deadlines on imported history,
+    no reminders already sent about it, files named after Odoo's fields."""
+    from app.api.records import RESUBMIT_STATES, periods
+    from app.core.workcal import add_period, calendar_for
+    from app.models.records import Notification, Record, RecordEvent, RecordType, StoredFile
+    rep: Counter = Counter()
+    cal = calendar_for(db, project)
+    types = {t.id: t for t in db.scalars(select(RecordType))}
+    recs = {r.legacy_ref: r for r in db.scalars(select(Record).where(Record.project_id == project.id, Record.legacy_ref.is_not(None)))}
+    fields = {"submit.submit": ("submitaldate", "submitalanswerdate"), "rfi.rfi": ("rfidate", "rfianswerdate"),
+              "inspection.inspection": ("date", "inspectionanswerdate")}
+    for model, (f_day, f_ans) in fields.items():
+        for r in data["models"].get(model, []):
+            rec = recs.get(f"odoo:{model}:{r['id']}")
+            if rec is None or rec.submitted_at is None:
+                continue
+            day = d(r.get(f_day)) or d(r.get("date"))
+            fixed = true_day(r, day, d(r.get(f_ans)))
+            if fixed is None or fixed == day:
+                continue
+            local = rec.submitted_at.astimezone(TZ)
+            new = datetime.combine(fixed, local.time(), TZ)
+            if model == "inspection.inspection" and rec.requested_for and rec.requested_for.astimezone(TZ).date() == day:
+                rec.requested_for = datetime.combine(fixed, rec.requested_for.astimezone(TZ).time(), TZ)
+            for e in db.scalars(select(RecordEvent).where(RecordEvent.record_id == rec.id, RecordEvent.channel == CHANNEL,
+                                                          RecordEvent.at == rec.submitted_at)):
+                e.at = new
+            rec.submitted_at = new
+            start = max(x for x in (new, rec.requested_for) if x)
+            rec.due_at = add_period(start, periods(project, types[rec.record_type_id])[0], cal)
+            rep["submission dates corrected"] += 1
+    # resubmission deadlines left by the import (answered on import, not since)
+    for rec in recs.values():
+        if rec.resubmit_due_at is None or rec.resubmitted_at is not None or rec.state_category not in RESUBMIT_STATES:
+            continue
+        last = db.scalar(select(RecordEvent).where(RecordEvent.record_id == rec.id).order_by(RecordEvent.at.desc(), RecordEvent.id.desc()).limit(1))
+        if last is not None and last.channel == CHANNEL:
+            rec.resubmit_due_at = None
+            rep["resubmission deadlines removed"] += 1
+    ids = [r.id for r in recs.values()]
+    for i in range(0, len(ids), 1000):
+        res = db.execute(update(Notification).where(Notification.record_id.in_(ids[i:i + 1000]), Notification.read_at.is_(None),
+                                                     Notification.event.in_(("reply_soon", "reply_late", "resub_soon", "resub_late")))
+                         .values(read_at=datetime.now(UTC)))
+        rep["reminder notifications cleared"] += res.rowcount or 0
+    by_key = {f"{project.id}/odoo-{a['id']}": a for a in data.get("attachments", [])}
+    for f in db.scalars(select(StoredFile).where(StoredFile.project_id == project.id, StoredFile.storage_key.like(f"{project.id}/odoo-%"))):
+        att = by_key.get(f.storage_key)
+        if att is None or not (f.filename in FIELD_NAMES or "." not in f.filename):
+            continue
+        rec = recs.get(f"odoo:{att.get('res_model')}:{att.get('res_id')}")
+        f.filename = file_name(att, rec)
+        rep["files renamed"] += 1
+    db.flush()
+    return rep
+
+
 def main(argv=None):
     from app.core.db import session_scope
     from app.models.core import Project, User
@@ -884,9 +977,12 @@ def main(argv=None):
     ap.add_argument("--as", dest="actor", required=True, help="e-mail of the Verqac account the import is done as")
     ap.add_argument("--commit", action="store_true", help="write the import (without it: a trial run that changes nothing)")
     ap.add_argument("--attachments", action="store_true", help="attach the files of an export folder to the imported records")
+    ap.add_argument("--fix", action="store_true", help="correct an earlier import in place (dates, deadlines, reminders, file names)")
     a = ap.parse_args(argv)
     if a.attachments:
         return _files(a)
+    if a.fix:
+        return _fix(a)
     if a.file.endswith(".zip"):
         with zipfile.ZipFile(a.file) as z:
             data = json.loads(z.read("data.json"))
@@ -919,6 +1015,31 @@ def _files(a):
             print("\nDone. Files moved into the platform's storage; running again adds only what is missing.")
     except TrialRun:
         print("\nTRIAL RUN: nothing was moved or written. Add --commit to attach the files.")
+
+
+def _fix(a):
+    import os
+    from app.core.db import session_scope
+    from app.models.core import Project
+    if a.file.endswith(".zip"):
+        with zipfile.ZipFile(a.file) as z:
+            data = json.loads(z.read("data.json"))
+    else:
+        data = json.load(open(os.path.join(a.file, "data.json") if os.path.isdir(a.file) else a.file, encoding="utf-8"))
+    try:
+        with session_scope(bypass=True) as db:
+            p = db.scalar(select(Project).where(func.upper(Project.code) == a.project.upper()))
+            if p is None:
+                sys.exit("Project not found.")
+            rep = fix_imported(db, data, p)
+            print(f"Corrections for {p.code}:")
+            for k, v in sorted(rep.items()):
+                print(f"  {k:34} {v}")
+            if not a.commit:
+                raise TrialRun
+            print("\nDone.")
+    except TrialRun:
+        print("\nTRIAL RUN: nothing was written. Add --commit to apply.")
 
 
 def _run(a, data):

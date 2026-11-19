@@ -136,8 +136,9 @@ def run_reminders(now: datetime | None = None) -> int:
                        title_ar=ar, title_en=en, body=rec.title)
                 sent += 1
 
+        # records brought over from Odoo still waiting there: no reminders (their answer is entered by hand)
         waiting = db.scalars(select(Record).where(Record.state_category == "submitted", Record.due_at.is_not(None),
-                                                  Record.due_at <= horizon))
+                                                  Record.due_at <= horizon, Record.legacy_ref.is_(None)))
         for rec in waiting:
             rt, p = types[rec.record_type_id], project(rec.project_id)
             if not reminders_on(p):

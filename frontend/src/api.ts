@@ -138,6 +138,7 @@ export interface RecordEvent {
 export interface RecordComment { id: string; author: User; party_kind: string; visibility: string; body: string; created_at: string }
 export interface Attachment { id: string; file_id: string; filename: string; content_type: string; size: number; kind: string; party_kind: string; created_at: string }
 export interface RecordDetail {
+  imported?: boolean; // brought over from Odoo
   checklist: CheckLine[]; custom: Record<string, string | null>;
   id: string; project_id: string; record_type: RecordType; number: string; rev_no: number; title: string;
   description: string | null; discipline: Discipline | null; state: State; from_party_kind: string;

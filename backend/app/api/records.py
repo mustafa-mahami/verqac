@@ -284,7 +284,7 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
                   and (rec.state_category in ("revise_and_resubmit", "rejected", "approved_as_noted", "cancelled")
                        or (rt.code == "programme" and rec.state_category == "approved"))  # an updated programme
                   and p.can("create", discipline_id=rec.discipline_id))
-    return RecordDetail(
+    return RecordDetail(imported=rec.legacy_ref is not None,
         id=rec.id, project_id=rec.project_id, record_type=RecordTypeOut.model_validate(rt), number=rec.number,
         rev_no=rec.rev_no, title=rec.title, description=rec.description,
         discipline=DisciplineOut.model_validate(disc) if disc else None, state=StateOut.model_validate(state),
@@ -784,12 +784,19 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
                 prev.resubmitted_at = now
         rec.checklist = _topic_checklist(c, rec, rt) or None
     elif t.effect == "respond":
-        rec.answered_by, rec.answered_at, rec.answered_on_behalf_of = c.user.id, now, on_behalf
+        when = now
+        if body.answered_on:  # an answer given on paper before the record came over from Odoo
+            require(rec.legacy_ref is not None, "answered_on_imported_only")
+            local = datetime.combine(body.answered_on, time(12, 0), calendar_for(c.db, a.project).tz)
+            if body.answered_on > now.astimezone(local.tzinfo).date() or (rec.submitted_at and local < rec.submitted_at - timedelta(days=1)):
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "answered_on_range")
+            when = max(local, rec.submitted_at) if rec.submitted_at else local
+        rec.answered_by, rec.answered_at, rec.answered_on_behalf_of = c.user.id, when, on_behalf
         rec.response_comment = comment
         if rt.code in TIMED_TYPES:
             if body.performed_at and body.performed_at > now + timedelta(minutes=5):
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "performed_in_future")
-            rec.performed_at = body.performed_at or now
+            rec.performed_at = body.performed_at or when
             _answer_checklist(rec, body.checklist, to, _checklists_on(a.project))
         if to.category in RESUBMIT_STATES:
             rec.resubmit_due_at = add_period(now, periods(a.project, rt)[1], calendar_for(c.db, a.project))
@@ -799,9 +806,13 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
         from app.api.daily import apply_progress
         apply_progress(c.db, rec)  # the approved report sets the progress of its cells
     stamp = _stamp(c, rec, to) if t.effect == "respond" else None
-    c.db.add(RecordEvent(record_id=rec.id, action=t.action, from_state_id=t.from_state_id, to_state_id=to.id,
-                         actor_id=c.user.id, on_behalf_of=on_behalf, comment=comment, stamp=stamp))
-    _audit(c, rec, "transition", {"action": t.action, "to": to.code, "on_behalf_of": str(on_behalf) if on_behalf else None}, a)
+    ev = RecordEvent(record_id=rec.id, action=t.action, from_state_id=t.from_state_id, to_state_id=to.id,
+                     actor_id=c.user.id, on_behalf_of=on_behalf, comment=comment, stamp=stamp)
+    if t.effect == "respond" and body.answered_on:
+        ev.at = rec.answered_at  # the history shows the real day; the audit log keeps when it was entered
+    c.db.add(ev)
+    _audit(c, rec, "transition", {"action": t.action, "to": to.code, "on_behalf_of": str(on_behalf) if on_behalf else None,
+                                  "answered_on": body.answered_on.isoformat() if body.answered_on else None}, a)
     c.db.flush()
     _notify_transition(c, bg, a.project, rec, rt, t, to, comment)
     return _detail(c, rec, a, rt, p)

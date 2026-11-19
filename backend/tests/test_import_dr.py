@@ -171,3 +171,55 @@ def test_import_attachments(client, site, tmp_path, capsys):
     # again: nothing new
     main([str(tmp_path), "--attachments", "--project", code, "--as", me, "--commit"])
     assert "already attached" in capsys.readouterr().out
+
+
+def test_fix_dates_and_answer_on_paper(client, site, tmp_path, capsys):
+    pid, code = site["pid"], site["code"]
+    _structure(client, site)
+    me = client.get("/api/v1/auth/me", headers=site["hc"]).json()["user"]["email"]
+    today = date.today()
+    f = _export(tmp_path, today)
+    data = json.loads(open(f, encoding="utf-8").read())
+    made, edited = today - timedelta(days=60), today - timedelta(days=10)
+    # submitted on paper 60 days ago, never answered in Odoo, its date edited 10 days ago
+    data["models"]["inspection.inspection"].append(
+        {"id": 2, "name": "IR-C-822", "inspectionrev": "r0", "status": "submitted", "category": "civil", "date": edited.isoformat(),
+         "inspectiondate": edited.isoformat(), "create_date": f"{made.isoformat()} 06:03:53", "inspectionname": "HPL",
+         "inspectionsubmitby": [5, "م. فراس"], "inspectionsubmitto": [6, "م. سعد"]})
+    open(f, "w", encoding="utf-8").write(json.dumps(data, ensure_ascii=False))
+    main([f, "--project", code, "--as", me, "--commit"])
+    from app.models.records import Record
+    with session_scope(bypass=True) as db:
+        rid = db.scalar(select(Record.id).where(Record.number == "IR-C-822", Record.project_id == pid))
+    d = client.get(f"/api/v1/records/{rid}", headers=site["hc"]).json()
+    assert d["submitted_at"][:10] == made.isoformat() and d["requested_for"][:10] == made.isoformat() and d["imported"]
+    # an import made before the fix: dates moved back, deadline removed, files renamed -> --fix corrects in place
+    with session_scope(bypass=True) as db:
+        r = db.get(Record, rid)
+        from datetime import datetime, time
+        from zoneinfo import ZoneInfo
+        r.submitted_at = datetime.combine(edited, time(8), ZoneInfo("Asia/Hebron"))
+        r.requested_for = datetime.combine(edited, time(9), ZoneInfo("Asia/Hebron"))
+    main([f, "--fix", "--project", code, "--as", me])
+    assert "TRIAL RUN" in capsys.readouterr().out
+    main([f, "--fix", "--project", code, "--as", me, "--commit"])
+    assert "submission dates corrected" in capsys.readouterr().out
+    assert client.get(f"/api/v1/records/{rid}", headers=site["hc"]).json()["submitted_at"][:10] == made.isoformat()
+    # supervision enters the paper answer with its real day
+    hce = site["hce"]
+    paper = made + timedelta(days=1)
+    bad = client.post(f"/api/v1/records/{rid}/transitions", headers=hce,
+                      json={"action": "reject", "comment": "x", "answered_on": (today + timedelta(days=2)).isoformat()})
+    assert bad.status_code == 422 and bad.json()["detail"] == "answered_on_range"
+    r = client.post(f"/api/v1/records/{rid}/transitions", headers=hce,
+                    json={"action": "reject", "comment": "1- تنظيف HPL", "answered_on": paper.isoformat()})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["answered_at"][:10] == paper.isoformat() and d["performed_at"][:10] == paper.isoformat()
+    assert d["resubmit_due_at"][:10] >= today.isoformat()  # the contractor's time counts from now
+    # only imported records take a past answer date
+    from tests.test_records import new_sub, submit
+    s2 = new_sub(client, site)
+    submit(client, site, s2)
+    r = client.post(f"/api/v1/records/{s2['id']}/transitions", headers=hce, json={"action": "approve", "answered_on": today.isoformat()})
+    assert r.status_code == 403

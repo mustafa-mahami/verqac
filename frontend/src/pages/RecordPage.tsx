@@ -85,6 +85,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
   const [text, setText] = useState(() => { try { return localStorage.getItem(key) ?? ''; } catch { return ''; } });
   const [onBehalf, setOnBehalf] = useState<string | null>(null);
   const [performed, setPerformed] = useState('');
+  const [answeredOn, setAnsweredOn] = useState('');
   const [error, setError] = useState<string | null>(null);
   const ckey = `verqac.check.${rec.id}`;
   const [answers, setAnswers] = useState<Answer[]>(() => {
@@ -111,6 +112,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
       return api<RecordDetail>(`/records/${rec.id}/transitions`, {
         method: 'POST', body: JSON.stringify({ action: tr.action, comment: text.trim() || null, on_behalf_of: onBehalf,
           performed_at: profile(rec.record_type.code).timed ? fromLocalInput(performed) : null,
+          answered_on: rec.imported && answeredOn ? answeredOn : null,
           checklist: rec.checklist.length ? answers.map((x) => ({ result: x.result, note: x.note.trim() || null })) : null }),
       });
     },
@@ -137,6 +139,11 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
       {profile(rec.record_type.code).timed && (
         <TextInput mt="sm" w={260} type="datetime-local" label={t('ir.performedAt')} description={t('ir.performedHint')}
           value={performed} onChange={(e) => setPerformed(e.currentTarget.value)} />
+      )}
+      {rec.imported && (
+        <TextInput mt="sm" w={260} type="date" label={t('resp.answeredOn')} description={t('resp.answeredOnHint')}
+          max={new Date().toISOString().slice(0, 10)} min={rec.submitted_at?.slice(0, 10)}
+          value={answeredOn} onChange={(e) => setAnsweredOn(e.currentTarget.value)} />
       )}
       {rec.can_act_on_behalf && colleagues.length > 1 && (
         <Select mt="sm" label={t('rec.onBehalfOf')} clearable placeholder={t('rec.myself')} value={onBehalf} onChange={setOnBehalf}

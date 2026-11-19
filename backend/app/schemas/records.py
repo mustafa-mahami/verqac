@@ -138,6 +138,7 @@ class TransitionIn(BaseModel):
     comment: str | None = Field(default=None, max_length=10000)
     on_behalf_of: UUID | None = None
     performed_at: datetime | None = None  # inspections: when it was actually done (default: now)
+    answered_on: date | None = None  # imported records: the day the answer was really given (on paper)
     checklist: list[CheckAnswer] | None = None  # inspections: one answer per checklist line, in order
 
 
@@ -211,6 +212,7 @@ class RevisionRef(BaseModel):
 
 class RecordDetail(BaseModel):
     id: UUID
+    imported: bool = False  # brought over from Odoo: an answer may carry its real (earlier) date
     project_id: UUID
     record_type: RecordTypeOut
     number: str

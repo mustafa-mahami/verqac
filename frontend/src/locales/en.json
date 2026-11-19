@@ -164,7 +164,9 @@
     "dr_actual_finish_needs_100": "An actual finish needs 100%.",
     "dr_actual_finish_range": "The actual finish must be after the start and not after the report date.",
     "stage_scope_locked": "This stage's scope cannot change: approved daily reports gave it progress. Switch it off and add a new stage with the right scope.",
-    "invalid_period": "Choose a valid start and end: end after start, start not in the future."
+    "invalid_period": "Choose a valid start and end: end after start, start not in the future.",
+    "answered_on_range": "The actual answer date must be between the submission and today.",
+    "answered_on_imported_only": "An actual answer date is for imported records only."
   },
   "common": {
     "cancel": "Cancel",
@@ -428,7 +430,9 @@
   "resp": {
     "title": "Consultant's comments",
     "placeholder": "Write the comments, one per line…",
-    "hint": "Saved with the decision and shown on the record and the PDF. The draft is kept on this device until you choose a decision."
+    "hint": "Saved with the decision and shown on the record and the PDF. The draft is kept on this device until you choose a decision.",
+    "answeredOn": "Actual answer date (record from Odoo)",
+    "answeredOnHint": "If it was answered on paper before the move: that day. Empty = today."
   },
   "inbox": {
     "title": "Awaiting me",
