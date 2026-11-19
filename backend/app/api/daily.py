@@ -66,6 +66,9 @@ class WorkLine(BaseModel):
     unit: str | None = Field(default=None, max_length=20)
     crew: int | None = Field(default=None, ge=0, le=5000)
     progress: float | None = Field(default=None, ge=0, le=100)  # cumulative % of the cell(s) after today's work
+    # when the project allows it (work that started or ended before the reports did): the real dates of the cell(s)
+    actual_start: date | None = None
+    actual_finish: date | None = None
 
 
 class DelayLine(BaseModel):
@@ -140,6 +143,8 @@ class ListItem(BaseModel):
 class DailySettings(BaseModel):
     crew: dict[str, Literal["names", "counts"]] = {"supervision": "names", "contractor": "counts", "labour": "counts"}
     link_materials: bool = False
+    actual_dates: bool = False  # work lines may carry the real start / finish (projects taken over while running)
+    forecast: bool = False  # the progress tab forecasts the finish from the actual progress
     # per crew group two lists: <group>_names (people, "names" mode) and <group>_desc (positions / trades, "counts" mode);
     # plus subcontractors and equipment
     lists: dict[str, list[ListItem]] = {}
@@ -363,13 +368,15 @@ def apply_progress(db, rec: Record) -> None:
             if cell is None:
                 cell = ProgressCell(project_id=d.project_id, stage_id=stage_id, location_id=loc_id, progress=Decimal(0))
                 db.add(cell)
-            if cell.started_on is None or cell.started_on > d.report_date:
-                cell.started_on = d.report_date  # work on the cell, with or without a %
+            began = date.fromisoformat(line["actual_start"]) if line.get("actual_start") else d.report_date
+            if cell.started_on is None or cell.started_on > began:
+                cell.started_on = began  # work on the cell, with or without a % (or the real start, when given)
             pct = line.get("progress")
             if pct is None or (cell.progress_on and cell.progress_on > d.report_date):
                 continue
             cell.progress, cell.progress_on, cell.record_id = Decimal(str(pct)), d.report_date, rec.id
-            cell.finished_on = d.report_date if pct >= 100 else None
+            ended = date.fromisoformat(line["actual_finish"]) if line.get("actual_finish") else d.report_date
+            cell.finished_on = ended if pct >= 100 else None
     db.flush()
     pct = project_progress(db, d.project_id).project
     db.execute(insert(ProgressSnapshot).values(project_id=d.project_id, day=d.report_date, actual=pct)
@@ -400,7 +407,8 @@ def _rt(c: Ctx) -> RecordType:
 
 
 def _strip(line: dict) -> dict:
-    return {k: (str(v) if isinstance(v, uuid.UUID) else [str(x) for x in v] if k == "location_ids" else v)
+    return {k: (str(v) if isinstance(v, uuid.UUID) else v.isoformat() if isinstance(v, date) else
+                [str(x) for x in v] if k == "location_ids" else v)
             for k, v in line.items()}
 
 
@@ -510,6 +518,18 @@ def put_daily(record_id: uuid.UUID, body: DailyIO, c: Ctx = Depends(ctx)):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_stage")
         if w.progress is not None and w.stage_id is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "progress_needs_stage")
+    allow = daily_settings(a.project).actual_dates
+    for w in body.works:
+        if not allow:
+            w.actual_start = w.actual_finish = None
+            continue
+        if w.actual_start and (w.actual_start > d.report_date or (a.project.start_date and w.actual_start < a.project.start_date)):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "dr_actual_start_range")
+        if w.actual_finish:
+            if (w.progress or 0) < 100:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "dr_actual_finish_needs_100")
+            if w.actual_finish > d.report_date or (w.actual_start and w.actual_finish < w.actual_start):
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "dr_actual_finish_range")
     for k in ("shift", "work_status", "stop_reason", "weather", "temp_min", "temp_max", "wind", "hours_from", "hours_to",
               "visitors", "notes"):
         setattr(d, k, getattr(body, k))

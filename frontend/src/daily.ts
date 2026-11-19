@@ -3,7 +3,7 @@ export interface CrewLine { group: Group; sub: string | null; name: string; name
 export interface ListItem { ar: string; en: string; role_ar?: string | null; role_en?: string | null; active: boolean }
 export interface EquipLine { name: string; count: number; hours: number | null; idle_hours: number | null; note: string | null }
 export interface MaterialLine { material: string; qty: number | null; unit: string | null; supplier: string | null; delivery_note: string | null; submittal_id: string | null; mir_id: string | null }
-export interface WorkLine { stage_id: string | null; topic_id: string | null; location_ids: string[]; all_locations: boolean; description: string | null; qty: number | null; unit: string | null; crew: number | null; progress: number | null }
+export interface WorkLine { stage_id: string | null; topic_id: string | null; location_ids: string[]; all_locations: boolean; description: string | null; qty: number | null; unit: string | null; crew: number | null; progress: number | null; actual_start?: string | null; actual_finish?: string | null }
 export interface DelayLine { cause: string; hours: number | null; description: string | null; link_id: string | null }
 export interface DailyData {
   shift: 'day' | 'night' | 'both'; work_status: 'normal' | 'partial' | 'stopped'; stop_reason: string | null; weather: string | null;
@@ -15,7 +15,7 @@ export interface DailyOut extends DailyData {
   record_id: string; report_date: string; can_edit: boolean; day_no: number | null; weekday: number; day_off: 'weekend' | 'holiday' | null; holiday: string | null; current: Record<string, number>; totals: Record<string, number>;
   qa: { code: string; name_ar: string; name_en: string; submitted: number; answered: number }[];
 }
-export interface DailySettings { crew: Record<Group, 'names' | 'counts'>; link_materials: boolean; lists: Record<string, ListItem[]> }
+export interface DailySettings { crew: Record<Group, 'names' | 'counts'>; link_materials: boolean; actual_dates?: boolean; forecast?: boolean; lists: Record<string, ListItem[]> }
 export const OTHER_LISTS = ['subcontractors', 'equipment'] as const;
 /** The list a crew group uses: people in "names" mode, positions / trades in "counts" mode. */
 export const crewList = (s: DailySettings, g: Group) => `${g}_${s.crew[g] === 'names' ? 'names' : 'desc'}`;

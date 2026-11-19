@@ -110,7 +110,10 @@ def _daily(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
     def works(lines):
         return [{"stage": " › ".join(x for x in (names.get(str(w.get("stage_id")), ""), names.get(str(w.get("topic_id")), "")) if x),
                  "where": L["all"] if w.get("all_locations") else sep.join(names.get(str(i), "") for i in w.get("location_ids") or []),
-                 "desc": w.get("description") or "", "qty": f"{num(w.get('qty'))} {w.get('unit') or ''}".strip(),
+                 "desc": " — ".join(x for x in (w.get("description") or "",
+                                                  (("بدأ فعلياً " if lang == "ar" else "actual start ") + w["actual_start"]) if w.get("actual_start") else "",
+                                                  (("انتهى فعلياً " if lang == "ar" else "actual finish ") + w["actual_finish"]) if w.get("actual_finish") else "") if x),
+                 "qty": f"{num(w.get('qty'))} {w.get('unit') or ''}".strip(),
                  "pct": num(w.get("progress"))} for w in lines]
     v = L["v"]
     from app.api.daily import day_info

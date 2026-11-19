@@ -95,6 +95,10 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
       </Tabs>
       <Switch mt="lg" label={t('dset.linkMaterials')} description={t('dset.linkMaterialsHint')} disabled={!editable} checked={s.link_materials}
         onChange={(e) => setS({ ...s, link_materials: e.currentTarget.checked })} />
+      <Switch mt="md" label={t('dset.actualDates')} description={t('dset.actualDatesHint')} disabled={!editable} checked={!!s.actual_dates}
+        onChange={(e) => setS({ ...s, actual_dates: e.currentTarget.checked })} />
+      <Switch mt="md" label={t('dset.forecast')} description={t('dset.forecastHint')} disabled={!editable} checked={!!s.forecast}
+        onChange={(e) => setS({ ...s, forecast: e.currentTarget.checked })} />
       {msg && <Alert mt="sm" color={msg.ok ? 'green' : 'red'}>{msg.text}</Alert>}
       {editable && <Group mt="md"><Button variant="light" loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button></Group>}
     </Card>

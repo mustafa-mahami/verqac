@@ -53,3 +53,31 @@ def test_location_required_and_rebuild(client, site):
     stages[0]["scope"] = "whole"
     client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages)
     assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["stages"][stg["id"]] == 40
+
+
+def test_actual_dates(client, site):
+    pid = site["pid"]
+    st = _structure(client, site)
+    stg, floor = st["stages"][0], st["locations"][0]["units"][0]
+    d1 = date.today() - timedelta(days=2)
+    rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1.isoformat()}).json()["id"]
+    began, ended = d1 - timedelta(days=60), d1 - timedelta(days=10)
+    line = {"stage_id": stg["id"], "location_ids": [floor["id"]], "progress": 100,
+            "actual_start": began.isoformat(), "actual_finish": ended.isoformat()}
+    # off by default: the dates are dropped
+    r = client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json={"works": [line]}).json()
+    assert r["works"][0]["actual_start"] is None
+    s = client.get(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"]).json()
+    s["actual_dates"] = True
+    assert client.put(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"], json=s).json()["actual_dates"] is True
+    bad = client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json={"works": [{**line, "progress": 60}]})
+    assert bad.status_code == 422 and bad.json()["detail"] == "dr_actual_finish_needs_100"
+    bad = client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json={"works": [{**line, "actual_start": (d1 + timedelta(days=1)).isoformat()}]})
+    assert bad.status_code == 422
+    r = client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json={"works": [line]})
+    assert r.status_code == 200 and r.json()["works"][0]["actual_start"] == began.isoformat()
+    act(client, site["hqa"], rid, "submit")
+    act(client, site["hce"], rid, "approve")
+    cell = next(c for c in client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["cells"]
+                if c["location_id"] == floor["id"] and c["stage_id"] == stg["id"])
+    assert cell["started_on"] == began.isoformat() and cell["finished_on"] == ended.isoformat()

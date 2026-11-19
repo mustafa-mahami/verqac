@@ -159,7 +159,10 @@
     "programme_file_type": "Unsupported file: xlsx, csv, xml or xer.",
     "programme_file_unreadable": "The file could not be read.",
     "programme_file_empty": "No tasks with names and dates found in the file.",
-    "programme_cycle_loop": "Circular link between stages (A after B and B after A)."
+    "programme_cycle_loop": "Circular link between stages (A after B and B after A).",
+    "dr_actual_start_range": "The actual start must be between the project start and the report date.",
+    "dr_actual_finish_needs_100": "An actual finish needs 100%.",
+    "dr_actual_finish_range": "The actual finish must be after the start and not after the report date."
   },
   "common": {
     "cancel": "Cancel",
@@ -964,7 +967,11 @@
     "unsaved": "Unsaved changes",
     "no": "Report no. {{n}}",
     "weekend": "Weekly day off",
-    "holiday": "Official holiday"
+    "holiday": "Official holiday",
+    "actualStart": "Actual start",
+    "actualFinish": "Actual finish",
+    "actualFinishHint": "With 100% only",
+    "actualHint": "Optional: for work that started or ended before the reports began. Filled once."
   },
   "progress": {
     "project": "Project progress",
@@ -1037,7 +1044,11 @@
     "descEn": "Description (English)",
     "position": "Position",
     "positions": "Positions (chosen above, and used in the count mode)",
-    "noPositions": "Add positions below first"
+    "noPositions": "Add positions below first",
+    "actualDates": "Enter actual start and finish dates of work",
+    "actualDatesHint": "For running projects taken over mid-way: work lines show the actual start, and the finish with 100%. Switch it off once running work is recorded; the dates stay.",
+    "forecast": "Forecast from actual progress",
+    "forecastHint": "In the progress tab and the Gantt: a forecast finish and critical path, from actual progress and delays to date through the approved programme's links."
   },
   "roleHint": {
     "contractor_pm": "Everything in all disciplines: create, submit, cancel and delete all requests, manage the project and team, answer NCRs.",

@@ -1,6 +1,6 @@
 import {
   ActionIcon, Alert, Anchor, Autocomplete, Badge, Button, Card, Checkbox, Group, MultiSelect, NumberInput, ScrollArea, Select, SimpleGrid, Stack, Table, Tabs,
-  Text, Textarea, TextInput, Title,
+  Text, Textarea, TextInput, Title, Tooltip,
 } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
@@ -19,8 +19,9 @@ const num = (v: string | number) => (v === '' || v === null || v === undefined ?
 const Del = ({ onClick }: { onClick: () => void }) => <ActionIcon size="sm" variant="subtle" color="red" aria-label="remove" onClick={onClick}>×</ActionIcon>;
 
 /** Work lines: stage → topic → where, what, quantity, crew and the cumulative % of the cell(s). */
-function WorksTable({ lines, onChange, editable, projectId, current, withProgress }: {
+function WorksTable({ lines, onChange, editable, projectId, current, withProgress, actualDates = false }: {
   lines: WorkLine[]; onChange: (l: WorkLine[]) => void; editable: boolean; projectId: string; current: Record<string, number>; withProgress: boolean;
+  actualDates?: boolean;
 }) {
   const { t } = useTranslation();
   const s = useStructure(projectId).data;
@@ -74,6 +75,17 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
               )}
               {editable && <Del onClick={() => onChange(lines.filter((_, j) => j !== i))} />}
             </Group>
+            {withProgress && actualDates && st && (
+              <Group gap="xs" mt={6} align="flex-end">
+                <TextInput size="xs" type="date" w={150} label={t('daily.actualStart')} value={w.actual_start ?? ''} disabled={!editable}
+                  onChange={(e) => set(i, { actual_start: e.currentTarget.value || null })} />
+                <Tooltip label={t('daily.actualFinishHint')}>
+                  <TextInput size="xs" type="date" w={150} label={t('daily.actualFinish')} value={w.actual_finish ?? ''} disabled={!editable || (w.progress ?? 0) < 100}
+                    onChange={(e) => set(i, { actual_finish: e.currentTarget.value || null })} />
+                </Tooltip>
+                <Text size="xs" c="dimmed" pb={6}>{t('daily.actualHint')}</Text>
+              </Group>
+            )}
           </Card>
         );
       })}
@@ -221,7 +233,8 @@ export default function DailyPanel({ rec }: { rec: RecordDetail }) {
 
         <Tabs.Panel value="works">
           <Text size="xs" c="dimmed" mb={6}>{t('daily.worksHint')}</Text>
-          <WorksTable lines={d.works} onChange={(l) => set({ works: l })} editable={ed} projectId={rec.project_id} current={out.current} withProgress />
+          <WorksTable lines={d.works} onChange={(l) => set({ works: l })} editable={ed} projectId={rec.project_id} current={out.current} withProgress
+            actualDates={!!settings.data?.actual_dates || d.works.some((x) => x.actual_start || x.actual_finish)} />
         </Tabs.Panel>
 
         <Tabs.Panel value="materials">
