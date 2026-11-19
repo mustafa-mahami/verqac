@@ -22,6 +22,8 @@ def test_inspection_flow_and_periods(client, site):
     assert round(delta.total_seconds() / 60) == 120
     # inspection asked for tomorrow 10:00 -> due 12:00
     when = (datetime.now(UTC) + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+    while when.weekday() == 4:  # not on the default weekend (Friday): the period would roll past it
+        when += timedelta(days=1)
     ir2 = _ir(client, site, requested_for=when.isoformat())
     done2 = act(client, site["hqa"], ir2["id"], "submit").json()
     assert datetime.fromisoformat(done2["due_at"]) == when + timedelta(hours=2)

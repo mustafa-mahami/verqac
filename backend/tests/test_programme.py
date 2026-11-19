@@ -131,3 +131,15 @@ def test_programme_exports(client, site):
     assert {(x["stage_id"], x["location_id"], x["start"]) for x in rows} == {(x["stage_id"], x["location_id"], x["start"]) for x in lines}
     pdf = client.get(f"/api/v1/records/{rid}/pdf?lang=ar", headers=s["hqa"])
     assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+
+def test_programme_critical_in_exports(client, site):
+    from app.core.programme import total_float
+    # structure 10 days a floor (0 stop), block after each floor's structure: the structure chain and the top block are critical
+    lines = [{"stage_id": "S", "location_id": u, "start": f"2026-12-{1 + 10 * i:02d}", "finish": f"2026-12-{10 + 10 * i:02d}"} for i, u in enumerate(("a", "b"))]
+    lines += [{"stage_id": "B", "location_id": "a", "start": "2026-12-11", "finish": "2026-12-15"},
+              {"stage_id": "B", "location_id": "b", "start": "2026-12-21", "finish": "2026-12-25"}]
+    cycles = [{"stage_id": "S", "start": "2026-12-01", "duration": 10, "lag": 0, "link": "fs"},
+              {"stage_id": "B", "duration": 5, "lag": 0, "link": "fs", "pred": "S", "rel": "after_end", "pred_days": 0}]
+    fl = total_float(lines, cycles, ["a", "b"], set())
+    assert fl[("S", "a")] == 0 and fl[("S", "b")] == 0 and fl[("B", "b")] == 0 and fl[("B", "a")] == 5  # the block crew waits for the next structure floor

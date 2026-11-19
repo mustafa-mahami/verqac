@@ -306,3 +306,55 @@ def match(rows: list[dict], stages: list, topics: list, units: list) -> list[dic
             loc = _best(norm(r["location"]) if r.get("location") else text, loc_names)
         out.append({**r, "stage_id": str(st.id) if st else None, "location_id": str(loc.id) if loc else None})
     return out
+
+
+# ----------------------------------------------------------------------------- critical path (same network as the UI)
+def total_float(lines: list[dict], cycles: list[dict], units: list[str], whole: set[str]) -> dict[tuple, int]:
+    """Total float in days of every cell ((stage, location | None) -> days); 0 or less = critical."""
+    cells = plan_cells(lines)
+    if not cells or not cycles:
+        return {}
+    nodes = {k: {"s": s.toordinal(), "f": f.toordinal()} for k, (s, f) in cells.items()}
+
+    def cells_of(stage):
+        keys = [(stage, None)] if stage in whole else [(stage, u) for u in units]
+        return [k for k in keys if k in nodes]
+
+    edges = []
+    for c in cycles:
+        sid = str(c["stage_id"])
+        mine = cells_of(sid)
+        fs = (c.get("link") or "fs") == "fs"
+        if sid not in whole:
+            for a, b in zip(mine, mine[1:]):
+                edges.append((a, b, "F" if fs else "S", (c.get("lag") or 0) + 1 if fs else (c.get("lag") or 0)))
+        pred = str(c["pred"]) if c.get("pred") else None
+        if not pred:
+            continue
+        d, rel = c.get("pred_days") or 0, c.get("rel") or "after_end"
+        on = "F" if rel.endswith("end") else "S"
+        k = d + 1 if rel == "after_end" else d if rel == "after_start" else -d
+        theirs = cells_of(pred)
+        if not theirs or not mine:
+            continue
+        if sid not in whole and pred not in whole:
+            for u in units:
+                if (pred, u) in nodes and (sid, u) in nodes:
+                    edges.append(((pred, u), (sid, u), on, k))
+        elif sid not in whole:
+            edges.append((theirs[0], mine[0], on, k))
+        else:
+            pick = max(theirs, key=lambda x: nodes[x]["f"]) if on == "F" else min(theirs, key=lambda x: nodes[x]["s"])
+            edges.append((pick, mine[0], on, k))
+    end = max(n["f"] for n in nodes.values())
+    lf = {k: end for k in nodes}
+    for _ in range(500):
+        changed = False
+        for p, s, on, k in edges:
+            ls = lf[s] - (nodes[s]["f"] - nodes[s]["s"])
+            v = ls - k if on == "F" else ls - k + (nodes[p]["f"] - nodes[p]["s"])
+            if v < lf[p]:
+                lf[p], changed = v, True
+        if not changed:
+            break
+    return {k: lf[k] - nodes[k]["f"] for k in nodes}

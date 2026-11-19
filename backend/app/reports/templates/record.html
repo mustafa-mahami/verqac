@@ -44,6 +44,8 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
 .g-bar { position: relative; flex: 1; height: 14px; }
 .g-bar i { position: absolute; top: 3px; height: 8px; background: #2b5d8f; border-radius: 2px; }
 .g-row.stage .g-bar i { background: #343a40; height: 4px; top: 5px; }
+.g-bar i.crit { background: #e03131; }
+.g-row.crit .g-lab { color: #c92a2a; font-weight: 600; }
 .g-m { position: absolute; top: 0; bottom: 0; border-inline-start: 1px solid #e3e7ec; }
 .g-head { display: flex; border-bottom: 1px solid #c9ced6; font-size: 7.5pt; color: #444; }
 .g-head .g-bar span { position: absolute; top: 1px; padding-inline-start: 2px; }
@@ -114,15 +116,16 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
 
   {% if programme %}{% set P = programme %}
   <div class="section">{{ P.t.gantt }} — <span class="ltr">{{ P.span }}</span></div>
+  {% if P.cpm %}<div class="muted" style="color:#c92a2a">{{ P.t.legend }}</div>{% endif %}
   <div class="gantt">
     <div class="g-head"><div class="g-lab">{{ P.t.stage }} / {{ P.t.where }}</div>
       <div class="g-bar">{% for m in P.months %}<span style="inset-inline-start: {{ m.l }}%" class="ltr">{{ m.label }}</span>{% endfor %}</div></div>
-    {% for r in P.rows %}<div class="g-row {{ r.kind }}"><div class="g-lab">{{ r.stage if r.kind == 'stage' else '' }}{% if r.kind == 'stage' and r.where %} · {{ r.where }}{% endif %}{% if r.kind == 'cell' %}&nbsp;&nbsp;{{ r.where }}{% endif %}</div>
-      <div class="g-bar">{% for m in P.months %}<span class="g-m" style="inset-inline-start: {{ m.l }}%"></span>{% endfor %}<i style="inset-inline-start: {{ r.l }}%; width: {{ r.w }}%"></i></div></div>{% endfor %}
+    {% for r in P.rows %}<div class="g-row {{ r.kind }}{% if r.crit %} crit{% endif %}"><div class="g-lab">{{ r.stage if r.kind == 'stage' else '' }}{% if r.kind == 'stage' and r.where %} · {{ r.where }}{% endif %}{% if r.kind == 'cell' %}&nbsp;&nbsp;{{ r.where }}{% endif %}</div>
+      <div class="g-bar">{% for m in P.months %}<span class="g-m" style="inset-inline-start: {{ m.l }}%"></span>{% endfor %}<i{% if r.crit %} class="crit"{% endif %} style="inset-inline-start: {{ r.l }}%; width: {{ r.w }}%"></i></div></div>{% endfor %}
   </div>
   <div class="section" style="page-break-before: always">{{ P.t.list }}</div>
-  <table class="check"><tr><th style="width:30%">{{ P.t.stage }}</th><th>{{ P.t.where }}</th><th style="width:14%">{{ P.t.start }}</th><th style="width:14%">{{ P.t.finish }}</th><th style="width:10%">{{ P.t.days }}</th></tr>
-    {% for r in P.rows %}<tr{% if r.kind == 'stage' %} style="background:#f3f5f8;font-weight:600"{% endif %}><td>{{ r.stage }}</td><td>{{ r.where }}</td><td class="ltr">{{ r.s }}</td><td class="ltr">{{ r.f }}</td><td>{{ r.days }}</td></tr>{% endfor %}
+  <table class="check"><tr><th style="width:30%">{{ P.t.stage }}</th><th>{{ P.t.where }}</th><th style="width:14%">{{ P.t.start }}</th><th style="width:14%">{{ P.t.finish }}</th><th style="width:10%">{{ P.t.days }}</th>{% if P.cpm %}<th style="width:10%">{{ P.t.float }}</th>{% endif %}</tr>
+    {% for r in P.rows %}<tr{% if r.kind == 'stage' %} style="background:#f3f5f8;font-weight:600"{% endif %}><td>{{ r.stage }}</td><td>{{ r.where }}</td><td class="ltr">{{ r.s }}</td><td class="ltr">{{ r.f }}</td><td>{{ r.days }}</td>{% if P.cpm %}<td{% if r.crit %} style="color:#c92a2a;font-weight:600"{% endif %}>{% if r.crit %}{{ P.t.crit }}{% elif r.float is not none %}{{ r.float }}{% endif %}</td>{% endif %}</tr>{% endfor %}
   </table>
   {% endif %}
 

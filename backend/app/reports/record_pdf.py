@@ -141,15 +141,15 @@ def _daily(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
             "visitors": r.visitors, "notes": r.notes, "num": num}
 
 
-PRG_T = {"ar": {"title": "البرنامج الزمني", "stage": "المرحلة", "where": "الموقع", "start": "البداية", "finish": "النهاية",
+PRG_T = {"ar": {"title": "البرنامج الزمني", "float": "الهامش (يوم)", "crit": "حرج", "legend": "الأحمر = المسار الحرج: أي تأخير فيه يؤخر نهاية المشروع",  "stage": "المرحلة", "where": "الموقع", "start": "البداية", "finish": "النهاية",
                 "days": "المدة (يوم)", "whole": "المشروع كاملاً", "span": "من {a} إلى {b} — {n} يوماً", "gantt": "المخطط الزمني",
                 "list": "تواريخ المراحل والطوابق"},
-          "en": {"title": "Time programme", "stage": "Stage", "where": "Location", "start": "Start", "finish": "Finish",
+          "en": {"title": "Time programme", "float": "Float (days)", "crit": "critical", "legend": "Red = critical path: any delay there moves the project finish",  "stage": "Stage", "where": "Location", "start": "Start", "finish": "Finish",
                  "days": "Days", "whole": "Whole project", "span": "{a} to {b} — {n} days", "gantt": "Schedule",
                  "list": "Dates of stages and floors"}}
 
 
-def programme_view(db, project_id, lines: list, lang: str) -> dict | None:
+def programme_view(db, project_id, lines: list, lang: str, cycles: list | None = None) -> dict | None:
     """Rows (stage, then its floors) with dates and Gantt positions in % of the programme span."""
     from datetime import date, timedelta
     from app.core.programme import plan_cells
@@ -168,24 +168,34 @@ def programme_view(db, project_id, lines: list, lang: str) -> dict | None:
     span = (hi - lo).days + 1
     pos = lambda s, f: {"l": round((s - lo).days / span * 100, 2), "w": max(0.4, round(((f - s).days + 1) / span * 100, 2))}  # noqa: E731
     T = PRG_T[lang]
+    from app.core.programme import total_float
+    whole_ids = {str(st.id) for st in stages if st.scope == "whole" or not units}
+    active = [str(u.id) for u in units if u.is_active]
+    fl = total_float(lines, cycles or [], active, whole_ids)
+    has_cpm = bool(fl)
     rows = []
     for st in stages:
         mine = [(u, cells[(str(st.id), str(u.id))]) for u in units if (str(st.id), str(u.id)) in cells]
         whole = cells.get((str(st.id), None))
         if whole:
+            f_ = fl.get((str(st.id), None))
             rows.append({"kind": "stage", "stage": getattr(st, n), "where": T["whole"], "s": whole[0], "f": whole[1],
-                         "days": (whole[1] - whole[0]).days + 1, **pos(*whole)})
+                         "days": (whole[1] - whole[0]).days + 1, "float": f_, "crit": f_ is not None and f_ <= 0, **pos(*whole)})
         elif mine:
             s, f = min(x[1][0] for x in mine), max(x[1][1] for x in mine)
-            rows.append({"kind": "stage", "stage": getattr(st, n), "where": "", "s": s, "f": f, "days": (f - s).days + 1, **pos(s, f)})
+            rows.append({"kind": "stage", "stage": getattr(st, n), "where": "", "s": s, "f": f, "days": (f - s).days + 1,
+                         "float": None, "crit": False, **pos(s, f)})
             for u, (a, b) in mine:
-                rows.append({"kind": "cell", "stage": "", "where": getattr(u, n), "s": a, "f": b, "days": (b - a).days + 1, **pos(a, b)})
+                f_ = fl.get((str(st.id), str(u.id)))
+                rows.append({"kind": "cell", "stage": "", "where": getattr(u, n), "s": a, "f": b, "days": (b - a).days + 1,
+                             "float": f_, "crit": f_ is not None and f_ <= 0, **pos(a, b)})
     months, d = [], date(lo.year, lo.month, 1)
     while d <= hi:
         if d >= lo:
             months.append({"l": round((d - lo).days / span * 100, 2), "label": d.strftime("%m/%Y")})
         d = (d + timedelta(days=32)).replace(day=1)
-    return {"t": T, "rows": rows, "months": months, "span": T["span"].format(a=lo.isoformat(), b=hi.isoformat(), n=span)}
+    return {"t": T, "rows": rows, "months": months, "span": T["span"].format(a=lo.isoformat(), b=hi.isoformat(), n=span),
+            "cpm": has_cpm}
 
 
 def _programme(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
@@ -193,7 +203,7 @@ def _programme(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
         return None
     from app.models.programme import Programme
     p = c.db.get(Programme, d.id)
-    return programme_view(c.db, d.project_id, p.lines, lang) if p else None
+    return programme_view(c.db, d.project_id, p.lines, lang, p.cycles) if p else None
 
 
 def _lab(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
