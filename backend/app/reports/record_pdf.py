@@ -48,7 +48,7 @@ LAB_T = {"ar": {"title": "نتائج الفحص المخبري", "lab": "الم�
                 "value": "القيمة", "limits": "الحدود", "res": "النتيجة", "result": "النتيجة المحسوبة", "pass": "مطابق",
                 "fail": "غير مطابق", "na": "—", "lab_concl": "استنتاج المختبر", "decision": "القرار على النتيجة الراسبة",
                 "avg": "متوسط مقاومة 28 يوماً", "low": "أضعف عينة",
-                "decisions": {"retest": "إعادة الفحص", "core": "فحص كور / موقعي", "accepted": "قبول من المهندس",
+                "decisions": {"retest": "إعادة الفحص", "core": "فحص كور / موقعي", "accepted": "قبول من المهندس", "deduction": "قبول مع خصم على المقاول",
                               "repair": "إصلاح / إزالة واستبدال", "rejected": "رفض المادة / الدفعة", "other": "أخرى"}},
          "en": {"title": "Laboratory test results", "lab": "Laboratory", "report_no": "Lab report no.", "sampling": "Sampling date",
                 "test_date": "Test date", "report_date": "Report date", "grade": "Grade / class", "fck": "Specified strength",
@@ -56,7 +56,7 @@ LAB_T = {"ar": {"title": "نتائج الفحص المخبري", "lab": "الم�
                 "param": "Parameter", "value": "Value", "limits": "Limits", "res": "Result", "result": "Calculated result",
                 "pass": "Pass", "fail": "Fail", "na": "—", "lab_concl": "Lab conclusion", "decision": "Decision on the failed test",
                 "avg": "Mean 28-day strength", "low": "Lowest specimen",
-                "decisions": {"retest": "Retest", "core": "Core / in-situ test", "accepted": "Accepted by the Engineer",
+                "decisions": {"retest": "Retest", "core": "Core / in-situ test", "accepted": "Accepted by the Engineer", "deduction": "Accepted with a deduction",
                               "repair": "Repair / remove and replace", "rejected": "Material / batch rejected", "other": "Other"}}}
 
 

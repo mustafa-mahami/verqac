@@ -33,7 +33,7 @@ export interface LabOut extends LabData {
 }
 
 export const MATERIALS = ['CON', 'STL', 'BC', 'SOIL', 'ASP', 'BLK', 'TIL', 'WP', 'MEP', 'OTH'];
-export const DECISIONS = ['retest', 'core', 'accepted', 'repair', 'rejected', 'other'];
+export const DECISIONS = ['retest', 'core', 'accepted', 'deduction', 'repair', 'rejected', 'other'];
 
 export const blankLine = (p: Partial<LabLine> = {}): LabLine => ({
   sample: null, parameter: '', unit: null, method: null, age: null, kind: 'number', value: null, text: null,

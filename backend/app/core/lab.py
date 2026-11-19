@@ -24,7 +24,7 @@ MATERIALS = [("CON", "الباطون", "Concrete"), ("STL", "حديد التسل
              ("TIL", "البلاط والحجر", "Tiles / Stone"), ("WP", "العزل", "Waterproofing / Insulation"),
              ("MEP", "مواد كهروميكانيكية", "MEP materials"), ("OTH", "أخرى", "Other")]
 MATERIAL_CODES = {m[0] for m in MATERIALS}
-DECISIONS = ("retest", "core", "accepted", "repair", "rejected", "other")
+DECISIONS = ("retest", "core", "accepted", "deduction", "repair", "rejected", "other")
 PASS_WORDS = {"OK", "PASS", "PASSED", "YES", "Y", "C", "COMPLY", "COMPLIES", "✓", "مطابق", "ناجح"}
 FAIL_WORDS = {"NOK", "NOT OK", "FAIL", "FAILED", "NO", "N", "NC", "X", "✗", "غير مطابق", "راسب"}
 

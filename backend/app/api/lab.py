@@ -116,7 +116,7 @@ class LabOut(LabIO):
 
 
 class DecisionIn(BaseModel):
-    decision: Literal["retest", "core", "accepted", "repair", "rejected", "other"] | None
+    decision: Literal["retest", "core", "accepted", "deduction", "repair", "rejected", "other"] | None
     note: str | None = Field(default=None, max_length=2000)
 
 
@@ -337,6 +337,14 @@ def put_decision(record_id: uuid.UUID, body: DecisionIn, c: Ctx = Depends(ctx)):
     require(res.result == "fail", "not_failed")
     res.decision, res.decision_note = body.decision, (body.note or "").strip() or None
     res.decision_by, res.decision_at = (c.user.id, datetime.now(UTC)) if body.decision else (None, None)
+    # a decision other than a retest settles the failure: the contractor no longer owes a resubmission
+    from app.api.records import RESUBMIT_STATES, periods
+    if rec.state_category in RESUBMIT_STATES and rec.resubmitted_at is None:
+        if body.decision and body.decision != "retest":
+            rec.resubmit_due_at = None
+        elif rec.resubmit_due_at is None and rec.answered_at:
+            from app.core.workcal import add_period, calendar_for
+            rec.resubmit_due_at = add_period(rec.answered_at, periods(a.project, rt)[1], calendar_for(c.db, a.project))
     from app.api.records import _audit
     _audit(c, rec, "lab_decision", {"decision": body.decision}, a)
     c.db.flush()

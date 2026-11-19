@@ -49,6 +49,12 @@ def test_templates_classes_and_concrete_result(client, site):
     assert d["decision"] == "core"
     assert client.put(f"/api/v1/records/{t['id']}/lab/decision", headers=site["hqa"], json={"decision": "accepted"}).status_code == 403
     act(client, site["hce"], t["id"], "retest", comment="أعيدوا الفحص")
+    assert client.get(f"/api/v1/records/{t['id']}", headers=site["hqa"]).json()["resubmit_due_at"]
+    # accepted with a deduction: settled, no resubmission owed; back to a retest: owed again
+    client.put(f"/api/v1/records/{t['id']}/lab/decision", headers=site["hce"], json={"decision": "deduction", "note": "خصم"})
+    assert client.get(f"/api/v1/records/{t['id']}", headers=site["hqa"]).json()["resubmit_due_at"] is None
+    client.put(f"/api/v1/records/{t['id']}/lab/decision", headers=site["hce"], json={"decision": "retest"})
+    assert client.get(f"/api/v1/records/{t['id']}", headers=site["hqa"]).json()["resubmit_due_at"]
     r1 = client.post(f"/api/v1/records/{t['id']}/revise", headers=site["hqa"]).json()
     lab1 = client.get(f"/api/v1/records/{r1['id']}/lab", headers=site["hqa"]).json()
     assert len(lab1["lines"]) == 3 and lab1["lines"][0]["value"] is None and lab1["fck"] == 30

@@ -813,7 +813,8 @@
       "accepted": "Accepted by the Engineer",
       "repair": "Repair / remove and replace",
       "rejected": "Material / batch rejected",
-      "other": "Other"
+      "other": "Other",
+      "deduction": "Accepted with a deduction"
     },
     "tab28": "28-day results and other parameters ({{count}})",
     "tab7": "7-day results ({{count}})",
