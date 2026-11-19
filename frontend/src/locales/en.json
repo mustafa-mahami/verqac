@@ -1132,7 +1132,10 @@
     "startTxt": "starts {{d}}",
     "durTxt": "{{n}}d per floor",
     "gapTxt": "{{n}}d stop",
-    "ssTxt": "next floor {{n}}d after its start"
+    "ssTxt": "next floor {{n}}d after its start",
+    "driftTitle": "Dates that do not follow the links",
+    "drift": "These stages have dates other than their links and floor cycle give: {{list}}. This happens when dates are edited by hand after generating, or stages are generated in parts. The result: false float and a short critical path.",
+    "driftFix": "Recompute all linked stages together"
   },
   "gantt": {
     "byFloor": "By floor",

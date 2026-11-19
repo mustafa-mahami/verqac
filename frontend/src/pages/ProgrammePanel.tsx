@@ -260,6 +260,17 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
   const from = bars.length ? bars.reduce((m, b) => (b.start < m ? b.start : m), bars[0].start) : null;
   const to = bars.length ? bars.reduce((m, b) => (b.finish > m ? b.finish : m), bars[0].finish) : null;
   const floats = cpm(lines, cycles, units.map((u) => u.id!), whole);
+  // cells whose saved dates no longer follow their links (edited by hand, shifted, or generated in parts)
+  const drift = (() => {
+    if (!cycles.length) return [] as string[];
+    const want = new Map(schedule(cycles, units.map((u) => u.id!), whole, lines).lines.map((l) => [cellKey(l.stage_id, l.location_id), l.start]));
+    const names = new Set<string>();
+    for (const l of lines) {
+      const w = want.get(cellKey(l.stage_id, l.location_id));
+      if (w && w !== l.start) names.add(pick(stages.find((x) => x.id === l.stage_id) ?? { name_ar: '', name_en: '' }, 'name'));
+    }
+    return [...names];
+  })();
   const today = new Date().toISOString().slice(0, 10);
   const done = new Map((prog.data?.cells ?? []).map((c) => [cellKey(c.stage_id, c.location_id), c]));
   const hasActual = (prog.data?.cells ?? []).some((c) => c.progress > 0 || c.started_on);
@@ -336,6 +347,15 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
       </Group>
       {edit && <Text size="xs" c="dimmed">{t('prg.formats')}</Text>}
       {msg && <Alert color={msg.ok ? 'green' : 'red'} withCloseButton onClose={() => setMsg(null)}>{msg.text}</Alert>}
+      {drift.length > 0 && (
+        <Alert color="orange" title={t('prg.driftTitle')}>
+          <Text size="sm">{t('prg.drift', { list: drift.join('، ') })}</Text>
+          {edit && <Button mt="xs" size="xs" variant="light" color="orange" onClick={() => {
+            const ids = new Set(cycles.map((c) => c.stage_id));
+            change([...lines.filter((l) => !ids.has(l.stage_id)), ...schedule(cycles, units.map((u) => u.id!), whole, lines).lines], 'cycle');
+          }}>{t('prg.driftFix')}</Button>}
+        </Alert>
+      )}
       {edit && draft && !dirty && (
         <Alert color="orange" title={t('prg.draftTitle')}>
           <Text size="sm">{t('prg.draftHint', { at: new Date(draft.at).toLocaleString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB') })}</Text>
