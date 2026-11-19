@@ -9,7 +9,7 @@ import { api, ApiError, openProtected, type RecordDetail } from '../api';
 import type { ProgressOut } from '../daily';
 import { fmtDate } from '../format';
 import i18n, { pick } from '../i18n';
-import { addDays, cellKey, cellPlanned, cellStatus, cpm, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
+import { addDays, cellKey, cellPlanned, cellStatus, cpm, lineLinks, daysBetween, schedule, type ImportRow, type Rel, type PCycle, type PLine, type ProgrammeOut } from '../programme';
 import { useStructure } from './Structure';
 import Gantt, { type GanttItem } from './Gantt';
 
@@ -365,7 +365,7 @@ export default function ProgrammePanel({ rec }: { rec: RecordDetail }) {
           </Group>
         </Alert>
       )}
-      {from && to && <Card withBorder p="xs"><Gantt items={gItems} showActual={hasActual} /></Card>}
+      {from && to && <Card withBorder p="xs"><Gantt items={gItems} showActual={hasActual} links={lineLinks(lines, cycles, units.map((u) => u.id!), whole)} /></Card>}
       <Card withBorder p={0}>
         <Table verticalSpacing={4} fz="sm">
           <Table.Thead><Table.Tr>

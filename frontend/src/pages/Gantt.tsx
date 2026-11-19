@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CellStatus } from '../daily';
 import { fmtDate } from '../format';
-import { addDays, daysBetween } from '../programme';
+import { addDays, cellKey, daysBetween, type NetLink } from '../programme';
 
 /** One bar row: a stage on a floor (or a whole-project stage). */
 export interface GanttItem {
@@ -30,7 +30,7 @@ const monthStarts = (from: string, to: string) => {
 
 /** Interactive Gantt: grouped by floor or by stage, zoom (week / month / quarter / fit), date range,
  * only behind, collapse, planned vs actual with status colours; follows the page direction. */
-export default function Gantt({ items, showActual, toolbar }: { items: GanttItem[]; showActual: boolean; toolbar?: ReactNode }) {
+export default function Gantt({ items, showActual, toolbar, links = [] }: { items: GanttItem[]; showActual: boolean; toolbar?: ReactNode; links?: NetLink[] }) {
   const { t, i18n } = useTranslation();
   const [by, setBy] = useState<'floor' | 'stage'>('floor');
   const [zoom, setZoom] = useState<Zoom>('fit'); // the whole programme on screen; month / week to look closer
@@ -39,6 +39,7 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
   const [onlyLate, setOnlyLate] = useState(false);
   const hasCpm = items.some((x) => x.float !== undefined && x.float !== null);
   const [crit, setCrit] = useState(false);
+  const [arrows, setArrows] = useState(false);
   const isCrit = (it: GanttItem) => it.float !== undefined && it.float !== null && it.float <= 0;
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const box = useRef<HTMLDivElement>(null);
@@ -134,6 +135,47 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
   const cell = { position: 'sticky' as const, insetInlineStart: 0, zIndex: 3, background: 'var(--mantine-color-body)', width: LABEL_W, minWidth: LABEL_W,
     borderInlineEnd: '1px solid #dee2e6', paddingInline: 8, display: 'flex', alignItems: 'center', gap: 6, height: ROW, overflow: 'hidden' };
 
+  // where each visible row sits (for the link arrows): header, then group rows (ROW) and item rows (ROW + 1px border)
+  const headH = (zoom === 'week' ? 40 : 26) + 1;
+  const rowAt = new Map<string, number>();
+  let yy = headH;
+  for (const g of groups) {
+    yy += ROW;
+    if (closed[g.key]) continue;
+    for (const it of g.rows) { rowAt.set(cellKey(it.stageId, it.locId), yy + 1); yy += ROW + 1; }
+  }
+  const byKey = new Map(shown.map((it) => [cellKey(it.stageId, it.locId), it]));
+  const rtl = i18n.dir() === 'rtl';
+  const X = (v: number) => (rtl ? W - v : v);
+  const mid = showActual ? 6 : 12;
+  const arrowSvg = arrows && links.length > 0 ? (
+    <svg width={W} height={yy} style={{ position: 'absolute', top: 0, insetInlineStart: LABEL_W, pointerEvents: 'none', zIndex: 2, overflow: 'visible' }}>
+      <defs>
+        {(['n', 'c', 'r'] as const).map((k) => (
+          <marker key={k} id={`gh-${k}`} viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L6,3 L0,6 z" fill={k === 'r' ? '#e03131' : k === 'c' ? '#adb5bd' : '#495057'} />
+          </marker>
+        ))}
+      </defs>
+      {links.map((e, i) => {
+        const a = byKey.get(e.p), b = byKey.get(e.s);
+        const ya = rowAt.get(e.p), yb = rowAt.get(e.s);
+        if (!a?.plan || !b?.plan || ya === undefined || yb === undefined) return null;
+        const xa = e.on === 'F' ? x(addDays(a.plan.finish, 1)) : x(a.plan.start);
+        const xb = x(b.plan.start);
+        const red = crit && isCrit(a) && isCrit(b);
+        const kind = red ? 'r' : e.crew ? 'c' : 'n';
+        const turn = Math.max(xa + 5, Math.min(xb - 5, xa + 5));
+        const y1 = ya + mid, y2 = yb + mid;
+        const d = xb - 6 >= turn
+          ? `M${X(xa)},${y1} H${X(turn)} V${y2} H${X(xb)}`
+          : `M${X(xa)},${y1} H${X(xa + 5)} V${(y1 + y2) / 2} H${X(xb - 6)} V${y2} H${X(xb)}`;
+        return <path key={i} d={d} fill="none" stroke={red ? '#e03131' : e.crew ? '#adb5bd' : '#495057'} strokeWidth={red ? 1.6 : 1}
+          strokeDasharray={e.crew && !red ? '3 2' : undefined} markerEnd={`url(#gh-${kind})`} opacity={0.9} />;
+      })}
+    </svg>
+  ) : null;
+
   return (
     <div ref={box}>
       <Group gap="xs" mb="xs" wrap="wrap">
@@ -145,6 +187,7 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
         <TextInput size="xs" type="date" w={140} value={from} onChange={(e) => setFrom(e.currentTarget.value)} aria-label={t('gantt.from')} leftSection={<Text size="xs">{t('gantt.from')}</Text>} leftSectionWidth={36} />
         <TextInput size="xs" type="date" w={140} value={to} onChange={(e) => setTo(e.currentTarget.value)} aria-label={t('gantt.to')} leftSection={<Text size="xs">{t('gantt.to')}</Text>} leftSectionWidth={36} />
         {hasCpm && <Checkbox size="xs" color="red" label={t('gantt.criticalPath')} checked={crit} onChange={(e) => setCrit(e.currentTarget.checked)} />}
+        {links.length > 0 && <Checkbox size="xs" label={t('gantt.arrows')} checked={arrows} onChange={(e) => setArrows(e.currentTarget.checked)} />}
         {showActual && <Checkbox size="xs" label={t('gantt.onlyLate')} checked={onlyLate} onChange={(e) => setOnlyLate(e.currentTarget.checked)} />}
         <Button size="compact-xs" variant="subtle" onClick={() => setClosed({})}>{t('gantt.expand')}</Button>
         <Button size="compact-xs" variant="subtle" onClick={() => setClosed(Object.fromEntries(groups.map((g) => [g.key, true])))}>{t('gantt.collapse')}</Button>
@@ -179,6 +222,7 @@ export default function Gantt({ items, showActual, toolbar }: { items: GanttItem
       )}
       <ScrollArea type="auto" offsetScrollbars style={{ border: '1px solid #dee2e6', borderRadius: 6 }}>
         <div style={{ width: LABEL_W + W, position: 'relative' }}>
+          {arrowSvg}
           <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 4, background: 'var(--mantine-color-gray-0)', borderBottom: '1px solid #dee2e6' }}>
             <div style={{ ...cell, background: 'var(--mantine-color-gray-0)', height: zoom === 'week' ? 40 : 26 }}>
               <Text size="xs" fw={600}>{by === 'floor' ? t('gantt.floorStage') : t('gantt.stageFloor')}</Text>

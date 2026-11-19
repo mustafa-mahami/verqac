@@ -95,35 +95,7 @@ export function cpm(lines: PLine[], cycles: PCycle[], units: string[], whole: Se
     const s = day(l.start), f = day(l.finish);
     nodes.set(cellKey(l.stage_id, l.location_id), { s, f, d: f - s + 1, lf: Infinity });
   }
-  // edges: succ.start >= (pred.start | pred.finish) + k
-  const edges: { p: string; s: string; on: 'S' | 'F'; k: number }[] = [];
-  const cellsOf = (stage: string) => (whole.has(stage) ? [cellKey(stage, null)] : units.map((u) => cellKey(stage, u))).filter((k) => nodes.has(k));
-  for (const c of cycles) {
-    const mine = cellsOf(c.stage_id);
-    if (!whole.has(c.stage_id)) {  // the crew moves up floor by floor
-      for (let i = 1; i < mine.length; i++)
-        edges.push({ p: mine[i - 1], s: mine[i], on: (c.link ?? 'fs') === 'fs' ? 'F' : 'S', k: (c.link ?? 'fs') === 'fs' ? c.lag + 1 : c.lag });
-    }
-    if (!c.pred) continue;
-    const d = c.pred_days ?? 0;
-    const rel = c.rel ?? 'after_end';
-    const on: 'S' | 'F' = rel.endsWith('end') ? 'F' : 'S';
-    const k = rel === 'after_end' ? d + 1 : rel === 'after_start' ? d : -d;
-    const theirs = cellsOf(c.pred);
-    if (!theirs.length || !mine.length) continue;
-    if (!whole.has(c.stage_id) && !whole.has(c.pred)) {
-      for (const u of units) {
-        const a = cellKey(c.pred, u), b = cellKey(c.stage_id, u);
-        if (nodes.has(a) && nodes.has(b)) edges.push({ p: a, s: b, on, k });
-      }
-    } else if (!whole.has(c.stage_id)) {  // a floor stage after a whole-project one: its first floor
-      edges.push({ p: theirs[0], s: mine[0], on, k });
-    } else {  // a whole-project stage after a floor stage: the binding floor (latest finish / earliest start)
-      const pick = on === 'F' ? theirs.reduce((a, b) => (nodes.get(b)!.f > nodes.get(a)!.f ? b : a))
-        : theirs.reduce((a, b) => (nodes.get(b)!.s < nodes.get(a)!.s ? b : a));
-      edges.push({ p: pick, s: mine[0], on, k });
-    }
-  }
+  const edges = links(nodes, cycles, units, whole);
   const end = Math.max(...[...nodes.values()].map((n) => n.f));
   for (const n of nodes.values()) n.lf = end;
   // backward pass: relax until stable (small networks)
@@ -151,4 +123,46 @@ export function cellStatus(planned: number, actual: number): 'done' | 'not_start
   if (actual + 10 < planned) return 'late';
   if (actual > planned + 5) return 'ahead';
   return 'on_track';
+}
+
+export interface NetLink { p: string; s: string; on: 'S' | 'F'; k: number; crew: boolean }
+
+/** The network of a programme: succ.start >= (pred.start | pred.finish) + k. "crew" = the same stage moving up a floor. */
+export function links(nodes: Map<string, { s: number; f: number }>, cycles: PCycle[], units: string[], whole: Set<string>): NetLink[] {
+  const edges: NetLink[] = [];
+  const cellsOf = (stage: string) => (whole.has(stage) ? [cellKey(stage, null)] : units.map((u) => cellKey(stage, u))).filter((k) => nodes.has(k));
+  for (const c of cycles) {
+    const mine = cellsOf(c.stage_id);
+    if (!whole.has(c.stage_id)) {  // the crew moves up floor by floor
+      for (let i = 1; i < mine.length; i++)
+        edges.push({ p: mine[i - 1], s: mine[i], on: (c.link ?? 'fs') === 'fs' ? 'F' : 'S', k: (c.link ?? 'fs') === 'fs' ? c.lag + 1 : c.lag, crew: true });
+    }
+    if (!c.pred) continue;
+    const d = c.pred_days ?? 0;
+    const rel = c.rel ?? 'after_end';
+    const on: 'S' | 'F' = rel.endsWith('end') ? 'F' : 'S';
+    const k = rel === 'after_end' ? d + 1 : rel === 'after_start' ? d : -d;
+    const theirs = cellsOf(c.pred);
+    if (!theirs.length || !mine.length) continue;
+    if (!whole.has(c.stage_id) && !whole.has(c.pred)) {
+      for (const u of units) {
+        const a = cellKey(c.pred, u), b = cellKey(c.stage_id, u);
+        if (nodes.has(a) && nodes.has(b)) edges.push({ p: a, s: b, on, k, crew: false });
+      }
+    } else if (!whole.has(c.stage_id)) {  // a floor stage after a whole-project one: its first floor
+      edges.push({ p: theirs[0], s: mine[0], on, k, crew: false });
+    } else {  // a whole-project stage after a floor stage: the binding floor (latest finish / earliest start)
+      const pick = on === 'F' ? theirs.reduce((a, b) => (nodes.get(b)!.f > nodes.get(a)!.f ? b : a))
+        : theirs.reduce((a, b) => (nodes.get(b)!.s < nodes.get(a)!.s ? b : a));
+      edges.push({ p: pick, s: mine[0], on, k, crew: false });
+    }
+  }
+  return edges;
+}
+
+/** The links between the cells of a set of lines (for drawing). */
+export function lineLinks(lines: PLine[], cycles: PCycle[], units: string[], whole: Set<string>): NetLink[] {
+  const day = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / 86_400_000);
+  const nodes = new Map(lines.filter((l) => l.start && l.finish).map((l) => [cellKey(l.stage_id, l.location_id), { s: day(l.start), f: day(l.finish) }]));
+  return links(nodes, cycles, units, whole);
 }

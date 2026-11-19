@@ -7,7 +7,7 @@ import { api, type ProjectSettings } from '../api';
 import type { CellStatus, ProgressCell, ProgressOut } from '../daily';
 import { fmtDate } from '../format';
 import { pick } from '../i18n';
-import { cellKey, cpm, type ProgrammeOut, type ProgrammeSummary } from '../programme';
+import { cellKey, cpm, lineLinks, type ProgrammeOut, type ProgrammeSummary } from '../programme';
 import { useStructure } from './Structure';
 import Gantt, { type GanttItem } from './Gantt';
 
@@ -204,7 +204,7 @@ export default function ProgressMatrix({ projectId }: { projectId: string }) {
         </Group>
       )}
       {view === 'gantt' ? (
-        <Card withBorder><Gantt items={ganttItems} showActual /></Card>
+        <Card withBorder><Gantt items={ganttItems} showActual links={prg.data ? lineLinks(prg.data.lines, prg.data.cycles, units.map((u) => u.id!), wholeSet) : []} /></Card>
       ) : (
       <Card withBorder p={0}>
         <ScrollArea>
