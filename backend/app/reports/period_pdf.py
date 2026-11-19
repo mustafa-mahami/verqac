@@ -24,7 +24,8 @@ P_T = {
            "late": "الأعمال المتأخرة عن البرنامج (نهاية الفترة)", "actual": "الفعلي", "finish": "النهاية المخططة",
            "requests": "سجلات الجودة (الطلبات)", "type": "النوع", "submitted": "قُدّم", "answered": "أُجيب", "approved": "معتمد",
            "returned": "مُعاد / مرفوض", "open": "مفتوح", "overdue": "متأخر الرد", "number": "الرقم", "title": "الموضوع",
-           "due": "موعد الرد", "late_by": "متأخر (يوم)", "none": "لا يوجد"},
+           "due": "موعد الرد", "late_by": "متأخر (يوم)", "none": "لا يوجد", "month_col": "الشهر", "deliveries": "مرات التوريد",
+           "monthly": "فترة طويلة: التفاصيل مجمّعة حسب الشهر (التفصيل الكامل في المنصة)"},
     "en": {"week": "Weekly report", "month": "Monthly report", "custom": "Period report", "period": "Period", "upto": "Counted up to",
            "consultant": "Consultant", "owner": "Owner", "summary": "Summary", "working_days": "Working days in the period",
            "reports": "Approved daily reports", "pending": "Awaiting approval (not counted)", "missing": "Working days without a report",
@@ -39,8 +40,32 @@ P_T = {
            "late": "Works behind the programme (end of period)", "actual": "Actual", "finish": "Planned finish",
            "requests": "QA registers (requests)", "type": "Type", "submitted": "Submitted", "answered": "Answered", "approved": "Approved",
            "returned": "Returned / rejected", "open": "Open", "overdue": "Reply overdue", "number": "No.", "title": "Subject",
-           "due": "Reply due", "late_by": "Late (days)", "none": "None"},
+           "due": "Reply due", "late_by": "Late (days)", "none": "None", "month_col": "Month", "deliveries": "Deliveries",
+           "monthly": "Long period: details summed by month (every line is on the platform)"},
 }
+
+
+LONG = 92  # days: beyond about a quarter, materials and delays print as monthly totals
+
+
+def monthly(out) -> dict:
+    """Materials and delays summed per month, for long periods."""
+    mats: dict = {}
+    for m in out.materials:
+        k = (m.day.strftime("%Y-%m"), m.material.strip(), (m.unit or "").strip())
+        r = mats.setdefault(k, {"qty": 0.0, "n": 0, "has_qty": False})
+        r["n"] += 1
+        if m.qty is not None:
+            r["qty"] += float(m.qty)
+            r["has_qty"] = True
+    dels: dict = {}
+    for d in out.delay_items:
+        k = (d.day.strftime("%Y-%m"), d.cause)
+        r = dels.setdefault(k, {"n": 0, "hours": 0.0})
+        r["n"] += 1
+        r["hours"] += float(d.hours or 0)
+    return {"materials": [{"month": k[0], "material": k[1], "unit": k[2], **v} for k, v in sorted(mats.items())],
+            "delays": [{"month": k[0], "cause": k[1], **v} for k, v in sorted(dels.items())]}
 
 
 def render_period_pdf(c: Ctx, a: ProjectAccess, out, lang: str) -> bytes:
@@ -63,7 +88,7 @@ def render_period_pdf(c: Ctx, a: ProjectAccess, out, lang: str) -> bytes:
         contractor=parties.get("contractor", ""), consultant=parties.get("consultant", ""), owner=parties.get("owner", ""),
         project_name=_n(a.project, lang), project_code=a.project.code, title=P_T[lang][out.kind],
         weather=" · ".join(f"{v.get(k, k)} {n}" for k, n in sorted(out.weather.items(), key=lambda x: -x[1])),
-        cause=cause, qty=qty, groups=D["groups"], party=PARTY[lang],
+        cause=cause, qty=qty, long=(out.end - out.start).days + 1 > LONG, monthly=monthly(out), groups=D["groups"], party=PARTY[lang],
         due=lambda x: x.astimezone(tz).strftime("%Y-%m-%d"),
         dates=lambda xs: " · ".join(d.strftime("%m/%d") for d in xs),
     )

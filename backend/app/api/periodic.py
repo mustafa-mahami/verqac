@@ -117,6 +117,7 @@ class PeriodOut(BaseModel):
     upto: date  # last day counted (today, for the running period)
     prev: date
     next: date | None = None
+    project_start: date | None = None  # the project's start (or its first daily report): 'from the start'
     working_days: int
     reports: int  # approved
     pending: int  # submitted, not yet approved
@@ -202,7 +203,7 @@ def _at(history: list, day: date) -> dict:
     return cells
 
 
-MAX_DAYS = 400  # a custom period: up to a little over a year
+MAX_DAYS = 3660  # a custom period: anything sensible, up to ten years (the whole project)
 
 
 def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date, until: date | None = None) -> PeriodOut:
@@ -260,7 +261,8 @@ def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date, until: date | Non
                     pending=sum(1 for d, cat in rows if start <= d.report_date <= end and cat not in APPROVED),
                     missing=[since + timedelta(days=i) for i in range((upto - since).days + 1)
                              if cal.working(since + timedelta(days=i)) and since + timedelta(days=i) not in reported],
-                    progress_start=p0, progress_end=p1)
+                    progress_start=p0, progress_end=p1,
+                    project_start=project.start_date or (rows[0][0].report_date if rows else None))
 
     # ---- the programme: planned at the end of the period, and the works behind it
     _, cur = programmes(db, project_id)

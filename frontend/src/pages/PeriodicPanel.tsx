@@ -12,7 +12,7 @@ type Named = { name_ar: string; name_en: string };
 interface StageRow extends Named { stage_id: string; weight: number; start: number; end: number; planned: number | null;
   locations_ar: string[]; locations_en: string[]; days: number; qty: { qty: number; unit: string }[] }
 interface PeriodOut {
-  kind: Kind; start: string; end: string; upto: string; prev: string; next: string | null;
+  kind: Kind; project_start: string | null; start: string; end: string; upto: string; prev: string; next: string | null;
   working_days: number; reports: number; pending: number; missing: string[]; stopped: string[]; partial: string[];
   weather: Record<string, number>; progress_start: number; progress_end: number; planned_end: number | null;
   planned_start: number | null; spi: number | null; stages: StageRow[];
@@ -56,8 +56,9 @@ export default function PeriodicPanel({ projectId }: { projectId: string }) {
   const nav = useNavigate();
   const [kind, setKind] = useState<Kind>('week');
   const [day, setDay] = useState<string | null>(null);
+  const today = new Date().toISOString().slice(0, 10);
   const [range, setRange] = useState<{ from: string; to: string }>({ from: '', to: '' });
-  const valid = kind !== 'custom' || (!!range.from && !!range.to && range.to >= range.from && daysBetween(range.from, range.to) < 400);
+  const valid = kind !== 'custom' || (!!range.from && !!range.to && range.to >= range.from && range.from <= today);
   const qs = kind === 'custom' ? `kind=custom&start=${range.from}&end=${range.to}` : `kind=${kind}${day ? `&day=${day}` : ''}`;
   const q = useQuery({
     queryKey: ['period', projectId, qs],
@@ -84,13 +85,17 @@ export default function PeriodicPanel({ projectId }: { projectId: string }) {
           <Button size="xs" variant="default" disabled={!o} onClick={() => o && go(o.prev)}>{t('per.prev')}</Button>
           {kind === 'custom' ? (
             <>
-              <TextInput size="xs" type="date" w={150} value={range.from} error={!valid} max={new Date().toISOString().slice(0, 10)}
+              <TextInput size="xs" type="date" w={150} value={range.from} error={!valid} max={today}
                 onChange={(e) => setRange({ ...range, from: e.currentTarget.value })} leftSection={<Text size="xs">{t('gantt.from')}</Text>} leftSectionWidth={36} />
               <TextInput size="xs" type="date" w={150} value={range.to} error={!valid}
                 onChange={(e) => setRange({ ...range, to: e.currentTarget.value })} leftSection={<Text size="xs">{t('gantt.to')}</Text>} leftSectionWidth={36} />
             </>
           ) : <Text fw={600} size="sm">{o ? `${fmtDate(o.start)} — ${fmtDate(o.end)}` : ''}</Text>}
           <Button size="xs" variant="default" disabled={!o?.next} onClick={() => o?.next && go(o.next)}>{t('per.next')}</Button>
+          <Button size="xs" variant="light" disabled={!o?.project_start} onClick={() => {
+            if (!o?.project_start) return;
+            setKind('custom'); setDay(null); setRange({ from: o.project_start, to: today });
+          }}>{t('per.fromStart')}</Button>
           {day && kind !== 'custom' && <Button size="xs" variant="subtle" onClick={() => setDay(null)}>{t('per.current')}</Button>}
         </Group>
         <Group gap="xs">

@@ -74,8 +74,19 @@ def test_weekly_report(client, site):
         pdf = client.get(f"/api/v1/projects/{pid}/period-report/pdf", headers=site["hk"],
                          params={"kind": "week", "day": start.isoformat(), "lang": lang})
         assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+    # the whole project, years long: fine; the PDF sums materials and delays by month
+    long = {"kind": "custom", "start": (end - timedelta(days=900)).isoformat(), "end": end.isoformat()}
+    assert client.get(f"/api/v1/projects/{pid}/period-report", headers=site["hk"], params=long).status_code == 200
+    assert client.get(f"/api/v1/projects/{pid}/period-report/pdf", headers=site["hk"], params=long).content[:4] == b"%PDF"
     m = client.get(f"/api/v1/projects/{pid}/period-report", headers=site["hk"], params={"kind": "month", "day": start.isoformat()}).json()
     assert m["start"] == start.replace(day=1).isoformat() and m["reports"] >= 1
+    assert o["project_start"] == (start - timedelta(days=30)).isoformat()
+    # a long period prints materials and delays by month
+    from types import SimpleNamespace
+    from app.reports.period_pdf import monthly
+    agg = monthly(SimpleNamespace(**{k: [SimpleNamespace(**{**x, "day": date.fromisoformat(x["day"])}) for x in o[k]]
+                                     for k in ("materials", "delay_items")}))
+    assert agg["materials"][0]["qty"] == 12 and agg["delays"][0]["hours"] == 3
 
 
 def test_requests_this_week(client, site):
@@ -100,7 +111,7 @@ def test_custom_period(client, site):
     assert (o["start"], o["end"], o["kind"]) == (a.isoformat(), b.isoformat(), "custom")
     assert o["prev"] == (a - timedelta(days=10)).isoformat() and o["next"] == (b + timedelta(days=1)).isoformat()
     for bad in ({"start": b.isoformat(), "end": a.isoformat()}, {"start": a.isoformat()},
-                {"start": (a - timedelta(days=500)).isoformat(), "end": b.isoformat()}):
+                {"start": (date.today() + timedelta(days=2)).isoformat(), "end": (date.today() + timedelta(days=9)).isoformat()}):
         assert client.get(f"/api/v1/projects/{pid}/period-report", headers=site["hk"], params={"kind": "custom", **bad}).status_code == 422
     pdf = client.get(f"/api/v1/projects/{pid}/period-report/pdf", headers=site["hk"],
                      params={"kind": "custom", "start": a.isoformat(), "end": b.isoformat()})

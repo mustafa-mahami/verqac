@@ -127,10 +127,17 @@ tr { break-inside: avoid; page-break-inside: avoid; }
     <tr><th>{{ t.cause }}</th><th class="n">{{ t.count }}</th><th class="n">{{ t.hours }}</th></tr>
     {% for r in o.delays %}<tr><td>{{ cause(r.cause) }}</td><td class="n">{{ r.count }}</td><td class="n">{{ '%g' % r.hours }}</td></tr>{% endfor %}
   </table>
+  {% if long %}
+  <table>
+    <tr><th class="n" style="width:14%">{{ t.month_col }}</th><th>{{ t.cause }}</th><th class="n">{{ t.count }}</th><th class="n">{{ t.hours }}</th></tr>
+    {% for r in monthly.delays %}<tr><td class="n ltr">{{ r.month }}</td><td>{{ cause(r.cause) }}</td><td class="n">{{ r.n }}</td><td class="n">{{ '%g' % r.hours }}</td></tr>{% endfor %}
+  </table>
+  {% else %}
   <table>
     <tr><th class="n" style="width:12%">{{ t.date }}</th><th style="width:18%">{{ t.cause }}</th><th class="n" style="width:8%">{{ t.hours }}</th><th>{{ t.desc }}</th></tr>
     {% for r in o.delay_items %}<tr><td class="n ltr">{{ r.day.isoformat() }}</td><td>{{ cause(r.cause) }}</td><td class="n">{{ '%g' % r.hours if r.hours is not none else '' }}</td><td>{{ r.description or '' }}</td></tr>{% endfor %}
   </table>
+  {% endif %}
   {% endif %}
 
   <div class="section">{{ t.hse }}</div>
@@ -157,10 +164,18 @@ tr { break-inside: avoid; page-break-inside: avoid; }
 
   {% if o.materials %}
   <div class="section">{{ t.materials }}</div>
+  {% if long %}
+  <div class="muted">{{ t.monthly }}</div>
+  <table>
+    <tr><th class="n" style="width:14%">{{ t.month_col }}</th><th>{{ D.materials }}</th><th class="n">{{ D.qty }}</th><th class="n">{{ t.deliveries }}</th></tr>
+    {% for r in monthly.materials %}<tr><td class="n ltr">{{ r.month }}</td><td>{{ r.material }}</td><td class="n">{{ ('%g' % r.qty) if r.has_qty else '' }} {{ r.unit }}</td><td class="n">{{ r.n }}</td></tr>{% endfor %}
+  </table>
+  {% else %}
   <table>
     <tr><th class="n" style="width:12%">{{ t.date }}</th><th>{{ D.materials }}</th><th class="n">{{ D.qty }}</th><th>{{ t.supplier }}</th><th>{{ t.dn }}</th></tr>
     {% for r in o.materials %}<tr><td class="n ltr">{{ r.day.isoformat() }}</td><td>{{ r.material }}</td><td class="n">{{ ('%g' % r.qty) if r.qty is not none else '' }} {{ r.unit or '' }}</td><td>{{ r.supplier or '' }}</td><td class="ltr" style="text-align:start">{{ r.delivery_note or '' }}</td></tr>{% endfor %}
   </table>
+  {% endif %}
   {% endif %}
 </body>
 </html>

@@ -164,7 +164,7 @@
     "dr_actual_finish_needs_100": "An actual finish needs 100%.",
     "dr_actual_finish_range": "The actual finish must be after the start and not after the report date.",
     "stage_scope_locked": "This stage's scope cannot change: approved daily reports gave it progress. Switch it off and add a new stage with the right scope.",
-    "invalid_period": "Choose a valid start and end (end after start, under 400 days)."
+    "invalid_period": "Choose a valid start and end: end after start, start not in the future."
   },
   "common": {
     "cancel": "Cancel",
@@ -1257,6 +1257,7 @@
     "materials": "Materials delivered",
     "date": "Date",
     "custom": "Custom",
-    "badRange": "Choose a valid start and end (end after start, under 400 days)."
+    "badRange": "Choose a valid start and end: end after start, start not in the future.",
+    "fromStart": "Since project start"
   }
 }
