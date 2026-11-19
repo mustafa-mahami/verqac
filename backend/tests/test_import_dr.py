@@ -268,6 +268,9 @@ def test_photo_captions_and_letterheads(client, site, tmp_path, capsys):
     main([f, "--fix", "--project", code, "--as", me, "--commit"])
     out = capsys.readouterr().out
     assert "letterheads removed" in out and "photo captions added" in out and not dest.exists()
+    main([f, "--fix", "--project", code, "--as", me])  # again: nothing left to correct
+    out = capsys.readouterr().out
+    assert "removed" not in out and "added" not in out and "renamed" not in out and "corrected" not in out, out
     d = client.get(f"/api/v1/records/{rec_id}", headers=site["hc"]).json()
     assert len(d["attachments"]) == 2
     one = next(a for a in d["attachments"] if a["caption"])

@@ -834,13 +834,18 @@ EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "im
 
 
 def file_name(att: dict, rec) -> str:
-    """Odoo names a file kept in a record field after the field ('pdf_file'): use the record's number instead."""
+    """Odoo names a file kept in a record field after the field ('pdf_file', 'image_2'): use the record's number instead."""
     name = (att.get("name") or "").strip()
-    if name and name not in FIELD_NAMES:
+    field = att.get("res_field") or ""
+    if name and name not in FIELD_NAMES and name != field:
         return name[:255]
     ext = EXT.get(att.get("mimetype") or "", "")
-    tail = "-answer" if att.get("res_field") == "pdf_file_answer" else ""
+    tail = "-answer" if field == "pdf_file_answer" else f"-photo{field[6:]}" if field.startswith("image_") else ""
     return f"{rec.number}-R{rec.rev_no}{tail}{ext}" if rec is not None else (name or "file") + ext
+
+
+def _field_named(f, att: dict) -> bool:
+    return f.filename in FIELD_NAMES or f.filename == (att.get("res_field") or None) or "." not in f.filename
 
 
 def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Counter:
@@ -902,8 +907,8 @@ def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Cou
             db.flush()
             rep["files"] += 1
             rep["MB"] += round(size / 1048576)
-        if f.filename in FIELD_NAMES or "." not in f.filename:
-            f.filename = file_name(att, rec)
+        if _field_named(f, att) and (new := file_name(att, rec)) != f.filename:
+            f.filename = new
             rep["files renamed"] += 1
         if (rec_id, f.id) in have:
             rep["already attached"] += 1
@@ -950,6 +955,8 @@ def fix_imported(db, data: dict, project, paths: list | None = None) -> Counter:
             new = datetime.combine(fixed, local.time(), TZ)
             if model == "inspection.inspection" and rec.requested_for and rec.requested_for.astimezone(TZ).date() == day:
                 rec.requested_for = datetime.combine(fixed, rec.requested_for.astimezone(TZ).time(), TZ)
+            if rec.submitted_at == new:
+                continue  # corrected already
             # the history (record_events) is append-only by design: it keeps what the import wrote
             rec.submitted_at = new
             start = max(x for x in (new, rec.requested_for) if x)
@@ -972,11 +979,13 @@ def fix_imported(db, data: dict, project, paths: list | None = None) -> Counter:
     by_key = {f"{project.id}/odoo-{a['id']}": a for a in data.get("attachments", [])}
     for f in db.scalars(select(StoredFile).where(StoredFile.project_id == project.id, StoredFile.storage_key.like(f"{project.id}/odoo-%"))):
         att = by_key.get(f.storage_key)
-        if att is None or not (f.filename in FIELD_NAMES or "." not in f.filename):
+        if att is None or att.get("res_field") in SKIP_FIELDS or not _field_named(f, att):
             continue
         rec = recs.get(f"odoo:{att.get('res_model')}:{att.get('res_id')}")
-        f.filename = file_name(att, rec)
-        rep["files renamed"] += 1
+        new = file_name(att, rec)
+        if new != f.filename:
+            f.filename = new
+            rep["files renamed"] += 1
     # the letterhead Odoo kept on every record came in as a photo: take it out (file and all)
     from app.core import storage
     from app.models.records import Attachment
