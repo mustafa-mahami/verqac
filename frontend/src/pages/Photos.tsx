@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Group, Image, Modal, SimpleGrid, Skeleton, Text, UnstyledButton } from '@mantine/core';
+import { ActionIcon, Badge, Button, Group, Image, Modal, Popover, SimpleGrid, Skeleton, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,10 +14,30 @@ function useImage(fileId: string) {
   });
 }
 
-function Thumb({ a, onOpen, onRemove }: { a: Attachment; onOpen: () => void; onRemove?: () => void }) {
+function CaptionEdit({ a, onSave }: { a: Attachment; onSave: (caption: string) => void }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState(a.caption ?? '');
+  const save = () => { onSave(v); setOpen(false); };
+  return (
+    <Popover opened={open} onChange={setOpen} width={300} position="bottom" withArrow trapFocus>
+      <Popover.Target>
+        <ActionIcon size="xs" variant="subtle" aria-label={t('rec.caption')} onClick={() => { setV(a.caption ?? ''); setOpen((o) => !o); }}>✎</ActionIcon>
+      </Popover.Target>
+      <Popover.Dropdown>
+        <TextInput size="xs" label={t('rec.caption')} placeholder={t('rec.captionHint')} value={v} maxLength={300} data-autofocus
+          onChange={(e) => setV(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+        <Group justify="flex-end" mt="xs"><Button size="xs" onClick={save}>{t('common.save')}</Button></Group>
+      </Popover.Dropdown>
+    </Popover>
+  );
+}
+
+function Thumb({ a, onOpen, onRemove, onCaption }: { a: Attachment; onOpen: () => void; onRemove?: () => void; onCaption?: (c: string) => void }) {
   const { t } = useTranslation();
   const img = useImage(a.file_id);
   return (
+    <div>
     <div style={{ position: 'relative' }}>
       <UnstyledButton onClick={onOpen} w="100%" aria-label={a.filename}>
         {img.data
@@ -32,6 +52,13 @@ function Thumb({ a, onOpen, onRemove }: { a: Attachment; onOpen: () => void; onR
           style={{ position: 'absolute', top: 4, insetInlineEnd: 4 }}>×</ActionIcon>
       )}
     </div>
+    <Group gap={4} wrap="nowrap" mt={2} align="flex-start">
+      <Text size="xs" c={a.caption ? undefined : 'dimmed'} style={{ flex: 1, minWidth: 0 }} lineClamp={2} title={a.caption ?? ''}>
+        {a.caption || (onCaption ? t('rec.noCaption') : '')}
+      </Text>
+      {onCaption && <CaptionEdit a={a} onSave={onCaption} />}
+    </Group>
+    </div>
   );
 }
 
@@ -40,8 +67,9 @@ function Large({ a }: { a: Attachment }) {
   return img.data ? <Image src={img.data} fit="contain" mah="80vh" w="100%" alt={a.filename} /> : <Skeleton h={400} />;
 }
 
-export default function Photos({ items, canRemove, onRemove }: {
+export default function Photos({ items, canRemove, onRemove, onCaption }: {
   items: Attachment[]; canRemove: (a: Attachment) => boolean; onRemove: (a: Attachment) => void;
+  onCaption?: (a: Attachment, caption: string) => void;
 }) {
   const [idx, setIdx] = useState<number | null>(null);
   const open = idx === null ? null : items[idx] ?? null;
@@ -60,10 +88,11 @@ export default function Photos({ items, canRemove, onRemove }: {
   return (
     <>
       <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="xs" mb="sm">
-        {items.map((a, i) => <Thumb key={a.id} a={a} onOpen={() => setIdx(i)} onRemove={canRemove(a) ? () => onRemove(a) : undefined} />)}
+        {items.map((a, i) => <Thumb key={a.id} a={a} onOpen={() => setIdx(i)} onRemove={canRemove(a) ? () => onRemove(a) : undefined}
+          onCaption={onCaption && a.can_edit ? (c) => onCaption(a, c) : undefined} />)}
       </SimpleGrid>
       <Modal opened={open !== null} onClose={() => setIdx(null)} size="90%" centered
-        title={open ? <Text size="sm" dir="ltr">{open.filename} · {(idx ?? 0) + 1} / {items.length}</Text> : ''}>
+        title={open ? <Text size="sm"><b>{(idx ?? 0) + 1} / {items.length}</b> · {open.caption || <span dir="ltr">{open.filename}</span>}</Text> : ''}>
         {open && (
           <Group wrap="nowrap" gap="xs" align="center">
             {items.length > 1 && <ActionIcon variant="light" size="lg" aria-label="prev" onClick={() => step(-1)}>{document.documentElement.dir === 'rtl' ? '›' : '‹'}</ActionIcon>}
@@ -92,4 +121,33 @@ export async function shrinkPhoto(file: File): Promise<File> {
   } catch {
     return file;
   }
+}
+
+/** A PDF shown in the page (the browser's own viewer: zoom, pages, print and download are in its toolbar). */
+export function PdfViewer({ a, onClose }: { a: Attachment | null; onClose: () => void }) {
+  const { t } = useTranslation();
+  const file = useQuery({
+    queryKey: ['pdf', a?.file_id], enabled: !!a, staleTime: Infinity, gcTime: 5 * 60_000,
+    queryFn: async () => URL.createObjectURL(new Blob([await (await fetchBlob(`/files/${a!.file_id}`)).arrayBuffer()], { type: 'application/pdf' })),
+  });
+  const download = () => {
+    if (!file.data || !a) return;
+    const link = document.createElement('a');
+    link.href = file.data;
+    link.download = a.filename;
+    link.click();
+  };
+  return (
+    <Modal opened={!!a} onClose={onClose} size="95%" centered padding="xs"
+      title={a ? (
+        <Group gap="sm" wrap="nowrap">
+          <Text size="sm" dir="ltr" truncate maw={500}>{a.filename}</Text>
+          <Button size="compact-xs" variant="light" onClick={download} disabled={!file.data}>{t('rec.download')}</Button>
+        </Group>
+      ) : ''}>
+      {file.data
+        ? <iframe src={file.data} title={a?.filename} style={{ width: '100%', height: '82vh', border: 0 }} />
+        : <Skeleton h="82vh" />}
+    </Modal>
+  );
 }

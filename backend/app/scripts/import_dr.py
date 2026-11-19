@@ -820,6 +820,16 @@ class Importer:
 
 IMAGE = ("image/jpeg", "image/png", "image/webp", "image/gif")
 FIELD_NAMES = {"pdf_file", "file_field", "pdf_file_answer", "photo", "image", "datas"}
+SKIP_FIELDS = {"logo_image"}  # the letterhead Odoo kept on every record: not a document of the record
+
+
+def caption_of(att: dict, rows: dict) -> str | None:
+    """Odoo's daily report keeps a description next to each of its four photos (image_1 → image_1_desc)."""
+    field = att.get("res_field") or ""
+    if att.get("res_model") != "dr.dr" or not field.startswith("image_"):
+        return None
+    r = rows.get(att.get("res_id")) or {}
+    return (txt(r.get(f"{field}_desc"), 300) or None) if r else None
 EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}
 
 
@@ -853,7 +863,11 @@ def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Cou
     have = {(x.record_id, x.file_id) for x in db.scalars(select(Attachment).join(Record, Record.id == Attachment.record_id)
                                                           .where(Record.project_id == project.id))}
     store = storage._root()
+    dr_rows = {r["id"]: r for r in data["models"].get("dr.dr", [])}
     for att in data.get("attachments", []):
+        if att.get("res_field") in SKIP_FIELDS:
+            rep["letterhead skipped"] += 1
+            continue
         src = os.path.join(root, att["path"]) if att.get("path") else None
         model, rid = att.get("res_model"), att.get("res_id")
         rec = recs.get(f"odoo:{model}:{rid}")
@@ -898,7 +912,7 @@ def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Cou
         field = att.get("res_field") or ""
         kind = "response" if field == "pdf_file_answer" else "photo" if mime in IMAGE else "submission"
         party = parties["contractor"] if (model != "site.instruction" or kind == "response") else parties["consultant"]
-        a = Attachment(record_id=rec_id, file_id=f.id, kind=kind, party_id=party)
+        a = Attachment(record_id=rec_id, file_id=f.id, kind=kind, party_id=party, caption=caption_of(att, dr_rows))
         created = (att.get("create_date") or "")[:19]
         if created:
             a.created_at = datetime.fromisoformat(created).replace(tzinfo=UTC)
@@ -909,10 +923,11 @@ def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Cou
     return rep
 
 
-def fix_imported(db, data: dict, project) -> Counter:
+def fix_imported(db, data: dict, project, paths: list | None = None) -> Counter:
     """Correct an import in place (nothing else is touched, so work done since stays):
     submission dates Odoo had edited afterwards, no resubmission deadlines on imported history,
-    no reminders already sent about it, files named after Odoo's fields."""
+    no reminders already sent about it, files named after Odoo's fields, no letterhead "photos", photo captions.
+    The files whose records are deleted are added to `paths` (to be removed from disk once committed)."""
     from app.api.records import RESUBMIT_STATES, periods
     from app.core.workcal import add_period, calendar_for
     from app.models.records import Notification, Record, RecordEvent, RecordType, StoredFile
@@ -962,6 +977,27 @@ def fix_imported(db, data: dict, project) -> Counter:
         rec = recs.get(f"odoo:{att.get('res_model')}:{att.get('res_id')}")
         f.filename = file_name(att, rec)
         rep["files renamed"] += 1
+    # the letterhead Odoo kept on every record came in as a photo: take it out (file and all)
+    from app.core import storage
+    from app.models.records import Attachment
+    logos = {k for k, a in by_key.items() if a.get("res_field") in SKIP_FIELDS}
+    dr_rows = {r["id"]: r for r in data["models"].get("dr.dr", [])}
+    gone = []
+    for at, f in db.execute(select(Attachment, StoredFile).join(StoredFile, StoredFile.id == Attachment.file_id)
+                            .where(StoredFile.project_id == project.id, StoredFile.storage_key.like(f"{project.id}/odoo-%"))).all():
+        if f.storage_key in logos:
+            db.delete(at)
+            gone.append(f)
+            rep["letterheads removed"] += 1
+        elif at.caption is None and (cap := caption_of(by_key.get(f.storage_key, {}), dr_rows)):
+            at.caption = cap
+            rep["photo captions added"] += 1
+    db.flush()
+    for f in gone:
+        if db.scalar(select(Attachment.id).where(Attachment.file_id == f.id).limit(1)) is None:
+            if paths is not None:
+                paths.append(str(storage._root() / f.storage_key))
+            db.delete(f)
     db.flush()
     return rep
 
@@ -1029,13 +1065,23 @@ def _fix(a):
             p = db.scalar(select(Project).where(func.upper(Project.code) == a.project.upper()))
             if p is None:
                 sys.exit("Project not found.")
-            rep = fix_imported(db, data, p)
+            paths: list = []
+            rep = fix_imported(db, data, p, paths)
             print(f"Corrections for {p.code}:")
             for k, v in sorted(rep.items()):
                 print(f"  {k:34} {v}")
             if not a.commit:
                 raise TrialRun
-            print("\nDone.")
+        freed = 0
+        for path in paths:  # committed: the letterhead files can go
+            try:
+                freed += os.path.getsize(path)
+                os.remove(path)
+            except OSError:
+                pass
+        if paths:
+            print(f"  {'files deleted from disk':34} {len(paths)} ({freed // 1048576} MB)")
+        print("\nDone.")
     except TrialRun:
         print("\nTRIAL RUN: nothing was written. Add --commit to apply.")
 

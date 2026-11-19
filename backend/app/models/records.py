@@ -227,6 +227,7 @@ class Attachment(Base):
     file_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("files.id"), nullable=False)
     kind: Mapped[str] = mapped_column(String(20), nullable=False, server_default="submission")
     party_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("project_parties.id"), nullable=False)
+    caption: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = created()
 
 

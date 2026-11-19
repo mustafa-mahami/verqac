@@ -136,7 +136,7 @@ export interface RecordEvent {
   comment: string | null; stamp: string | null; at: string;
 }
 export interface RecordComment { id: string; author: User; party_kind: string; visibility: string; body: string; created_at: string }
-export interface Attachment { id: string; file_id: string; filename: string; content_type: string; size: number; kind: string; party_kind: string; created_at: string }
+export interface Attachment { id: string; file_id: string; filename: string; content_type: string; size: number; kind: string; party_kind: string; caption?: string | null; can_edit?: boolean; created_at: string }
 export interface RecordDetail {
   imported?: boolean; // brought over from Odoo
   checklist: CheckLine[]; custom: Record<string, string | null>;

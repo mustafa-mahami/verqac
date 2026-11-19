@@ -149,7 +149,7 @@ th { background: #eef2f7; font-weight: 600; width: 18%; }
   {% if photos %}
   <div class="section">{{ t.photos }}</div>
   <div class="photos">
-    {% for p in photos %}<figure><img src="{{ p.src }}" alt=""><figcaption>{{ loop.index }} · {{ p.who }} · <span class="ltr">{{ p.name }}</span></figcaption></figure>{% endfor %}
+    {% for p in photos %}<figure><img src="{{ p.src }}" alt=""><figcaption>{{ loop.index }} · {% if p.caption %}<b>{{ p.caption }}</b>{% else %}{{ p.who }} · <span class="ltr">{{ p.name }}</span>{% endif %}</figcaption></figure>{% endfor %}
   </div>
   {% endif %}
 

@@ -333,7 +333,7 @@ def _photos(c: Ctx, d: RecordDetail) -> list[dict]:
         except Exception:  # noqa: BLE001 - an unreadable image is listed, not printed
             continue
         out.append({"src": "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode(),
-                    "name": x.filename, "kind": x.kind, "party": x.party_kind})
+                    "name": x.filename, "caption": x.caption, "kind": x.kind, "party": x.party_kind})
     return out
 
 

@@ -10,11 +10,12 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   api, ApiError, openProtected, type CheckLine, type LinkedRef, type Place, type RecordDetail, type RecordMeta, type Team, type Transition,
+  type Attachment,
 } from '../api';
 import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../format';
 import i18n, { pick } from '../i18n';
 import BackButton from './BackButton';
-import Photos, { isPhoto, shrinkPhoto } from './Photos';
+import Photos, { isPhoto, PdfViewer, shrinkPhoto } from './Photos';
 import LabPanel from './LabPanel';
 import DailyPanel from './DailyPanel';
 import ProgrammePanel from './ProgrammePanel';
@@ -358,6 +359,7 @@ export default function RecordPage() {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [comment, setComment] = useState('');
+  const [pdf, setPdf] = useState<Attachment | null>(null);
   const [internal, setInternal] = useState(false);
   const rec = useQuery({ queryKey: ['record', id], queryFn: () => api<RecordDetail>(`/records/${id}`) });
   // previous / next record of the list it was opened from (Alt+P / Alt+N)
@@ -390,6 +392,11 @@ export default function RecordPage() {
       }
       return last!;
     },
+    onSuccess: put, onError: (e) => setError(errText(e)),
+  });
+  const caption = useMutation({
+    mutationFn: ({ aid, text }: { aid: string; text: string }) =>
+      api<RecordDetail>(`/records/${id}/attachments/${aid}`, { method: 'PATCH', body: JSON.stringify({ caption: text }) }),
     onSuccess: put, onError: (e) => setError(errText(e)),
   });
   const detach = useMutation({
@@ -571,17 +578,22 @@ export default function RecordPage() {
                   ))}
                 </Group>
               </Group>
-              <Photos items={r.attachments.filter(isPhoto)} canRemove={(a) => r.can_attach.includes(a.kind)} onRemove={(a) => detach.mutate(a.id)} />
+              <Photos items={r.attachments.filter(isPhoto)} canRemove={(a) => r.can_attach.includes(a.kind)} onRemove={(a) => detach.mutate(a.id)}
+                onCaption={(a, text) => caption.mutate({ aid: a.id, text })} />
+              <PdfViewer a={pdf} onClose={() => setPdf(null)} />
               {r.attachments.length === 0 ? <Text size="sm" c="dimmed">{t('rec.noFiles')}</Text> : r.attachments.some((a) => !isPhoto(a)) && (
                 <Stack gap={6}>
                   {r.attachments.filter((a) => !isPhoto(a)).map((a) => (
                     <Group key={a.id} justify="space-between" wrap="nowrap">
                       <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
                         <Badge size="sm" tt="none" variant="outline" color={a.kind === 'response' ? 'teal' : 'gray'}>{t(`rec.kind.${a.kind}`)}</Badge>
-                        <Anchor size="sm" dir="ltr" truncate onClick={() => openProtected(`/files/${a.file_id}`, a.filename, a.content_type === 'application/pdf')}>
+                        <Anchor size="sm" dir="ltr" truncate onClick={() => (a.content_type === 'application/pdf' || a.filename.toLowerCase().endsWith('.pdf')
+                          ? setPdf(a) : openProtected(`/files/${a.file_id}`, a.filename))}>
                           {a.filename}
                         </Anchor>
                         <Text size="xs" c="dimmed">{fmtSize(a.size)}</Text>
+                        <ActionIcon size="sm" variant="subtle" aria-label={t('rec.download')} title={t('rec.download')}
+                          onClick={() => openProtected(`/files/${a.file_id}`, a.filename)}>⤓</ActionIcon>
                       </Group>
                       {r.can_attach.includes(a.kind) && (
                         <ActionIcon variant="subtle" color="red" aria-label="remove" onClick={() => detach.mutate(a.id)}>×</ActionIcon>

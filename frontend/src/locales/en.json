@@ -365,7 +365,11 @@
     "answeredLate": "Answered after the deadline",
     "addPhotos": "Add photos",
     "prev": "Previous record",
-    "next": "Next record"
+    "next": "Next record",
+    "caption": "Caption",
+    "captionHint": "e.g. 8th floor – painting work",
+    "noCaption": "No caption",
+    "download": "Download"
   },
   "back": {
     "projects": "All projects",

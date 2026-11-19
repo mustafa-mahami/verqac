@@ -223,3 +223,58 @@ def test_fix_dates_and_answer_on_paper(client, site, tmp_path, capsys):
     submit(client, site, s2)
     r = client.post(f"/api/v1/records/{s2['id']}/transitions", headers=hce, json={"action": "approve", "answered_on": today.isoformat()})
     assert r.status_code == 403
+
+
+def test_photo_captions_and_letterheads(client, site, tmp_path, capsys):
+    code = site["code"]
+    _structure(client, site)
+    me = client.get("/api/v1/auth/me", headers=site["hc"]).json()["user"]["email"]
+    f = _export(tmp_path, date.today())
+    data = json.loads(open(f, encoding="utf-8").read())
+    data["models"]["dr.dr"][0]["image_1_desc"] = "8th floor painting work"
+    main([f, "--project", code, "--as", me, "--commit"])
+    (tmp_path / "files").mkdir()
+    for n in ("1", "2", "3"):
+        (tmp_path / "files" / n).write_bytes(b"\xff\xd8 photo " + n.encode())
+    rid = data["models"]["dr.dr"][0]["id"]
+    data["attachments"] = [
+        {"id": 1, "name": "image_1", "mimetype": "image/jpeg", "res_model": "dr.dr", "res_id": rid, "res_field": "image_1", "path": "files/1"},
+        {"id": 2, "name": "logo_image", "mimetype": "image/png", "res_model": "dr.dr", "res_id": rid, "res_field": "logo_image", "path": "files/2"},
+        {"id": 3, "name": "image_2", "mimetype": "image/jpeg", "res_model": "dr.dr", "res_id": rid, "res_field": "image_2", "path": "files/3"}]
+    (tmp_path / "data.json").write_text(json.dumps(data, ensure_ascii=False))
+    main([str(tmp_path), "--attachments", "--project", code, "--as", me, "--commit"])
+    out = capsys.readouterr().out
+    assert "letterhead skipped" in out, out
+    from app.models.core import ProjectParty
+    from app.models.records import Attachment, Record, StoredFile
+    with session_scope(bypass=True) as db:
+        rec = db.scalar(select(Record).where(Record.legacy_ref == f"odoo:dr.dr:{rid}", Record.project_id == site["pid"]))
+        caps = sorted((a.caption or "") for a in db.scalars(select(Attachment).where(Attachment.record_id == rec.id)))
+        assert caps == ["", "8th floor painting work"], out
+        # an import made before: the letterhead came in as a photo and captions were not kept
+        party = db.scalar(select(ProjectParty.id).where(ProjectParty.project_id == site["pid"], ProjectParty.kind == "contractor"))
+        from app.core import storage
+        dest = storage._root() / f"{site['pid']}/odoo-2"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"logo")
+        lf = StoredFile(project_id=site["pid"], storage_key=f"{site['pid']}/odoo-2", filename="logo_image.png",
+                        content_type="image/png", size=4, sha256="x", uploaded_by=rec.submitted_by)
+        db.add(lf)
+        db.flush()
+        db.add(Attachment(record_id=rec.id, file_id=lf.id, kind="photo", party_id=party))
+        for a in db.scalars(select(Attachment).where(Attachment.record_id == rec.id)):
+            a.caption = None
+        rec_id = rec.id
+    main([f, "--fix", "--project", code, "--as", me, "--commit"])
+    out = capsys.readouterr().out
+    assert "letterheads removed" in out and "photo captions added" in out and not dest.exists()
+    d = client.get(f"/api/v1/records/{rec_id}", headers=site["hc"]).json()
+    assert len(d["attachments"]) == 2
+    one = next(a for a in d["attachments"] if a["caption"])
+    assert one["caption"] == "8th floor painting work"
+    # a caption is written by the party that attached the photo
+    r = client.patch(f"/api/v1/records/{rec_id}/attachments/{one['id']}", json={"caption": "  الطابق الثامن - دهان "}, headers=site["hc"])
+    assert r.status_code == 200, r.text
+    assert any(a["caption"] == "الطابق الثامن - دهان" for a in r.json()["attachments"])
+    r = client.patch(f"/api/v1/records/{rec_id}/attachments/{one['id']}", json={"caption": "x"}, headers=site["hk"])
+    assert r.status_code == 403

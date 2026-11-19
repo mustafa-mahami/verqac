@@ -257,7 +257,9 @@ def _detail(c: Ctx, rec: Record, a: ProjectAccess, rt: RecordType, p: Perms) -> 
                 for cm in c.db.scalars(select(RecordComment).where(RecordComment.record_id == rec.id)
                                        .order_by(RecordComment.created_at))]
     atts = [AttachmentOut(id=at.id, file_id=f.id, filename=f.filename, content_type=f.content_type, size=f.size,
-                          kind=at.kind, party_kind=parties.get(at.party_id, ""), created_at=at.created_at)
+                          kind=at.kind, party_kind=parties.get(at.party_id, ""), caption=at.caption,
+                          can_edit=at.party_id == (a.party.id if a.party else None) and a.member is not None,
+                          created_at=at.created_at)
             for at, f in c.db.execute(select(Attachment, StoredFile).join(StoredFile, StoredFile.id == Attachment.file_id)
                                       .where(Attachment.record_id == rec.id).order_by(Attachment.created_at))]
     revs = [RevisionRef(id=r.id, rev_no=r.rev_no, state=StateOut.model_validate(_state(c, r.state_id)))
@@ -1023,6 +1025,26 @@ def upload(record_id: uuid.UUID, file: UploadFile = File(...), kind: str = Form(
     c.db.add(Attachment(record_id=rec.id, file_id=f.id, kind=kind, party_id=a.party.id))
     _audit(c, rec, "attach", {"file": f.filename, "size": size, "sha256": sha, "kind": kind}, a)
     c.db.flush()
+    return _detail(c, rec, a, rt, p)
+
+
+class CaptionIn(BaseModel):
+    caption: str | None = Field(None, max_length=300)
+
+
+@router.patch("/records/{record_id}/attachments/{attachment_id}", response_model=RecordDetail)
+def caption_attachment(record_id: uuid.UUID, attachment_id: uuid.UUID, body: CaptionIn, c: Ctx = Depends(ctx)):
+    """The caption says what a photo shows: its own party may write it at any time (the file itself stays as it is)."""
+    rec, a, rt, p = _load(c, record_id)
+    att = c.db.get(Attachment, attachment_id)
+    if att is None or att.record_id != rec.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    require(a.member is not None and att.party_id == (a.party.id if a.party else None), "cannot_attach")
+    new = (body.caption or "").strip() or None
+    if new != att.caption:
+        _audit(c, rec, "caption", {"attachment": str(att.id), "from": att.caption, "to": new}, a)
+        att.caption = new
+        c.db.flush()
     return _detail(c, rec, a, rt, p)
 
 

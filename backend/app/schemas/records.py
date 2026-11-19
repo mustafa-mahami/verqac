@@ -201,6 +201,8 @@ class AttachmentOut(BaseModel):
     size: int
     kind: str
     party_kind: str
+    caption: str | None = None
+    can_edit: bool = False
     created_at: datetime
 
 
