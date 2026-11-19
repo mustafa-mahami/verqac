@@ -79,7 +79,10 @@ def _export(tmp_path, today):
             "teams.teams": [{"teams_id": u(1, "001"), "staff": u(1, "Site Engineer"), "value": 2, "wtime": "8"}],
             "equip.equip": [{"equip_id": u(1, "001"), "euiplist": u(1, "Tower Crane"), "qty": 1}],
             "work.work": [{"work_id": u(1, "001"), "schedule_stage_id": u(1, "S"), "schedule_location_id": u(11, "F1"),
-                           "actiondone": u(7, "Concrete Cast"), "itemname": "slab", "qty": 30, "progress_pct": 0}],
+                           "actiondone": u(7, "Concrete Cast"), "itemname": "slab", "qty": 30, "progress_pct": 0,
+                           "laborno": 4, "labortime": 8, "subcontselec": u(3, "Company Labors")},
+                          {"work_id": u(1, "001"), "itemname": "formwork", "laborno": 3, "labortime": 6, "subcontselec": u(3, "Company Labors")},
+                          {"work_id": u(1, "001"), "itemname": "blocks", "laborno": 5, "subcontselec": u(4, "Block team")}],
         },
     }
     f = tmp_path / "data.json"
@@ -281,3 +284,25 @@ def test_photo_captions_and_letterheads(client, site, tmp_path, capsys):
     assert any(a["caption"] == "الطابق الثامن - دهان" for a in r.json()["attachments"])
     r = client.patch(f"/api/v1/records/{rec_id}/attachments/{one['id']}", json={"caption": "x"}, headers=site["hk"])
     assert r.status_code == 403
+
+
+def test_labour_from_work_lines(client, site, tmp_path, capsys):
+    code = site["code"]
+    _structure(client, site)
+    me = client.get("/api/v1/auth/me", headers=site["hc"]).json()["user"]["email"]
+    f = _export(tmp_path, date.today())
+    main([f, "--project", code, "--as", me, "--commit"])
+    from app.models.daily import DailyReport
+    with session_scope(bypass=True) as db:
+        drs = db.scalars(select(DailyReport).where(DailyReport.project_id == site["pid"])).all()
+        lab = sorted((c["name"], c["count"], c["hours"]) for d in drs for c in d.crew if c["group"] == "labour")
+        assert lab == [("Block team", 5, None), ("Company Labors", 7, 8.0)]
+        for d in drs:  # an import made before: no labour
+            d.crew = [c for c in d.crew if c["group"] != "labour"]
+    main([f, "--fix", "--project", code, "--as", me, "--commit"])
+    assert "daily reports: labour added" in capsys.readouterr().out
+    with session_scope(bypass=True) as db:
+        drs = db.scalars(select(DailyReport).where(DailyReport.project_id == site["pid"])).all()
+        assert sum(c["count"] for d in drs for c in d.crew if c["group"] == "labour") == 12
+    main([f, "--fix", "--project", code, "--as", me])
+    assert "labour" not in capsys.readouterr().out

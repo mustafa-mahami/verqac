@@ -701,6 +701,10 @@ class Importer:
                 for model, target in (("work.work", works), ("worknd.worknd", planned)):
                     for x in k[model]:
                         target.append(self._work(x))
+            if not any(x["group"] == "labour" for x in crew):
+                for x in labour_of([x for one in rs for x in kids[one["id"]]["work.work"]]):
+                    crew.append(x)
+                    lists["labour_desc"].add(x["name"])
             weather = WEATHER.get((m2o_name(r.get("weather")) or "").lower())
             wind = WIND.get((m2o_name(r.get("wind")) or "").lower())
             ws = (m2o_name(r.get("work")) or "").strip()
@@ -821,6 +825,24 @@ class Importer:
 IMAGE = ("image/jpeg", "image/png", "image/webp", "image/gif")
 FIELD_NAMES = {"pdf_file", "file_field", "pdf_file_answer", "photo", "image", "datas"}
 SKIP_FIELDS = {"logo_image"}  # the letterhead Odoo kept on every record: not a document of the record
+
+
+def labour_of(lines: list[dict]) -> list[dict]:
+    """Odoo's daily report kept the labour on each work line (team + number of workers):
+    the day's labour is, per team, the workers of its lines added up."""
+    teams: dict[str, dict] = {}
+    for x in lines:
+        n = int(x.get("laborno") or 0)
+        if n <= 0:
+            continue
+        name = (m2o_name(x.get("subcontselec")) or "Labour")[:150]
+        t = teams.setdefault(name, {"group": "labour", "sub": None, "name": name, "name_en": name, "role": None,
+                                    "role_en": None, "count": 0, "hours": None})
+        t["count"] += n
+        h = min(24.0, float(x.get("labortime") or 0)) or None
+        if h and (t["hours"] is None or h > t["hours"]):
+            t["hours"] = h
+    return list(teams.values())
 
 
 def caption_of(att: dict, rows: dict) -> str | None:
@@ -986,6 +1008,32 @@ def fix_imported(db, data: dict, project, paths: list | None = None) -> Counter:
         if new != f.filename:
             f.filename = new
             rep["files renamed"] += 1
+    # labour: Odoo kept it on the work lines (team + workers); reports imported before have none
+    from app.models.daily import DailyReport
+    lines = defaultdict(list)
+    for x in data["models"].get("work.work", []):
+        lines[m2o_id(x.get("work_id"))].append(x)
+    dr_rows = {r["id"]: r for r in data["models"].get("dr.dr", [])}
+    by_day = defaultdict(list)
+    for rid, r in dr_rows.items():
+        if r.get("date"):
+            by_day[r["date"][:10]].append(rid)
+    names = set()
+    for dr in db.scalars(select(DailyReport).where(DailyReport.project_id == project.id)):
+        if any(c.get("group") == "labour" for c in dr.crew or []):
+            continue
+        rows = labour_of([x for rid in by_day.get(dr.report_date.isoformat(), []) for x in lines[rid]])
+        if rows:
+            dr.crew = list(dr.crew or []) + rows
+            names.update(x["name"] for x in rows)
+            rep["daily reports: labour added"] += 1
+    if names:
+        ds = dict((project.settings or {}).get("daily") or {})
+        lists = dict(ds.get("lists") or {})
+        have = {x.get("ar") for x in lists.get("labour_desc", [])}
+        lists["labour_desc"] = list(lists.get("labour_desc", [])) + [
+            {"ar": n, "en": n, "role_ar": None, "role_en": None, "active": True} for n in sorted(names - have)]
+        project.settings = {**(project.settings or {}), "daily": {**ds, "lists": lists}}
     # the letterhead Odoo kept on every record came in as a photo: take it out (file and all)
     from app.core import storage
     from app.models.records import Attachment
