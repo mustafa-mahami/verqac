@@ -240,7 +240,7 @@ export default function LabPanel({ rec }: { rec: RecordDetail }) {
   });
   const decide = useMutation({
     mutationFn: () => api<LabOut>(`/records/${rec.id}/lab/decision`, { method: 'PUT', body: JSON.stringify({ decision: decision.d, note: decision.note }) }),
-    onSuccess: (l) => { put(l); qc.invalidateQueries({ queryKey: ['record', rec.id] }); setMsg({ ok: true, text: t('settings.saved') }); },
+    onSuccess: (l) => { put(l); qc.invalidateQueries({ queryKey: ['record', rec.id] }); setMsg({ ok: true, text: t('lab.decisionSaved') }); },
     onError: (e) => setMsg({ ok: false, text: errText(e) }),
   });
   const lab = q.data;

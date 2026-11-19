@@ -137,3 +137,37 @@ def test_floor_names():
     assert floor_ar("Floor 3") == "الطابق الثالث" and floor_ar("Basement 1") == "التسوية الأولى"
     assert floor_ar("Roof") == "السطح" and floor_ar("Floor 25") == "الطابق 25"
     assert TrialRun.__doc__
+
+
+def test_import_attachments(client, site, tmp_path, capsys):
+    code = site["code"]
+    _structure(client, site)
+    me = client.get("/api/v1/auth/me", headers=site["hc"]).json()["user"]["email"]
+    f = _export(tmp_path, date.today())
+    main([f, "--project", code, "--as", me, "--commit"])
+    data = json.loads(open(f, encoding="utf-8").read())
+    (tmp_path / "files").mkdir()
+    (tmp_path / "files" / "7").write_bytes(b"%PDF-1.4 sheet")
+    (tmp_path / "files" / "8").write_bytes(b"\xff\xd8 photo")
+    data["attachments"] = [
+        {"id": 7, "name": "sheet.pdf", "mimetype": "application/pdf", "res_model": "submit.submit", "res_id": 1,
+         "res_field": "pdf_file", "path": "files/7", "create_date": "2025-01-02 10:00:00"},
+        {"id": 8, "name": "site.jpg", "mimetype": "image/jpeg", "res_model": "dr.dr", "res_id": 1, "res_field": False, "path": "files/8"},
+        {"id": 9, "name": "gone.pdf", "res_model": "submit.submit", "res_id": 999, "path": None}]
+    (tmp_path / "data.json").write_text(json.dumps(data, ensure_ascii=False))
+    main([str(tmp_path), "--attachments", "--project", code, "--as", me])  # trial: nothing moved
+    assert "TRIAL RUN" in capsys.readouterr().out and (tmp_path / "files" / "7").exists()
+    main([str(tmp_path), "--attachments", "--project", code, "--as", me, "--commit"])
+    out = capsys.readouterr().out
+    assert "attached (submission)" in out and "attached (photo)" in out and "no record" in out
+    assert not (tmp_path / "files" / "7").exists()  # moved into the storage
+    from app.models.records import Record
+    with session_scope(bypass=True) as db:
+        r0 = db.scalar(select(Record.id).where(Record.number == "SH-C-001", Record.rev_no == 0, Record.project_id == site["pid"]))
+    d = client.get(f"/api/v1/records/{r0}", headers=site["hc"]).json()
+    att = d["attachments"][0]
+    assert att["filename"] == "sheet.pdf" and att["kind"] == "submission"
+    assert client.get(f"/api/v1/files/{att['file_id']}", headers=site["hc"]).content == b"%PDF-1.4 sheet"
+    # again: nothing new
+    main([str(tmp_path), "--attachments", "--project", code, "--as", me, "--commit"])
+    assert "already attached" in capsys.readouterr().out

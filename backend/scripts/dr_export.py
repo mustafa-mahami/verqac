@@ -10,6 +10,8 @@ and is never written to disk.
     python3 dr_export.py --url ... --db ... --user ... --project 12
         writes dr_export_<project>.zip: data.json + the attachments (PDFs, photos)
     add --no-files to leave the attachments out (a quick first run to check the data)
+    --files-dir DIR writes data.json and files/<id> into DIR instead of a zip (for big exports): run it again
+        and it carries on where it stopped; with ODOO_PASSWORD set it does not ask (for a run in the background)
 
 Nothing in Odoo is changed: the script only reads.
 """
@@ -17,7 +19,10 @@ import argparse
 import base64
 import getpass
 import json
+import os
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import xmlrpc.client
 import zipfile
 from datetime import datetime
@@ -107,8 +112,11 @@ def main():
     ap.add_argument("--project", help="project id(s), comma separated; leave out to list the projects")
     ap.add_argument("--no-files", action="store_true", help="leave the attachments out")
     ap.add_argument("--out", help="output file (default dr_export_<project>.zip)")
+    ap.add_argument("--files-dir", help="write into this folder (data.json + files/), resumable, instead of a zip")
+    ap.add_argument("--workers", type=int, default=4, help="parallel downloads with --files-dir (default 4)")
     a = ap.parse_args()
-    o = Odoo(a.url, a.db, a.user, getpass.getpass("Odoo password or API key (not shown): "))
+    password = os.environ.get("ODOO_PASSWORD") or getpass.getpass("Odoo password or API key (not shown): ")
+    o = Odoo(a.url, a.db, a.user, password)
     print(f"Connected to Odoo {o.version}, database {a.db}.")
     if not a.project:
         list_projects(o)
@@ -171,6 +179,9 @@ def main():
             data["attachments"] += rows
             total += sum(r.get("file_size") or 0 for r in rows)
     print(f"  attachments: {len(data['attachments'])} files, {total / 1048576:.1f} MB")
+    if a.files_dir:
+        download_dir(a, data, password)
+        return
     out = a.out or f"dr_export_{'_'.join(map(str, pids))}.zip"
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         if not a.no_files:
@@ -188,6 +199,52 @@ def main():
         print("\nSkipped (this user has no access; give the user the group named, or run as an administrator, then export again):")
         for m, msg in denied:
             print(f"  - {m}: {msg}")
+
+
+def download_dir(a, data: dict, password: str) -> None:
+    """Attachments into DIR/files/<id> (skipping those already there), then DIR/data.json."""
+    root = os.path.abspath(a.files_dir)
+    os.makedirs(os.path.join(root, "files"), exist_ok=True)
+    atts = data["attachments"]
+    todo = [x for x in atts if not os.path.exists(os.path.join(root, "files", str(x["id"])))]
+    total = sum(x.get("file_size") or 0 for x in todo)
+    print(f"  {len(atts) - len(todo)} already here; downloading {len(todo)} files ({total / 1048576:.0f} MB) with {a.workers} workers")
+    local = threading.local()
+    lock = threading.Lock()
+    done = {"n": 0, "mb": 0.0, "failed": 0}
+
+    def one(att):
+        if not hasattr(local, "o"):
+            local.o = Odoo(a.url, a.db, a.user, password)
+        path = os.path.join(root, "files", str(att["id"]))
+        try:
+            got = local.o.call("ir.attachment", "read", [att["id"]], fields=["datas"])
+            raw = base64.b64decode(got[0]["datas"]) if got and got[0].get("datas") else b""
+            with open(path + ".part", "wb") as f:
+                f.write(raw)
+            os.replace(path + ".part", path)  # complete files only: a stopped run never leaves half a file
+        except Exception as e:  # noqa: BLE001 - count it, the next run retries
+            with lock:
+                done["failed"] += 1
+                print(f"  ! {att['id']} {att.get('name')}: {str(e)[:120]}", flush=True)
+            return
+        with lock:
+            done["n"] += 1
+            done["mb"] += len(raw) / 1048576
+            if done["n"] % 100 == 0 or done["n"] == len(todo):
+                print(f"  {datetime.now():%H:%M} downloaded {done['n']} / {len(todo)} ({done['mb']:.0f} MB)", flush=True)
+
+    with ThreadPoolExecutor(max_workers=max(1, a.workers)) as pool:
+        list(pool.map(one, todo))
+    for att in atts:
+        p = os.path.join(root, "files", str(att["id"]))
+        att["path"] = f"files/{att['id']}" if os.path.exists(p) and os.path.getsize(p) > 0 else None
+    with open(os.path.join(root, "data.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, default=str)
+    missing = sum(1 for x in atts if not x["path"])
+    print(f"\nDone: {root}/data.json and {len(atts) - missing} files"
+          + (f"; {done['failed']} failed this run, run again to retry" if done["failed"] else "")
+          + (f"; {missing} empty or missing" if missing else ""))
 
 
 if __name__ == "__main__":

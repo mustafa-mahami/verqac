@@ -826,7 +826,8 @@
     "certs": "The file holds {{count}} certificates",
     "page": "Page",
     "certsHint": "Pick this test's certificate. Read the others into their own tests from the same file.",
-    "saveDecision": "Save decision"
+    "saveDecision": "Save decision",
+    "decisionSaved": "Decision saved."
   },
   "labt": {
     "hint": "Test templates used in all the organization's projects: parameters, units, test methods and acceptance limits. A new test takes its template; limits can be adjusted on the test.",

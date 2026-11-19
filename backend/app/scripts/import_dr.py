@@ -2,6 +2,9 @@
 
     python -m app.scripts.import_dr dr_export_50.zip --project AAUP --as ceo@example.com
         a trial run: everything is written inside one transaction, checked, reported, then rolled back
+    python -m app.scripts.import_dr /data/files/odoo-import/50 --attachments --project AAUP --as ceo@example.com [--commit]
+        the attachments only (a folder made by dr_export.py --files-dir, on the files volume): each file is moved
+        into the platform's storage and attached to its record; running it again adds only what is missing
     ... --commit
         the real import (back up the database first)
 
@@ -797,6 +800,81 @@ class Importer:
         self.db.flush()
 
 
+IMAGE = ("image/jpeg", "image/png", "image/webp", "image/gif")
+
+
+def import_files(db, data: dict, root: str, project, actor, commit: bool) -> Counter:
+    """Attach the exported Odoo files to the imported records (found by legacy_ref)."""
+    import hashlib
+    import os
+    import shutil
+
+    from app.core import storage
+    from app.models.core import ProjectParty
+    from app.models.daily import DailyReport
+    from app.models.records import Attachment, Record, StoredFile
+    rep: Counter = Counter()
+    recs = {r.legacy_ref: r for r in db.scalars(select(Record).where(Record.project_id == project.id, Record.legacy_ref.is_not(None)))}
+    # daily reports merged on import (two in Odoo on one day): their files go to the one report of that day
+    by_day = {d.report_date: d.record_id for d in db.scalars(select(DailyReport).where(DailyReport.project_id == project.id))}
+    dr_day = {r["id"]: d(r.get("date")) for r in data["models"].get("dr.dr", [])}
+    parties = {x.kind: x.id for x in db.scalars(select(ProjectParty).where(ProjectParty.project_id == project.id,
+                                                                              ProjectParty.status != "removed"))}
+    have = {(x.record_id, x.file_id) for x in db.scalars(select(Attachment).join(Record, Record.id == Attachment.record_id)
+                                                          .where(Record.project_id == project.id))}
+    store = storage._root()
+    for att in data.get("attachments", []):
+        src = os.path.join(root, att["path"]) if att.get("path") else None
+        model, rid = att.get("res_model"), att.get("res_id")
+        rec = recs.get(f"odoo:{model}:{rid}")
+        rec_id = rec.id if rec else (by_day.get(dr_day.get(rid)) if model == "dr.dr" else None)
+        if rec_id is None:
+            rep["no record (not imported)"] += 1
+            continue
+        key = f"{project.id}/odoo-{att['id']}"
+        dest = store / key
+        f = db.scalar(select(StoredFile).where(StoredFile.storage_key == key))
+        if f is None:
+            path = src if src and os.path.exists(src) else (str(dest) if dest.exists() else None)
+            if path is None:
+                rep["file missing in the export"] += 1
+                continue
+            h, size = hashlib.sha256(), 0
+            with open(path, "rb") as fh:
+                while chunk := fh.read(1 << 20):
+                    h.update(chunk)
+                    size += len(chunk)
+            if size == 0:
+                rep["empty file"] += 1
+                continue
+            if commit and path != str(dest):
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(path, dest)  # same volume: a rename, nothing is copied
+            f = StoredFile(id=uuid.uuid4(), project_id=project.id, storage_key=key, filename=(att.get("name") or "file")[:255],
+                           content_type=(att.get("mimetype") or "application/octet-stream")[:120], size=size,
+                           sha256=h.hexdigest(), uploaded_by=actor.id)
+            db.add(f)
+            db.flush()
+            rep["files"] += 1
+            rep["MB"] += round(size / 1048576)
+        if (rec_id, f.id) in have:
+            rep["already attached"] += 1
+            continue
+        mime = att.get("mimetype") or ""
+        field = att.get("res_field") or ""
+        kind = "response" if field == "pdf_file_answer" else "photo" if mime in IMAGE else "submission"
+        party = parties["contractor"] if (model != "site.instruction" or kind == "response") else parties["consultant"]
+        a = Attachment(record_id=rec_id, file_id=f.id, kind=kind, party_id=party)
+        created = (att.get("create_date") or "")[:19]
+        if created:
+            a.created_at = datetime.fromisoformat(created).replace(tzinfo=UTC)
+        db.add(a)
+        have.add((rec_id, f.id))
+        rep[f"attached ({kind})"] += 1
+    db.flush()
+    return rep
+
+
 def main(argv=None):
     from app.core.db import session_scope
     from app.models.core import Project, User
@@ -805,7 +883,10 @@ def main(argv=None):
     ap.add_argument("--project", required=True, help="the Verqac project code")
     ap.add_argument("--as", dest="actor", required=True, help="e-mail of the Verqac account the import is done as")
     ap.add_argument("--commit", action="store_true", help="write the import (without it: a trial run that changes nothing)")
+    ap.add_argument("--attachments", action="store_true", help="attach the files of an export folder to the imported records")
     a = ap.parse_args(argv)
+    if a.attachments:
+        return _files(a)
     if a.file.endswith(".zip"):
         with zipfile.ZipFile(a.file) as z:
             data = json.loads(z.read("data.json"))
@@ -815,6 +896,29 @@ def main(argv=None):
         _run(a, data)
     except TrialRun:
         print("\nTRIAL RUN: nothing was written. Add --commit to import (back up the database first).")
+
+
+def _files(a):
+    import os
+    from app.core.db import session_scope
+    from app.models.core import Project, User
+    root = a.file
+    data = json.load(open(os.path.join(root, "data.json"), encoding="utf-8"))
+    try:
+        with session_scope(bypass=True) as db:
+            p = db.scalar(select(Project).where(func.upper(Project.code) == a.project.upper()))
+            actor = db.scalar(select(User).where(func.lower(User.email) == a.actor.lower()))
+            if p is None or actor is None:
+                sys.exit("Project or account not found.")
+            rep = import_files(db, data, root, p, actor, a.commit)
+            print(f"Attachments for {p.code}:")
+            for k, v in sorted(rep.items()):
+                print(f"  {k:32} {v}")
+            if not a.commit:
+                raise TrialRun
+            print("\nDone. Files moved into the platform's storage; running again adds only what is missing.")
+    except TrialRun:
+        print("\nTRIAL RUN: nothing was moved or written. Add --commit to attach the files.")
 
 
 def _run(a, data):
