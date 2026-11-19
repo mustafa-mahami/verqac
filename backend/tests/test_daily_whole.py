@@ -46,13 +46,17 @@ def test_location_required_and_rebuild(client, site):
     assert client.post(f"/api/v1/projects/{pid}/progress/rebuild", headers=site["hk"]).status_code == 403
     r = client.post(f"/api/v1/projects/{pid}/progress/rebuild", headers=site["hc"])
     assert r.status_code == 200 and r.json()["stages"][stg["id"]] == 40 and len(r.json()["snapshots"]) == 1
-    # changing the scope recounts by itself: no locations -> nothing; back to whole -> 40 again
+    # once approved reports gave the stage a %, its scope is locked (it would move or drop that progress)
+    st2 = client.get(f"/api/v1/projects/{pid}/structure", headers=site["hc"]).json()
+    assert next(x for x in st2["stages"] if x["id"] == stg["id"])["scope_locked"] is True
     stages[0]["scope"] = "per_location"
-    client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages)
-    assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["stages"][stg["id"]] == 0
-    stages[0]["scope"] = "whole"
-    client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages)
+    r = client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages)
+    assert r.status_code == 409 and r.json()["detail"] == "stage_scope_locked"
     assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["stages"][stg["id"]] == 40
+    stages[0]["scope"] = "whole"
+    # a stage without approved progress still changes scope freely
+    stages[1]["scope"] = "whole"
+    assert client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages).status_code == 200
 
 
 def test_actual_dates(client, site):

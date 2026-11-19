@@ -115,6 +115,7 @@ export default function Bell() {
     if (!n.read) void read({ ids: [n.id] });
     qc.invalidateQueries({ queryKey: ['inbox'] });
     if (n.record_id) navigate(`/records/${n.record_id}`);
+    else if (n.event === 'dr_missing' && n.project_id) navigate(`/projects/${n.project_id}?tab=daily`);
   };
   const unread = data.data?.unread ?? 0;
 

@@ -11,20 +11,21 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 from fastapi import BackgroundTasks
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.core.db import session_scope
 from app.core.notify import members_who_can, notify
 from app.models.core import Project
-from app.models.records import Record, RecordReminder, RecordType
+from app.models.records import ProjectReminder, Record, RecordReminder, RecordType
 
 log = logging.getLogger("verqac.reminders")
 
 # how long before a deadline the "soon" reminder goes out, and whether "late" repeats daily
 LEAD = {"inspection": timedelta(minutes=30), "material": timedelta(hours=2)}
 DEFAULT_LEAD = timedelta(days=1)
-DAILY_LATE = {"submittal", "rfi", "ncr"}
+DAILY_LATE = {"submittal", "rfi", "ncr", "daily_report"}  # late daily reports: supervision is reminded every day
+MISSING_AFTER = 9  # local hour: the morning after a working day without a daily report, the contractor is told
 EVERY = 300  # seconds between runs
 
 
@@ -67,6 +68,48 @@ def _author_users(c, rec: Record, rt: RecordType) -> set:
     users |= {m.user_id for m, r in members_who_can(c, rec.project_id, rec.from_party_id, rt, "create",
                                                      rec.discipline_id) if r.manage_project}
     return users
+
+
+def _missing_daily(c, bg, now: datetime) -> int:
+    """The morning after a working day with no daily report: the contractor's staff who write them are told.
+    Only projects that use daily reports (their first report is on or before that day), between their start and end."""
+    from app.api.records import type_enabled
+    from app.core.workcal import calendar_for
+    from app.models.core import ProjectParty
+    from app.models.daily import DailyReport
+    db, sent = c.db, 0
+    rt = db.scalar(select(RecordType).where(RecordType.org_id.is_(None), RecordType.code == "daily_report"))
+    if rt is None:
+        return 0
+    firsts = dict(db.execute(select(DailyReport.project_id, func.min(DailyReport.report_date)).group_by(DailyReport.project_id)).all())
+    for pid, first in firsts.items():
+        p = db.get(Project, pid)
+        if p is None or p.is_archived or not reminders_on(p) or not type_enabled(p, "daily_report"):
+            continue
+        cal = calendar_for(db, p)
+        local = now.astimezone(cal.tz)
+        day = local.date() - timedelta(days=1)
+        if local.hour < MISSING_AFTER or day < first or (p.start_date and day < p.start_date) \
+                or (p.end_date and day > p.end_date) or not cal.working(day):
+            continue
+        has = db.scalar(select(func.count()).select_from(DailyReport).join(Record, Record.id == DailyReport.record_id)
+                        .where(DailyReport.project_id == pid, DailyReport.report_date == day, Record.state_category != "cancelled"))
+        if has:
+            continue
+        party = db.scalar(select(ProjectParty).where(ProjectParty.project_id == pid, ProjectParty.kind == rt.creator_party,
+                                                     ProjectParty.status != "removed"))
+        users = {m.user_id for m, _ in members_who_can(c, pid, party.id, rt, "create", None)} if party else set()
+        if not users:
+            continue
+        claimed = db.execute(insert(ProjectReminder).values(project_id=pid, kind="dr_missing", key=day.isoformat())
+                             .on_conflict_do_nothing().returning(ProjectReminder.project_id)).first()
+        if claimed is None:
+            continue
+        notify(c, bg, project=p, rec=None, event="dr_missing", user_ids=users, path=f"/projects/{pid}?tab=daily",
+               title_ar=f"{p.name_ar}: لم يُسجَّل التقرير اليومي ليوم {day.strftime('%Y/%m/%d')}",
+               title_en=f"{p.name_en}: no daily report for {day.isoformat()}")
+        sent += 1
+    return sent
 
 
 def run_reminders(now: datetime | None = None) -> int:
@@ -127,6 +170,7 @@ def run_reminders(now: datetime | None = None) -> int:
             else:
                 send(rec, rt, "resub_late", _late_key(rt, rec.resubmit_due_at, now), _author_users(c, rec, rt),
                      f"{head_ar}: تأخرت إعادة التقديم", f"{head_en}: resubmission overdue")
+        sent += _missing_daily(c, bg, now)
     # e-mail and push go out after the commit, like for a request
     for task in bg.tasks:
         try:

@@ -166,7 +166,7 @@ export interface InboxItem {
   reason: 'reply' | 'verify' | 'returned' | 'draft'; due_at: string | null; required_by: string | null;
   submittal_kind_name: { ar: string; en: string } | null; overdue: boolean; assigned_to_me: boolean; updated_at: string;
 }
-export interface NotificationItem { id: number; record_id: string | null; event: string; title_ar: string; title_en: string; body: string | null; created_at: string; read: boolean }
+export interface NotificationItem { id: number; record_id: string | null; project_id?: string | null; event: string; title_ar: string; title_en: string; body: string | null; created_at: string; read: boolean }
 export interface Notifications { unread: number; items: NotificationItem[] }
 
 // ---- project structure (mirror app/schemas/structure.py)
@@ -179,7 +179,7 @@ export interface ProjectTypeT {
   id: string | null; name_ar: string; name_en: string; group_label_ar: string; group_label_en: string;
   unit_label_ar: string; unit_label_en: string; stages: TemplateStage[]; units: { name_ar: string; name_en: string }[]; is_active: boolean;
 }
-export interface StageT extends TemplateStage { id: string | null; is_active: boolean; used: boolean }
+export interface StageT extends TemplateStage { id: string | null; is_active: boolean; used: boolean; scope_locked?: boolean }
 export interface UnitT { id: string | null; name_ar: string; name_en: string; is_active: boolean; used: boolean }
 export interface GroupT extends UnitT { units: UnitT[] }
 export interface TypeRef { id: string; name_ar: string; name_en: string }

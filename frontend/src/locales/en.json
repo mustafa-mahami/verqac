@@ -162,7 +162,8 @@
     "programme_cycle_loop": "Circular link between stages (A after B and B after A).",
     "dr_actual_start_range": "The actual start must be between the project start and the report date.",
     "dr_actual_finish_needs_100": "An actual finish needs 100%.",
-    "dr_actual_finish_range": "The actual finish must be after the start and not after the report date."
+    "dr_actual_finish_range": "The actual finish must be after the start and not after the report date.",
+    "stage_scope_locked": "This stage's scope cannot change: approved daily reports gave it progress. Switch it off and add a new stage with the right scope."
   },
   "common": {
     "cancel": "Cancel",
@@ -548,7 +549,8 @@
     "addTopic": "Add a subject",
     "pickTopic": "Pick the subject",
     "filterTopic": "Subject:",
-    "topic": "Topic"
+    "topic": "Topic",
+    "scopeLocked": "The scope is locked: approved daily reports gave this stage progress, and changing it would drop or move that progress. To change it, switch the stage off and add a new one with the right scope."
   },
   "account": {
     "title": "My account",

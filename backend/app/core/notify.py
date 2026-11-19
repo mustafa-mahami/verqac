@@ -60,19 +60,22 @@ def members_who_can(c: Ctx, project_id: uuid.UUID, party_id: uuid.UUID, rt: Reco
     return out
 
 
-def notify(c: Ctx, bg: BackgroundTasks, *, project: Project, rec: Record, event: str, user_ids: set[uuid.UUID],
-           title_ar: str, title_en: str, body: str | None = None) -> None:
+def notify(c: Ctx, bg: BackgroundTasks, *, project: Project, rec: Record | None, event: str, user_ids: set[uuid.UUID],
+           title_ar: str, title_en: str, body: str | None = None, path: str | None = None) -> None:
+    """To these users: the bell, browser push, and e-mail / Mahami when the project uses them. Without a record
+    (e.g. a missing daily report) `path` is where the notification leads."""
     user_ids = {u for u in user_ids if u and u != c.user.id}
     if not user_ids:
         return
     c.db.execute(insert(Notification), [
-        {"user_id": u, "project_id": project.id, "record_id": rec.id, "event": event, "title_ar": title_ar[:300],
+        {"user_id": u, "project_id": project.id, "record_id": rec.id if rec else None, "event": event, "title_ar": title_ar[:300],
          "title_en": title_en[:300], "body": (body or "")[:2000] or None} for u in user_ids])
 
-    link = f"{get_settings().app_url.rstrip('/')}/records/{rec.id}"
+    path = path or f"/records/{rec.id}"
+    link = f"{get_settings().app_url.rstrip('/')}{path}"
     # browser push (per user, not per project): the device shows it even when Verqac is closed
     bg.add_task(send_push, set(user_ids), {"title": title_ar, "title_en": title_en, "body": body or "",
-                                           "url": f"/records/{rec.id}", "tag": f"{event}-{rec.id}"})
+                                           "url": path, "tag": f"{event}-{rec.id if rec else project.id}"})
 
     ch = channels(project)
     want_mail, want_mahami = ch["email"] and mail_enabled(), ch["mahami"] and mahami_enabled()
@@ -85,7 +88,7 @@ def notify(c: Ctx, bg: BackgroundTasks, *, project: Project, rec: Record, event:
             bg.add_task(send_mail, e, f"Verqac: {title_en}", text)
     if want_mahami:
         bg.add_task(_post_mahami, {"emails": emails, "title": title_ar[:250], "body": (body or title_en)[:500],
-                                   "url": link, "project": project.name_ar, "ref": f"verqac.record,{rec.id}"})
+                                   "url": link, "project": project.name_ar, "ref": f"verqac.record,{rec.id}" if rec else f"verqac.project,{project.id}"})
 
 
 def _post_mahami(payload: dict) -> None:

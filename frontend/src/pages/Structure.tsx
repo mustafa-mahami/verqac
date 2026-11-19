@@ -108,7 +108,7 @@ function TopicsEditor({ topics, onChange, editable, withActive, checklists }: {
 }
 
 /** Rows of stages with name, scope, weight and their subjects; for type templates and a project's own stages. */
-export function StagesEditor<S extends TemplateStage & { is_active?: boolean; used?: boolean }>({ stages, onChange, editable, blank, checklists = true }: {
+export function StagesEditor<S extends TemplateStage & { is_active?: boolean; used?: boolean; scope_locked?: boolean }>({ stages, onChange, editable, blank, checklists = true }: {
   stages: S[]; onChange: (s: S[]) => void; editable: boolean; blank: S; checklists?: boolean;
 }) {
   const { t } = useTranslation();
@@ -136,9 +136,11 @@ export function StagesEditor<S extends TemplateStage & { is_active?: boolean; us
                 <Table.Td><TextInput size="xs" disabled={!editable} value={s.name_ar} onChange={(e) => set(i, { name_ar: e.currentTarget.value } as Partial<S>)} /></Table.Td>
                 <Table.Td><TextInput size="xs" dir="ltr" disabled={!editable} value={s.name_en} onChange={(e) => set(i, { name_en: e.currentTarget.value } as Partial<S>)} /></Table.Td>
                 <Table.Td>
-                  <Select size="xs" disabled={!editable} allowDeselect={false} value={s.scope}
-                    data={[{ value: 'per_location', label: t('structure.perLocation') }, { value: 'whole', label: t('structure.whole') }]}
-                    onChange={(v) => set(i, { scope: (v ?? 'per_location') as StageScope } as Partial<S>)} />
+                  <Tooltip label={t('structure.scopeLocked')} disabled={!s.scope_locked} multiline w={280}>
+                    <div><Select size="xs" disabled={!editable || !!s.scope_locked} allowDeselect={false} value={s.scope}
+                      data={[{ value: 'per_location', label: t('structure.perLocation') }, { value: 'whole', label: t('structure.whole') }]}
+                      onChange={(v) => set(i, { scope: (v ?? 'per_location') as StageScope } as Partial<S>)} /></div>
+                  </Tooltip>
                 </Table.Td>
                 <Table.Td>
                   <NumberInput size="xs" min={0} max={100} decimalScale={2} hideControls disabled={!editable} rightSection="%"

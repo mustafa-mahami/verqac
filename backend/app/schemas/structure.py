@@ -67,6 +67,7 @@ class StageIO(BaseModel):
     weight: Decimal = Field(default=Decimal(0), ge=0, le=100)
     is_active: bool = True
     used: bool = False  # output only: records point at it, so it can be switched off but not deleted
+    scope_locked: bool = False  # output only: approved daily reports gave it a %, so its scope stays
     topics: list[TopicIO] = []
 
 

@@ -128,8 +128,21 @@ def _used_ids(project_id: uuid.UUID) -> tuple[set, set, set]:
     return stages, locs, topics
 
 
+def progress_stages(project_id: uuid.UUID) -> set:
+    """Stages that approved daily reports gave a %: changing their scope would move or drop that progress."""
+    from app.models.daily import DailyReport
+    with session_scope(bypass=True) as s:
+        out = set()
+        for works in s.scalars(select(DailyReport.works).join(Record, Record.id == DailyReport.record_id)
+                               .where(DailyReport.project_id == project_id,
+                                      Record.state_category.in_(("approved", "approved_as_noted")))):
+            out.update(uuid.UUID(str(w["stage_id"])) for w in works if w.get("stage_id") and w.get("progress") is not None)
+    return out
+
+
 def structure_of(c: Ctx, project: Project, can_edit: bool) -> StructureOut:
     used_stages, used_locs, used_topics = _used_ids(project.id)
+    locked = progress_stages(project.id)
     topics: dict = {}
     for tp in c.db.scalars(select(ProjectStageTopic).where(ProjectStageTopic.project_id == project.id)
                            .order_by(ProjectStageTopic.sort)):
@@ -137,8 +150,8 @@ def structure_of(c: Ctx, project: Project, can_edit: bool) -> StructureOut:
             TopicIO(id=tp.id, name_ar=tp.name_ar, name_en=tp.name_en, is_active=tp.is_active, used=tp.id in used_topics,
                     checklist=tp.checklist or []))
     stages = [StageIO(id=s.id, name_ar=s.name_ar, name_en=s.name_en, scope=s.scope, weight=s.weight,
-                      is_active=s.is_active, used=s.id in used_stages or any(t.used for t in topics.get(s.id, [])),
-                      topics=topics.get(s.id, []))
+                      is_active=s.is_active, used=s.id in used_stages or s.id in locked or any(t.used for t in topics.get(s.id, [])),
+                      scope_locked=s.id in locked, topics=topics.get(s.id, []))
               for s in c.db.scalars(select(ProjectStage).where(ProjectStage.project_id == project.id)
                                     .order_by(ProjectStage.sort))]
     rows = c.db.scalars(select(ProjectLocation).where(ProjectLocation.project_id == project.id)
@@ -232,8 +245,14 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
         raise HTTPException(status.HTTP_409_CONFLICT, "stage_in_use")
     if removed_topics & used_topics:
         raise HTTPException(status.HTTP_409_CONFLICT, "topic_in_use")
-    # a stage that changes scope moves its approved % to other cells: recount from the approved reports
-    rescope = any(x.id in old and old[x.id].scope != x.scope for x in body)
+    # a stage that changes scope moves its approved % to other cells: refused once approved reports gave it a %
+    # (stop it and add a new stage instead); before that, recount from the approved reports
+    rescoped = {x.id for x in body if x.id in old and old[x.id].scope != x.scope}
+    if rescoped & progress_stages(project_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "stage_scope_locked")
+    if removed & progress_stages(project_id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "stage_in_use")
+    rescope = bool(rescoped)
     for i, x in enumerate(body):
         s = old.get(x.id) if x.id else None
         if x.id and s is None:

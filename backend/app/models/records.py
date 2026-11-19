@@ -246,6 +246,17 @@ class Notification(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class ProjectReminder(Base):
+    """A project reminder already sent (e.g. a day without a daily report), so each goes out once."""
+
+    __tablename__ = "project_reminders"
+
+    project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), primary_key=True)  # dr_missing
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)  # the day
+    sent_at: Mapped[datetime] = created()
+
+
 RECORD_TABLES = [
     "workflows", "workflow_states", "workflow_transitions", "record_types", "records", "submittal_details",
     "numbering_counters", "record_events", "record_comments", "files", "attachments",
