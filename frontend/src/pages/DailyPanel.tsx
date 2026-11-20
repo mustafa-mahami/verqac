@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type LinkedRef, type RecordDetail } from '../api';
 import {
-  blankWork, CAUSES, crewList, GROUPS, itemLabel, WEATHER, type CrewLine, type DailyData, type DailyOut, type DailySettings, type DelayLine, type EquipLine,
+  blankWork, CAUSES, crewList, labourFromWorks, GROUPS, itemLabel, WEATHER, type CrewLine, type DailyData, type DailyOut, type DailySettings, type DelayLine, type EquipLine,
   type Group as CrewGroup, type MaterialLine, type WorkLine,
 } from '../daily';
 import i18n, { pick } from '../i18n';
@@ -19,9 +19,9 @@ const num = (v: string | number) => (v === '' || v === null || v === undefined ?
 const Del = ({ onClick }: { onClick: () => void }) => <ActionIcon size="sm" variant="subtle" color="red" aria-label="remove" onClick={onClick}>×</ActionIcon>;
 
 /** Work lines: stage → topic → where, what, quantity, crew and the cumulative % of the cell(s). */
-function WorksTable({ lines, onChange, editable, projectId, current, withProgress, actualDates = false }: {
+function WorksTable({ lines, onChange, editable, projectId, current, withProgress, actualDates = false, settings }: {
   lines: WorkLine[]; onChange: (l: WorkLine[]) => void; editable: boolean; projectId: string; current: Record<string, number>; withProgress: boolean;
-  actualDates?: boolean;
+  actualDates?: boolean; settings?: DailySettings;
 }) {
   const { t } = useTranslation();
   const s = useStructure(projectId).data;
@@ -43,9 +43,19 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
     return lo === hi ? `${lo}%` : `${lo}–${hi}%`;
   };
   const ALL = '__all__';
+  // who did it: a team from the project's labour list (or typed), its subcontractor, workers and hours
+  const lang = i18n.language === 'en' ? 'en' : 'ar';
+  const teamItems = settings ? (settings.lists[crewList(settings, 'labour')] ?? []).filter((x) => x.active) : [];
+  const teamOpts = teamItems.map((x) => itemLabel(x, lang));
+  const subs = settings ? (settings.lists.subcontractors ?? []).filter((x) => x.active).map((x) => itemLabel(x, lang)) : [];
+  const pickTeam = (i: number, v: string) => {
+    const it = teamItems[teamOpts.indexOf(v)];
+    set(i, it ? { team: it.ar, team_en: it.en } : { team: v || null, team_en: null });
+  };
+  const teamShown = (w: WorkLine) => (lang === 'en' ? w.team_en || w.team : w.team) ?? '';
   return (
     <Stack gap={4}>
-      <Table.ScrollContainer minWidth={820}>
+      <Table.ScrollContainer minWidth={1000}>
         <Table verticalSpacing={3} horizontalSpacing={4} withRowBorders striped style={{ tableLayout: 'fixed' }}>
           <Table.Thead>
             <Table.Tr>
@@ -54,7 +64,9 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
               <Table.Th>{t('daily.desc')}</Table.Th>
               <Table.Th w={58}>{t('daily.qty')}</Table.Th>
               <Table.Th w={48}>{t('daily.unit')}</Table.Th>
+              <Table.Th w={170}>{t('daily.team')}</Table.Th>
               <Table.Th w={46}>{t('daily.crewN')}</Table.Th>
+              <Table.Th w={46}>{t('daily.hoursShort')}</Table.Th>
               {withProgress && <Table.Th w={70}>%</Table.Th>}
               {(editable || actualDates) && <Table.Th w={editable ? 56 : 30} />}
             </Table.Tr>
@@ -93,7 +105,16 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
                     </Table.Td>
                     <Table.Td><NumberInput size="xs" hideControls value={w.qty ?? ''} disabled={!editable} onChange={(v) => set(i, { qty: num(v) })} /></Table.Td>
                     <Table.Td><TextInput size="xs" dir="ltr" value={w.unit ?? ''} disabled={!editable} onChange={(e) => set(i, { unit: e.currentTarget.value || null })} /></Table.Td>
+                    <Table.Td>
+                      <Autocomplete size="xs" data={teamOpts} value={teamShown(w)} disabled={!editable} placeholder={t('daily.team')}
+                        onChange={(v) => pickTeam(i, v)} />
+                      {subs.length > 0 && (w.team || w.sub) && (
+                        <Select size="xs" mt={2} data={subs} value={w.sub ?? null} clearable disabled={!editable} placeholder={t('daily.sub')}
+                          onChange={(v) => set(i, { sub: v })} />
+                      )}
+                    </Table.Td>
                     <Table.Td><NumberInput size="xs" hideControls value={w.crew ?? ''} disabled={!editable} onChange={(v) => set(i, { crew: num(v) })} /></Table.Td>
+                    <Table.Td><NumberInput size="xs" hideControls min={0} max={24} value={w.hours ?? ''} disabled={!editable} onChange={(v) => set(i, { hours: num(v) })} /></Table.Td>
                     {withProgress && (
                       <Table.Td>
                         <Tooltip label={`${t('daily.was')}: ${was(w) ?? '0%'}`} disabled={!st}>
@@ -118,7 +139,7 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
                   </Table.Tr>
                   {showDates && (
                     <Table.Tr>
-                      <Table.Td colSpan={8}>
+                      <Table.Td colSpan={10}>
                         <Group gap="xs" align="center">
                           <TextInput size="xs" type="date" w={190} value={w.actual_start ?? ''} disabled={!editable}
                             leftSection={<Text size="xs">{t('daily.actualStart')}</Text>} leftSectionWidth={110}
@@ -145,7 +166,9 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
 }
 
 /** Staff and labour: names or trade + count per group, as the project settings say. */
-function CrewTable({ lines, onChange, editable, settings }: { lines: CrewLine[]; onChange: (l: CrewLine[]) => void; editable: boolean; settings: DailySettings }) {
+function CrewTable({ lines, onChange, editable, settings, derived }: {
+  lines: CrewLine[]; onChange: (l: CrewLine[]) => void; editable: boolean; settings: DailySettings; derived: CrewLine[];
+}) {
   const { t } = useTranslation();
   const lang = i18n.language === 'en' ? 'en' : 'ar';
   const subs = (settings.lists.subcontractors ?? []).filter((x) => x.active).map((x) => itemLabel(x, lang));
@@ -169,10 +192,22 @@ function CrewTable({ lines, onChange, editable, settings }: { lines: CrewLine[];
           return r ? `${n} — ${r}` : n;
         };
         const set = (i: number, p: Partial<CrewLine>) => onChange(lines.map((x, j) => (j === i ? { ...x, ...p } : x)));
-        const total = rows.reduce((a, r) => a + (r.x.count || 0), 0);
+        const auto = g === 'labour' ? derived : [];
+        const total = rows.reduce((a, r) => a + (r.x.count || 0), 0) + auto.reduce((a, x) => a + x.count, 0);
         return (
           <div key={g}>
             <Text size="sm" fw={600}>{t(`daily.g.${g}`)} <Badge size="sm" variant="light">{total}</Badge></Text>
+            {auto.map((x, k) => (
+              <Group key={`a${k}`} gap="xs" mt={4} wrap="nowrap">
+                <TextInput size="xs" style={{ flex: 1 }} readOnly value={lang === 'en' ? x.name_en || x.name : x.name}
+                  rightSection={<Badge size="xs" variant="light" color="teal" tt="none">{t('daily.fromWorks')}</Badge>} rightSectionWidth={120} />
+                {subs.length > 0 && <TextInput size="xs" w={170} readOnly value={x.sub ?? ''} />}
+                <TextInput size="xs" w={80} readOnly value={String(x.count)} />
+                <TextInput size="xs" w={80} readOnly value={x.hours ?? ''} />
+                {editable && <div style={{ width: 28 }} />}
+              </Group>
+            ))}
+            {g === 'labour' && auto.length > 0 && <Text size="xs" c="dimmed" mt={2}>{t('daily.fromWorksHint')}</Text>}
             {rows.map(({ x, i }) => (
               <Group key={i} gap="xs" mt={4} wrap="nowrap">
                 <Autocomplete size="xs" style={{ flex: 1 }} placeholder={t(names ? 'daily.person' : 'daily.trade')} disabled={!editable} value={shown(x)}
@@ -237,7 +272,7 @@ export default function DailyPanel({ rec }: { rec: RecordDetail }) {
           {out.day_off && <Badge color="orange" variant="light" tt="none">{out.day_off === 'weekend' ? t('daily.weekend') : `${t('daily.holiday')}${out.holiday ? `: ${out.holiday}` : ''}`}</Badge>}
         </Group>
         <Group gap="xs">
-          {GROUPS.map((g) => <Badge key={g} variant="light" tt="none">{t(`daily.g.${g}`)}: {d.crew.filter((x) => x.group === g).reduce((a, x) => a + (x.count || 0), 0)}</Badge>)}
+          {GROUPS.map((g) => <Badge key={g} variant="light" tt="none">{t(`daily.g.${g}`)}: {[...d.crew.filter((x) => !x.auto), ...labourFromWorks(d.works)].filter((x) => x.group === g).reduce((a, x) => a + (x.count || 0), 0)}</Badge>)}
           <Badge variant="light" tt="none" color="gray">{t('daily.equipment')}: {d.equipment.reduce((a, x) => a + (x.count || 0), 0)}</Badge>
         </Group>
       </Group>
@@ -279,11 +314,13 @@ export default function DailyPanel({ rec }: { rec: RecordDetail }) {
           {ed && <Button mt={2} size="compact-xs" variant="subtle" onClick={() => set({ equipment: [...d.equipment, { name: '', count: 1, hours: 8, idle_hours: null, note: null }] })}>+ {t('daily.add')}</Button>}
         </Tabs.Panel>
 
-        <Tabs.Panel value="crew"><CrewTable lines={d.crew} onChange={(l) => set({ crew: l })} editable={ed} settings={S} /></Tabs.Panel>
+        <Tabs.Panel value="crew">
+          <CrewTable lines={d.crew.filter((x) => !x.auto)} onChange={(l) => set({ crew: l })} editable={ed} settings={S} derived={labourFromWorks(d.works)} />
+        </Tabs.Panel>
 
         <Tabs.Panel value="works">
           <Text size="xs" c="dimmed" mb={6}>{t('daily.worksHint')}</Text>
-          <WorksTable lines={d.works} onChange={(l) => set({ works: l })} editable={ed} projectId={rec.project_id} current={out.current} withProgress
+          <WorksTable lines={d.works} onChange={(l) => set({ works: l })} editable={ed} projectId={rec.project_id} current={out.current} settings={S} withProgress
             actualDates={!!settings.data?.actual_dates || d.works.some((x) => x.actual_start || x.actual_finish)} />
         </Tabs.Panel>
 
@@ -326,7 +363,7 @@ export default function DailyPanel({ rec }: { rec: RecordDetail }) {
 
         <Tabs.Panel value="planned">
           <Text size="xs" c="dimmed" mb={6}>{t('daily.plannedHint')}</Text>
-          <WorksTable lines={d.planned} onChange={(l) => set({ planned: l })} editable={ed} projectId={rec.project_id} current={out.current} withProgress={false} />
+          <WorksTable lines={d.planned} onChange={(l) => set({ planned: l })} editable={ed} projectId={rec.project_id} current={out.current} withProgress={false} settings={S} />
         </Tabs.Panel>
 
         <Tabs.Panel value="issues">

@@ -10,7 +10,7 @@ import { addDays, daysBetween } from '../programme';
 
 type Named = { name_ar: string; name_en: string };
 interface StageRow extends Named { stage_id: string; weight: number; start: number; end: number; planned: number | null;
-  locations_ar: string[]; locations_en: string[]; days: number; qty: { qty: number; unit: string }[] }
+  locations_ar: string[]; locations_en: string[]; days: number; qty: { qty: number; unit: string }[]; man_days?: number; teams?: string[] }
 interface PeriodOut {
   kind: Kind; project_start: string | null; start: string; end: string; upto: string; prev: string; next: string | null;
   working_days: number; reports: number; pending: number; missing: string[]; stopped: string[]; partial: string[];
@@ -132,7 +132,7 @@ export default function PeriodicPanel({ projectId }: { projectId: string }) {
                 <Table.Thead><Table.Tr>
                   <Table.Th>{t('per.stage')}</Table.Th><Table.Th ta="center">{t('per.pStart')}</Table.Th><Table.Th ta="center">{t('per.pEnd')}</Table.Th>
                   {o.planned_end != null && <Table.Th ta="center">{t('per.planned')}</Table.Th>}
-                  <Table.Th w={160} /><Table.Th>{t('per.where')}</Table.Th><Table.Th>{t('per.qty')}</Table.Th>
+                  <Table.Th w={160} /><Table.Th>{t('per.where')}</Table.Th><Table.Th>{t('per.qty')}</Table.Th><Table.Th ta="center">{t('per.manDays')}</Table.Th>
                 </Table.Tr></Table.Thead>
                 <Table.Tbody>
                   {o.stages.map((s) => (
@@ -148,6 +148,7 @@ export default function PeriodicPanel({ projectId }: { projectId: string }) {
                       </Table.Td>
                       <Table.Td fz="xs">{(lang === 'en' ? s.locations_en : s.locations_ar).join(lang === 'en' ? ', ' : '، ')}</Table.Td>
                       <Table.Td fz="xs" dir="ltr" ta="start">{s.qty.map((x) => `${x.qty} ${x.unit}`.trim()).join(' · ')}</Table.Td>
+                      <Table.Td ta="center">{s.man_days || ''}{s.teams && s.teams.length > 0 && <Text size="xs" c="dimmed">{s.teams.join(' · ')}</Text>}</Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Tbody>

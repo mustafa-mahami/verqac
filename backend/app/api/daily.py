@@ -36,6 +36,7 @@ class CrewLine(BaseModel):
     role_en: str | None = Field(default=None, max_length=150)
     count: int = Field(default=1, ge=0, le=5000)
     hours: float | None = Field(default=None, ge=0, le=24)
+    auto: bool = False  # worked out from the work lines (team + workers): not entered by hand
 
 
 class EquipLine(BaseModel):
@@ -65,6 +66,11 @@ class WorkLine(BaseModel):
     qty: float | None = None
     unit: str | None = Field(default=None, max_length=20)
     crew: int | None = Field(default=None, ge=0, le=5000)
+    # who did it: the labour team (a trade from the project's labour list), its subcontractor, hours worked
+    team: str | None = Field(default=None, max_length=150)
+    team_en: str | None = Field(default=None, max_length=150)
+    sub: str | None = Field(default=None, max_length=150)
+    hours: float | None = Field(default=None, ge=0, le=24)
     progress: float | None = Field(default=None, ge=0, le=100)  # cumulative % of the cell(s) after today's work
     # when the project allows it (work that started or ended before the reports did): the real dates of the cell(s)
     actual_start: date | None = None
@@ -461,6 +467,29 @@ def _rt(c: Ctx) -> RecordType:
     return c.db.scalar(select(RecordType).where(RecordType.org_id.is_(None), RecordType.code == "daily_report"))
 
 
+def labour_from_works(works: list[dict]) -> list[dict]:
+    """The day's labour from its work lines: per team (and subcontractor) the workers of its lines added up,
+    the longest hours. Lines without a team are not counted (who worked is not known)."""
+    teams: dict[tuple, dict] = {}
+    for w in works:
+        name, n = (w.get("team") or "").strip(), int(w.get("crew") or 0)
+        if not name or n <= 0:
+            continue
+        k = (name, (w.get("sub") or "").strip() or None)
+        t = teams.setdefault(k, {"group": "labour", "sub": k[1], "name": name, "name_en": w.get("team_en") or name,
+                                 "role": None, "role_en": None, "count": 0, "hours": None, "auto": True})
+        t["count"] += n
+        h = w.get("hours")
+        if h and (t["hours"] is None or h > t["hours"]):
+            t["hours"] = float(h)
+    return list(teams.values())
+
+
+def with_labour(crew: list[dict], works: list[dict]) -> list[dict]:
+    """The crew as entered by hand, and the labour worked out from the work lines."""
+    return [x for x in crew if not x.get("auto")] + labour_from_works(works)
+
+
 def _strip(line: dict) -> dict:
     return {k: (str(v) if isinstance(v, uuid.UUID) else v.isoformat() if isinstance(v, date) else
                 [str(x) for x in v] if k == "location_ids" else v)
@@ -497,8 +526,8 @@ def new_daily(project_id: uuid.UUID, body: NewDaily, c: Ctx = Depends(ctx)):
             d.shift = prev.shift
             if not d.hours_from:
                 d.hours_from, d.hours_to = prev.hours_from, prev.hours_to
-            d.crew, d.equipment = prev.crew, prev.equipment
             d.works = [{**x, "qty": None, "progress": None} for x in prev.planned]
+            d.crew, d.equipment = with_labour(prev.crew or [], d.works), prev.equipment
     c.db.add(d)
     c.db.flush()
     return {"id": str(rec.id)}
@@ -588,11 +617,12 @@ def put_daily(record_id: uuid.UUID, body: DailyIO, c: Ctx = Depends(ctx)):
     for k in ("shift", "work_status", "stop_reason", "weather", "temp_min", "temp_max", "wind", "hours_from", "hours_to",
               "visitors", "notes"):
         setattr(d, k, getattr(body, k))
-    d.crew = [x.model_dump() for x in body.crew if x.name.strip()]
+    d.crew = [x.model_dump() for x in body.crew if x.name.strip() and not x.auto]  # the rest comes from the works below
     d.equipment = [x.model_dump() for x in body.equipment if x.name.strip()]
     d.materials = [_strip(x.model_dump()) for x in body.materials if x.material.strip()]
     d.works = [_strip(x.model_dump()) for x in body.works if x.stage_id or (x.description or "").strip()]
     d.planned = [_strip(x.model_dump()) for x in body.planned if x.stage_id or (x.description or "").strip()]
+    d.crew = with_labour(d.crew, d.works)
     d.delays = [_strip(x.model_dump()) for x in body.delays]
     d.hse = body.hse.model_dump()
     rec.updated_at = datetime.now(UTC)

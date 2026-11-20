@@ -111,6 +111,9 @@ def _daily(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
         return [{"stage": " › ".join(x for x in (names.get(str(w.get("stage_id")), ""), names.get(str(w.get("topic_id")), "")) if x),
                  "where": L["all"] if w.get("all_locations") else sep.join(names.get(str(i), "") for i in w.get("location_ids") or []),
                  "desc": " — ".join(x for x in (w.get("description") or "",
+                                                  (f"{(w.get('team_en') if lang == 'en' else None) or w['team']}"
+                                                   + (f" ({w['sub']})" if w.get("sub") else "")
+                                                   + (f" × {w['crew']}" if w.get("crew") else "")) if w.get("team") else "",
                                                   (("بدأ فعلياً " if lang == "ar" else "actual start ") + w["actual_start"]) if w.get("actual_start") else "",
                                                   (("انتهى فعلياً " if lang == "ar" else "actual finish ") + w["actual_finish"]) if w.get("actual_finish") else "") if x),
                  "qty": f"{num(w.get('qty'))} {w.get('unit') or ''}".strip(),

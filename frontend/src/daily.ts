@@ -1,9 +1,10 @@
 export type Group = 'supervision' | 'contractor' | 'labour';
-export interface CrewLine { group: Group; sub: string | null; name: string; name_en?: string | null; role?: string | null; role_en?: string | null; count: number; hours: number | null }
+export interface CrewLine { group: Group; sub: string | null; name: string; name_en?: string | null; role?: string | null; role_en?: string | null; count: number; hours: number | null; auto?: boolean }
 export interface ListItem { ar: string; en: string; role_ar?: string | null; role_en?: string | null; active: boolean }
 export interface EquipLine { name: string; count: number; hours: number | null; idle_hours: number | null; note: string | null }
 export interface MaterialLine { material: string; qty: number | null; unit: string | null; supplier: string | null; delivery_note: string | null; submittal_id: string | null; mir_id: string | null }
-export interface WorkLine { stage_id: string | null; topic_id: string | null; location_ids: string[]; all_locations: boolean; description: string | null; qty: number | null; unit: string | null; crew: number | null; progress: number | null; actual_start?: string | null; actual_finish?: string | null }
+export interface WorkLine { stage_id: string | null; topic_id: string | null; location_ids: string[]; all_locations: boolean; description: string | null; qty: number | null; unit: string | null; crew: number | null; progress: number | null; actual_start?: string | null; actual_finish?: string | null;
+  team?: string | null; team_en?: string | null; sub?: string | null; hours?: number | null }
 export interface DelayLine { cause: string; hours: number | null; description: string | null; link_id: string | null }
 export interface DailyData {
   shift: 'day' | 'night' | 'both'; work_status: 'normal' | 'partial' | 'stopped'; stop_reason: string | null; weather: string | null;
@@ -38,3 +39,21 @@ export const GROUPS: Group[] = ['supervision', 'contractor', 'labour'];
 export const WEATHER = ['sunny', 'cloudy', 'rain', 'storm', 'snow', 'fog', 'dust', 'hot', 'cold'];
 export const CAUSES = ['weather', 'materials', 'design', 'approval', 'equipment', 'labour', 'utilities', 'access', 'other'];
 export const blankWork = (): WorkLine => ({ stage_id: null, topic_id: null, location_ids: [], all_locations: false, description: null, qty: null, unit: null, crew: null, progress: null });
+
+/** The day's labour from its work lines (as the server works it out): per team and subcontractor, the workers
+ * added up and the longest hours. Lines without a team are not counted. */
+export function labourFromWorks(works: WorkLine[]): CrewLine[] {
+  const out = new Map<string, CrewLine>();
+  for (const w of works) {
+    const name = (w.team ?? '').trim();
+    const n = w.crew ?? 0;
+    if (!name || n <= 0) continue;
+    const sub = (w.sub ?? '').trim() || null;
+    const k = `${name}|${sub ?? ''}`;
+    const x = out.get(k) ?? { group: 'labour', sub, name, name_en: w.team_en || name, role: null, role_en: null, count: 0, hours: null, auto: true };
+    x.count += n;
+    if (w.hours && (x.hours === null || w.hours > x.hours)) x.hours = w.hours;
+    out.set(k, x);
+  }
+  return [...out.values()];
+}

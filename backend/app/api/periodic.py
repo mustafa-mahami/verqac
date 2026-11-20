@@ -36,6 +36,8 @@ class StageRow(BaseModel):
     locations_en: list[str] = []
     days: int = 0  # reports in which it appears
     qty: list[dict] = []  # [{qty, unit}] summed per unit
+    man_days: int = 0  # workers on its work lines, added up over the reports
+    teams: list[str] = []  # who worked on it (the work lines' teams), most man-days first
 
 
 class CrewRow(BaseModel):
@@ -291,7 +293,8 @@ def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date, until: date | Non
         out.late = sorted(late, key=lambda r: (r.actual - r.planned, r.plan_finish or upto))[:60]
 
     # ---- the daily reports of the period
-    worked: dict[str, dict] = defaultdict(lambda: {"locs": set(), "days": set(), "qty": defaultdict(float)})
+    worked: dict[str, dict] = defaultdict(lambda: {"locs": set(), "days": set(), "qty": defaultdict(float), "men": 0,
+                                                   "teams": defaultdict(int)})
     crew: dict[tuple, dict] = {}
     gday: dict[str, dict[date, int]] = {g: defaultdict(int) for g in GROUPS}
     equip: dict[str, dict] = {}
@@ -318,6 +321,10 @@ def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date, until: date | Non
                 w["locs"].update(str(x) for x in line.get("location_ids") or [])
             if line.get("qty") is not None:
                 w["qty"][(line.get("unit") or "").strip()] += float(line["qty"])
+            n = int(line.get("crew") or 0)
+            w["men"] += n
+            if n and (line.get("team") or "").strip():
+                w["teams"][line["team"].strip()] += n
         for x in d.crew:
             g, n = x.get("group"), int(x.get("count") or 0)
             if g not in GROUPS:
@@ -371,7 +378,9 @@ def build(c: Ctx, project_id: uuid.UUID, kind: str, day: date, until: date | Non
         out.stages.append(StageRow(stage_id=s.id, name_ar=s.name_ar, name_en=s.name_en, weight=float(s.weight),
                                    start=s0.get(sid, 0.0), end=s1.get(sid, 0.0), planned=ps.get(sid) if plan else None,
                                    locations_ar=name("ar"), locations_en=name("en"), days=len(w["days"]) if w else 0,
-                                   qty=[{"qty": round(q, 2), "unit": u} for u, q in w["qty"].items()] if w else []))
+                                   qty=[{"qty": round(q, 2), "unit": u} for u, q in w["qty"].items()] if w else [],
+                                   man_days=w["men"] if w else 0,
+                                   teams=[k for k, _ in sorted(w["teams"].items(), key=lambda x: -x[1])][:4] if w else []))
 
     # ---- the QA registers (only what this user may see)
     t0 = datetime.combine(start, datetime.min.time(), TZ)

@@ -705,7 +705,8 @@ class Importer:
                     for x in k[model]:
                         target.append(self._work(x))
             if not any(x["group"] == "labour" for x in crew):
-                for x in labour_of([x for one in rs for x in kids[one["id"]]["work.work"]]):
+                from app.api.daily import labour_from_works
+                for x in labour_from_works(works):
                     crew.append(x)
                     lists["labour_desc"].add(x["name"])
             weather = WEATHER.get((m2o_name(r.get("weather")) or "").lower())
@@ -764,6 +765,7 @@ class Importer:
                 "location_ids": [unit.id] if unit and st is not None and st.scope != "whole" else [],
                 "all_locations": False, "description": " – ".join(desc)[:1000] or None, "qty": x.get("qty") or None,
                 "unit": (m2o_name(x.get("unitm")) or "")[:20] or None, "crew": int(x.get("laborno") or 0) or None,
+                **team_of(x),
                 "progress": pct if st is not None else None, "actual_start": None, "actual_finish": None}
 
     def progress_from_schedule(self):
@@ -793,7 +795,7 @@ class Importer:
             if fin and (fin > day or (begin and fin < begin)):
                 fin = day
             line = {"stage_id": st.id, "topic_id": None, "location_ids": [unit.id] if unit and st.scope != "whole" else [],
-                    "all_locations": False, "description": "نسبة الإنجاز من جدول Odoo", "qty": None, "unit": None, "crew": None,
+                    "all_locations": False, "description": SCHEDULE_LINE, "qty": None, "unit": None, "crew": None,
                     "progress": round(min(100.0, pct), 1), "actual_start": begin, "actual_finish": fin if pct >= 100 else None}
             if pct >= 100 and fin is None:
                 line["actual_finish"] = None
@@ -872,6 +874,16 @@ def kpi_targets(data: dict, project) -> bool:
     close = int(((data.get("projects") or [{}])[0]).get("qa_ncr_close_days") or kpi.DEFAULT_NCR_CLOSE_DAYS)
     project.settings = {**(project.settings or {}), "kpi": {"targets": targets, "ncr_close_days": close}}
     return True
+
+
+SCHEDULE_LINE = "نسبة الإنجاز من جدول Odoo"
+
+
+def team_of(x: dict) -> dict:
+    """Who did an Odoo work line: its team ("Team Select") and the workers' hours."""
+    n = int(x.get("laborno") or 0)
+    team = (m2o_name(x.get("subcontselec")) or ("Labour" if n > 0 else "") or "")[:150] or None
+    return {"team": team, "team_en": team, "sub": None, "hours": min(24.0, float(x.get("labortime") or 0)) or None}
 
 
 def labour_of(lines: list[dict]) -> list[dict]:
@@ -1068,25 +1080,43 @@ def fix_imported(db, data: dict, project, paths: list | None = None) -> Counter:
         if new != f.filename:
             f.filename = new
             rep["files renamed"] += 1
-    # labour: Odoo kept it on the work lines (team + workers); reports imported before have none
+    # labour: Odoo kept it on the work lines (team + workers). The team goes on each work line, and the
+    # day's labour is worked out from them (as for reports written in Verqac)
+    from app.api.daily import labour_from_works
     from app.models.daily import DailyReport
-    lines = defaultdict(list)
+    kids = defaultdict(list)
     for x in data["models"].get("work.work", []):
-        lines[m2o_id(x.get("work_id"))].append(x)
-    dr_rows = {r["id"]: r for r in data["models"].get("dr.dr", [])}
+        kids[m2o_id(x.get("work_id"))].append(x)
     by_day = defaultdict(list)
-    for rid, r in dr_rows.items():
+    for r in data["models"].get("dr.dr", []):
         if r.get("date"):
-            by_day[r["date"][:10]].append(rid)
+            by_day[r["date"][:10]].append(r)
     names = set()
     for dr in db.scalars(select(DailyReport).where(DailyReport.project_id == project.id)):
-        if any(c.get("group") == "labour" for c in dr.crew or []):
+        rs = sorted(by_day.get(dr.report_date.isoformat(), []), key=lambda r: (r.get("status") != "signed", r["id"]))
+        odoo = [x for r in rs for x in kids[r["id"]]]  # in the order the import wrote them
+        if not odoo:
             continue
-        rows = labour_of([x for rid in by_day.get(dr.report_date.isoformat(), []) for x in lines[rid]])
-        if rows:
-            dr.crew = list(dr.crew or []) + rows
-            names.update(x["name"] for x in rows)
-            rep["daily reports: labour added"] += 1
+        works = [dict(w) for w in dr.works or []]
+        # the import wrote Odoo's lines first, then the schedule's % (lines of their own)
+        same = len(works) >= len(odoo) and all(w.get("description") == SCHEDULE_LINE for w in works[len(odoo):])
+        if same and any(w.get("team") is None and team_of(x)["team"] for w, x in zip(works, odoo)):
+            for w, x in zip(works, odoo):
+                if w.get("team") is None:
+                    w.update(team_of(x))
+            dr.works = works
+            rep["daily reports: team on work lines"] += 1
+        crew = list(dr.crew or [])
+        hand = [c for c in crew if c.get("group") == "labour" and not c.get("auto")]
+        was = sorted((c["name"], c["count"]) for c in labour_of(odoo))
+        derived = labour_from_works(works)
+        # the labour the import added (untouched since) becomes the worked-out one
+        if (not hand or sorted((c["name"], c["count"]) for c in hand) == was) and derived and \
+                sorted((c["name"], c["count"], c.get("auto")) for c in crew if c.get("group") == "labour") != \
+                sorted((c["name"], c["count"], True) for c in derived):
+            dr.crew = [c for c in crew if c.get("group") != "labour"] + derived
+            names.update(x["name"] for x in derived)
+            rep["daily reports: labour from work lines"] += 1
     if names:
         ds = dict((project.settings or {}).get("daily") or {})
         lists = dict(ds.get("lists") or {})

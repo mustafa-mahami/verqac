@@ -999,7 +999,11 @@
     "actualStart": "Actual start",
     "actualFinish": "Actual finish",
     "actualFinishHint": "With 100% only",
-    "actualHint": "Optional: for work that started or ended before the reports began. Filled once."
+    "actualHint": "Optional: for work that started or ended before the reports began. Filled once.",
+    "team": "Team",
+    "hoursShort": "Hrs",
+    "fromWorks": "From works executed",
+    "fromWorksHint": "Marked labour is worked out from the team and workers on the “Works executed” lines and follows them. Add here by hand what is not tied to a work (guards, cleaning...)."
   },
   "progress": {
     "project": "Project progress",

@@ -70,3 +70,21 @@ def test_daily_cycle_and_progress(client, site):
     # an older report approved later does not overwrite a newer %
     assert client.get(f"/api/v1/records/{rid}/pdf?lang=ar", headers=site["hqa"]).status_code == 200
     assert client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json=body).status_code == 403
+
+
+def test_labour_from_work_lines(client, site):
+    """The team and its workers on each work line: the day's labour is worked out from them, plus what is
+    entered by hand (guards, cleaners...); worked-out lines sent back are ignored (they are worked out again)."""
+    pid = site["pid"]
+    day = date.today() - timedelta(days=3)
+    rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": day.isoformat()}).json()["id"]
+    body = {"crew": [{"group": "labour", "name": "حارس", "count": 1, "hours": 12},
+                     {"group": "labour", "name": "قديم", "count": 50, "auto": True}],
+            "works": [{"description": "قصارة الطابق 8", "crew": 6, "team": "فريق هلال", "sub": "عارف شهاب", "hours": 8},
+                      {"description": "قصارة الطابق 9", "crew": 4, "team": "فريق هلال", "sub": "عارف شهاب", "hours": 6},
+                      {"description": "بلاط", "crew": 3, "team": "بلّيط"},
+                      {"description": "تنظيف", "crew": 2}]}
+    d = client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json=body).json()
+    lab = sorted((x["name"], x.get("sub"), x["count"], x.get("hours"), x.get("auto")) for x in d["crew"] if x["group"] == "labour")
+    assert lab == [("بلّيط", None, 3, None, True), ("حارس", None, 1, 12.0, False), ("فريق هلال", "عارف شهاب", 10, 8.0, True)]
+    assert d["totals"]["labour"] == 14 and d["works"][0]["team"] == "فريق هلال"

@@ -297,10 +297,14 @@ def test_labour_from_work_lines(client, site, tmp_path, capsys):
         drs = db.scalars(select(DailyReport).where(DailyReport.project_id == site["pid"])).all()
         lab = sorted((c["name"], c["count"], c["hours"]) for d in drs for c in d.crew if c["group"] == "labour")
         assert lab == [("Block team", 5, None), ("Company Labors", 7, 8.0)]
-        for d in drs:  # an import made before: no labour
+        assert all(c.get("auto") for d in drs for c in d.crew if c["group"] == "labour")
+        assert {w.get("team") for d in drs for w in d.works} >= {"Company Labors", "Block team"}
+        for d in drs:  # an import made before: no team on the work lines, no labour
             d.crew = [c for c in d.crew if c["group"] != "labour"]
+            d.works = [{k: v for k, v in w.items() if k not in ("team", "team_en", "sub", "hours")} for w in d.works]
     main([f, "--fix", "--project", code, "--as", me, "--commit"])
-    assert "daily reports: labour added" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "daily reports: team on work lines" in out and "daily reports: labour from work lines" in out
     with session_scope(bypass=True) as db:
         drs = db.scalars(select(DailyReport).where(DailyReport.project_id == site["pid"])).all()
         assert sum(c["count"] for d in drs for c in d.crew if c["group"] == "labour") == 12

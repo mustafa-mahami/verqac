@@ -68,7 +68,7 @@ tr { break-inside: avoid; page-break-inside: avoid; }
   {% if o.stages %}
   <table>
     <tr><th>{{ t.stage }}</th><th class="n">{{ t.weight }}</th><th class="n">{{ t.p_start }}</th><th class="n">{{ t.p_end }}</th>
-      {% if o.planned_end is not none %}<th class="n">{{ t.planned }}</th>{% endif %}<th style="width:16%"></th><th>{{ t.where }}</th><th>{{ t.qty }}</th></tr>
+      {% if o.planned_end is not none %}<th class="n">{{ t.planned }}</th>{% endif %}<th style="width:16%"></th><th>{{ t.where }}</th><th>{{ t.qty }}</th><th class="n">{{ t.man_days }}</th></tr>
     {% for s in o.stages %}
     <tr>
       <td>{{ s['name_' + lang] }}</td><td class="n">{{ '%g' % s.weight }}</td><td class="n">{{ s.start }}%</td>
@@ -77,6 +77,7 @@ tr { break-inside: avoid; page-break-inside: avoid; }
       <td><div class="bar"><i style="width:{{ s.end }}%"></i><i class="prev" style="width:{{ s.start }}%"></i>{% if s.planned is not none %}<u style="inset-inline-start:{{ s.planned }}%"></u>{% endif %}</div></td>
       <td>{{ s['locations_' + lang]|join('، ' if lang == 'ar' else ', ') }}</td>
       <td class="ltr" style="text-align:start">{{ qty(s.qty) }}</td>
+      <td class="n">{{ s.man_days or '' }}{% if s.teams %}<div class="muted">{{ s.teams|join(' · ') }}</div>{% endif %}</td>
     </tr>
     {% endfor %}
   </table>
