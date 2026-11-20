@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { api, type RecordMeta } from '../api';
+import { api, openProtected, type RecordMeta } from '../api';
 import { pick } from '../i18n';
 
 export interface Kpi {
@@ -58,6 +58,15 @@ export default function KpiPanel({ projectId }: { projectId: string }) {
   const q = useQuery({ queryKey: ['kpi', projectId, from, to, disc], queryFn: () => api<KpiData>(`/projects/${projectId}/kpi?${qs}`) });
   const meta = useQuery({ queryKey: ['recMeta', projectId, 'submittal'], queryFn: () => api<RecordMeta>(`/projects/${projectId}/records/meta?type=submittal`) });
   const { value, target } = useFmt();
+  const [busy, setBusy] = useState<string | null>(null);
+  const download = async (fmt: 'pdf' | 'xlsx', lang: string) => {
+    setBusy(fmt + lang);
+    try {
+      await openProtected(`/projects/${projectId}/kpi/${fmt}?${qs}&lang=${lang}`, `QA-KPIs.${fmt}`, fmt === 'pdf');
+    } finally {
+      setBusy(null);
+    }
+  };
   const d = q.data;
   const counts = { green: 0, amber: 0, red: 0 };
   d?.kpis.forEach((k) => { if (k.status) counts[k.status] += 1; });
@@ -88,6 +97,13 @@ export default function KpiPanel({ projectId }: { projectId: string }) {
             data={(meta.data?.disciplines ?? []).map((x) => ({ value: x.code, label: pick(x, 'name') }))} />
           {(from || to || disc) && <Button variant="subtle" onClick={() => { setFrom(''); setTo(''); setDisc(null); }}>{t('stats.clear')}</Button>}
         </Group>
+        <Group gap="xs">
+          <Button size="xs" variant="light" loading={busy === 'pdfar'} onClick={() => download('pdf', 'ar')}>PDF عربي</Button>
+          <Button size="xs" variant="light" loading={busy === 'pdfen'} onClick={() => download('pdf', 'en')}>PDF English</Button>
+          <Button size="xs" variant="light" color="teal" loading={busy === 'xlsx' + i18n.language} onClick={() => download('xlsx', i18n.language)}>Excel</Button>
+        </Group>
+      </Group>
+      <Group justify="flex-end">
         {d && (
           <Group gap="xs">
             <Badge color="green" size="lg" variant="light">{t('kpi.onTarget')}: {counts.green}</Badge>

@@ -2,7 +2,8 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import select
 from pydantic import BaseModel, Field
 
 from app.core import kpi
@@ -59,6 +60,34 @@ def get_kpi(project_id: uuid.UUID, date_from: date | None = Query(None, alias="f
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_range")
     return kpi.compute(c.db, a.project, date_from, date_to, discipline or None)
+
+
+def _disc_name(c: Ctx, code: str | None, lang: str) -> str | None:
+    from app.models.core import Discipline
+    if not code:
+        return None
+    d = c.db.scalar(select(Discipline).where(Discipline.code == code).limit(1))
+    return (getattr(d, f"name_{lang}") or d.name_ar) if d else code
+
+
+@router.get("/projects/{project_id}/kpi/{fmt}")
+def export_kpi(project_id: uuid.UUID, fmt: str, lang: str = Query("ar", pattern="^(ar|en)$"),
+               date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
+               discipline: str | None = Query(None, max_length=10), c: Ctx = Depends(ctx)):
+    """The scorecard to print (pdf) or to work on (xlsx), with the same filters as the screen."""
+    from app.reports.kpi_report import kpi_xlsx, render_kpi_pdf
+    if fmt not in ("pdf", "xlsx"):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
+    data = get_kpi(project_id, date_from, date_to, discipline, c)
+    a = project_access(c, project_id)
+    name = f"{a.project.code}-QA-KPIs-{date.today().isoformat()}"
+    disc = _disc_name(c, discipline, lang)
+    if fmt == "pdf":
+        return Response(render_kpi_pdf(c, a, data, lang, date_from, date_to, disc), media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="{name}.pdf"'})
+    return Response(kpi_xlsx(a, data, lang, date_from, date_to, disc),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.xlsx"'})
 
 
 @router.get("/projects/{project_id}/kpi-settings", response_model=KpiSettingsOut)

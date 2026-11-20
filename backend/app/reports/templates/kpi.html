@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if lang == 'ar' else 'ltr' }}">
+<head>
+<meta charset="utf-8">
+<style>
+{{ font_css }}
+* { box-sizing: border-box; }
+body { font-family: 'Plex Arabic', sans-serif; font-size: 9pt; color: #1a1a1a; margin: 0; line-height: 1.4; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1f3a5f; padding-bottom: 8px; }
+.org { font-size: 12pt; font-weight: 700; color: #1f3a5f; }
+.org small { display: block; font-size: 9pt; font-weight: 400; color: #555; }
+.doc { text-align: end; }
+.doc h1 { font-size: 14pt; margin: 0; }
+.doc div { font-size: 9pt; color: #444; }
+table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+th, td { border: 1px solid #c9ced6; padding: 3px 6px; text-align: start; vertical-align: top; }
+th { background: #eef2f7; font-weight: 600; }
+td.n, th.n { text-align: center; white-space: nowrap; }
+.section { margin-top: 12px; font-weight: 700; color: #1f3a5f; font-size: 11pt; break-after: avoid; page-break-after: avoid; }
+.sub { margin-top: 6px; font-weight: 600; font-size: 9pt; break-after: avoid; page-break-after: avoid; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.card { border: 1px solid #c9ced6; border-radius: 4px; padding: 6px 8px; border-inline-start-width: 5px; }
+.card b { display: block; font-size: 16pt; }
+.card.green { border-inline-start-color: #2f9e44; } .card.green b { color: #2f9e44; }
+.card.amber { border-inline-start-color: #f08c00; } .card.amber b { color: #e67700; }
+.card.red { border-inline-start-color: #e03131; } .card.red b { color: #e03131; }
+.st { display: inline-block; min-width: 62px; text-align: center; border-radius: 3px; padding: 0 5px; color: #fff; font-size: 8pt; font-weight: 600; }
+.st.green { background: #2f9e44; } .st.amber { background: #f08c00; } .st.red { background: #e03131; }
+.val { font-weight: 700; }
+.how { color: #666; font-size: 7.5pt; }
+.muted { color: #666; font-size: 8pt; }
+.banner { display: block; width: 100%; max-height: 30mm; object-fit: contain; margin-bottom: 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+tr { break-inside: avoid; page-break-inside: avoid; }
+</style>
+</head>
+<body>
+  {% if header %}<img class="banner" src="{{ header }}" alt="">{% endif %}
+  <div class="head">
+    <div class="org">{% if not header %}{{ contractor }}{% endif %}<small>{{ project_name }} · <span class="ltr">{{ project_code }}</span></small></div>
+    <div class="doc">
+      <h1>{{ t.title }}</h1>
+      <div>{{ t.period }}: <span class="ltr">{{ period }}</span> · {{ t.disc }}: {{ disc }}</div>
+      <div class="muted">{{ t.printed }}: <span class="ltr">{{ printed }}</span></div>
+    </div>
+  </div>
+  <table>
+    <tr><th style="width:16%">{{ party.contractor }}</th><td>{{ contractor }}</td><th style="width:16%">{{ t.consultant }}</th><td>{{ consultant }}</td></tr>
+  </table>
+
+  <div class="cards">
+    <div class="card green"><b>{{ counts.green }}</b>{{ t.on }}</div>
+    <div class="card amber"><b>{{ counts.amber }}</b>{{ t.watch }}</div>
+    <div class="card red"><b>{{ counts.red }}</b>{{ t.off }}</div>
+  </div>
+  <div class="muted" style="margin-top:4px">{{ t.note }}</div>
+
+  {% for s in sections %}{% set rows = d.kpis | selectattr('section', 'equalto', s) | list %}{% if rows %}
+  <div class="section">{{ t.sec[s] }}</div>
+  <table>
+    <tr><th>{{ t.kpi }}</th><th class="n" style="width:11%">{{ t.actual }}</th><th class="n" style="width:11%">{{ t.target }}</th>
+        <th class="n" style="width:12%">{{ t.status }}</th><th class="n" style="width:12%">{{ t.qmp }}</th></tr>
+    {% for k in rows %}
+    <tr>
+      <td>{{ name(k) }}<div class="how">{{ formula(k) }}</div></td>
+      <td class="n val"><span class="ltr">{{ fmt(k.unit, k.value) }}</span></td>
+      <td class="n"><span class="ltr">{{ target(k) }}</span></td>
+      <td class="n">{% if k.status %}<span class="st {{ k.status }}">{{ {'green': t.on, 'amber': t.watch, 'red': t.off}[k.status] }}</span>{% else %}—{% endif %}</td>
+      <td class="n ltr">{{ k.qmp_ref or '' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% if s in disc_cols and d[s].by_discipline | length > 1 %}
+  <div class="sub">{{ t.by_disc }}</div>
+  <table>
+    <tr><th>{{ t.c.discipline }}</th>{% for c in disc_cols[s] %}<th class="n">{{ t.c[c] }}</th>{% endfor %}</tr>
+    {% for r in d[s].by_discipline %}
+    <tr><td>{{ r['name_' + lang] }}</td>{% for c in disc_cols[s] %}<td class="n"><span class="ltr">{{ fmt(col_unit(c), r[c]) }}</span></td>{% endfor %}</tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  {% if s == 'test' %}
+  <div class="two">
+    {% if d.test.by_material %}<div>
+      <div class="sub">{{ t.by_mat }}</div>
+      <table>
+        <tr><th>{{ t.c.material }}</th><th class="n">{{ t.c.tests }}</th><th class="n">{{ t.c.pass }}</th><th class="n">{{ t.c.fail }}</th><th class="n">{{ t.c.pass_rate }}</th></tr>
+        {% for m in d.test.by_material %}<tr><td>{{ mat(m.material) }}</td><td class="n">{{ m.tests }}</td><td class="n">{{ m.pass }}</td>
+          <td class="n">{{ m.fail }}</td><td class="n"><span class="ltr">{{ fmt('pct', m.pass_rate) }}</span></td></tr>{% endfor %}
+      </table>
+    </div>{% endif %}
+    {% if d.test.by_class %}<div>
+      <div class="sub">{{ t.by_class }}</div>
+      <table>
+        <tr><th>{{ t.c.grade }}</th><th class="n">fck</th><th class="n">{{ t.c.reports }}</th><th class="n">{{ t.c.failed }}</th><th class="n">{{ t.c.below }}</th></tr>
+        {% for x in d.test.by_class %}<tr><td class="ltr">{{ x.grade }}</td><td class="n">{{ '%g' % x.fck }}</td><td class="n">{{ x.reports }}</td>
+          <td class="n">{{ x.failed }}</td><td class="n"><span class="ltr">{{ x.below }} / {{ x.specimens }}</span></td></tr>{% endfor %}
+      </table>
+    </div>{% endif %}
+  </div>
+  {% if d.test.open_failed_list %}
+  <div class="sub">{{ t.open_failed }}</div>
+  <table>{% for x in d.test.open_failed_list %}<tr><td class="ltr" style="width:25%">{{ x.number }} R{{ x.rev_no }}</td><td>{{ x.title }}</td></tr>{% endfor %}</table>
+  {% endif %}
+  {% endif %}
+  {% endif %}{% endfor %}
+</body>
+</html>

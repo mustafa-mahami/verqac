@@ -40,3 +40,19 @@ def test_kpi_scorecard_and_targets(client, site):
     bad = {**t, "SUB_FIRST_PASS": {"green": 50, "amber": 60, "qmp_ref": None, "active": True}}  # amber above green
     assert client.put(f"/api/v1/projects/{pid}/kpi-settings", headers=site["hc"], json={"targets": bad}).status_code == 422
     assert client.put(f"/api/v1/projects/{pid}/kpi-settings", headers=site["hce"], json={"targets": t}).status_code == 403
+
+
+def test_kpi_exports(client, site):
+    pid = site["pid"]
+    a = submit(client, site, new_sub(client, site))
+    act(client, site["hce"], a["id"], "approve")
+    r = client.get(f"/api/v1/projects/{pid}/kpi/xlsx?lang=ar&discipline=C", headers=site["hk"])
+    assert r.status_code == 200 and r.content[:2] == b"PK"
+    import io
+
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(r.content))
+    assert len(wb.sheetnames) == 3 and wb.worksheets[0].sheet_view.rightToLeft
+    codes = [row[8] for row in wb.worksheets[0].iter_rows(values_only=True) if row and len(row) > 8]
+    assert "SUB_FIRST_PASS" in codes
+    assert client.get(f"/api/v1/projects/{pid}/kpi/doc", headers=site["hc"]).status_code == 404
