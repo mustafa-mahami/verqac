@@ -13,6 +13,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.core.access import project_access, require
 from app.core.audit import audit
+from app.core.daily_defaults import dedupe, merge
 from app.core.deps import Ctx, ctx
 from app.models.core import Project
 from app.models.daily import DailyReport, ProgressCell, ProgressSnapshot
@@ -237,10 +238,31 @@ def put_daily_settings(project_id: uuid.UUID, body: DailySettings, c: Ctx = Depe
             if not k.endswith("_names"):
                 item["role_ar"] = item["role_en"] = None  # positions only for people
             rows.append(item)
-        clean[k] = rows[:300]
+        clean[k] = dedupe(rows)[:300]  # one item per name, whatever its case or spacing
     a.project.settings = {**(a.project.settings or {}), "daily": {**body.model_dump(), "lists": clean}}
     c.db.flush()
     return daily_settings(a.project)
+
+
+class DefaultsOut(BaseModel):
+    settings: DailySettings
+    added: int
+    translated: int
+
+
+@router.post("/projects/{project_id}/daily-settings/defaults", response_model=DefaultsOut)
+def add_daily_defaults(project_id: uuid.UUID, c: Ctx = Depends(ctx)):
+    """Add the default positions, trades and equipment (both languages) to the project's lists; what is there stays."""
+    a = project_access(c, project_id)
+    require(a.can_manage_project, "manage_project_required")
+    cur = daily_settings(a.project).model_dump()
+    lists, rep = merge(cur["lists"])
+    lists = {k: dedupe(v)[:300] for k, v in lists.items()}
+    a.project.settings = {**(a.project.settings or {}), "daily": {**cur, "lists": lists}}
+    audit(c.db, entity="project", action="daily_defaults", entity_id=project_id, actor=c.user.id,
+          org_id=a.project.owner_org_id, project_id=project_id, changes=rep, ip=c.meta.ip, user_agent=c.meta.user_agent)
+    c.db.flush()
+    return DefaultsOut(settings=daily_settings(a.project), **rep)
 
 
 # ----------------------------------------------------------------------------- progress

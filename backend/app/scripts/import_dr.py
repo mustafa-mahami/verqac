@@ -743,8 +743,10 @@ class Importer:
         ds = daily_settings(self.p).model_dump()
         ds["crew"] = {"supervision": "counts", "contractor": "counts", "labour": "counts"}
         ds["actual_dates"] = True
-        ds["lists"] = {k: [{"ar": n, "en": n, "role_ar": None, "role_en": None, "active": True} for n in sorted(v)][:300]
-                       for k, v in lists.items()}
+        from app.core.daily_defaults import dedupe, merge
+        imported = {k: [{"ar": n, "en": n, "role_ar": None, "role_en": None, "active": True} for n in sorted(v)]
+                    for k, v in lists.items()}
+        ds["lists"] = {k: dedupe(v)[:300] for k, v in merge(imported)[0].items()}  # with the defaults (both languages)
         self.p.settings = {**(self.p.settings or {}), "daily": ds}
 
     def _work(self, x) -> dict:

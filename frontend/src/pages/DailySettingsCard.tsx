@@ -19,6 +19,15 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
     onSuccess: (d) => { qc.setQueryData(['dailySettings', projectId], d); setS(d); setMsg({ ok: true, text: t('settings.saved') }); },
     onError: (e) => setMsg({ ok: false, text: t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic')) }),
   });
+  const defaults = useMutation({
+    mutationFn: () => api<{ settings: DailySettings; added: number; translated: number }>(`/projects/${projectId}/daily-settings/defaults`, { method: 'POST' }),
+    onSuccess: (r) => {
+      qc.setQueryData(['dailySettings', projectId], r.settings);
+      setS(r.settings);
+      setMsg({ ok: true, text: t('dset.defaultsDone', { added: r.added, translated: r.translated }) });
+    },
+    onError: () => setMsg({ ok: false, text: t('errors.generic') }),
+  });
   if (!s) return null;
   const rows = (k: string) => s.lists[k] ?? [];
   const setRows = (k: string, v: ListItem[]) => setS({ ...s, lists: { ...s.lists, [k]: v } });
@@ -109,7 +118,13 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
         </Radio.Group>
       )}
       {msg && <Alert mt="sm" color={msg.ok ? 'green' : 'red'}>{msg.text}</Alert>}
-      {editable && <Group mt="md"><Button variant="light" loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button></Group>}
+      {editable && (
+        <Group mt="md">
+          <Button variant="light" loading={save.isPending} onClick={() => save.mutate()}>{t('rec.save')}</Button>
+          <Button variant="subtle" loading={defaults.isPending} onClick={() => defaults.mutate()} title={t('dset.defaultsHint')}>{t('dset.defaults')}</Button>
+        </Group>
+      )}
+      {editable && <Text size="xs" c="dimmed" mt={4}>{t('dset.defaultsHint')}</Text>}
     </Card>
   );
 }

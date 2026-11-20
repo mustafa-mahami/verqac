@@ -88,3 +88,26 @@ def test_labour_from_work_lines(client, site):
     lab = sorted((x["name"], x.get("sub"), x["count"], x.get("hours"), x.get("auto")) for x in d["crew"] if x["group"] == "labour")
     assert lab == [("بلّيط", None, 3, None, True), ("حارس", None, 1, 12.0, False), ("فريق هلال", "عارف شهاب", 10, 8.0, True)]
     assert d["totals"]["labour"] == 14 and d["works"][0]["team"] == "فريق هلال"
+
+
+def test_default_lists(client, site):
+    """A new project starts with the usual positions, trades and equipment in both languages; an existing one can
+    add them, and a name entered twice (another case or spacing) is kept once."""
+    pid = site["pid"]
+    s = client.get(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"]).json()
+    trades = s["lists"]["labour_desc"]
+    assert any(x["ar"] == "قصّارون" and x["en"] == "Plaster Masons" for x in trades)
+    assert s["lists"]["supervision_desc"] and s["lists"]["contractor_desc"] and s["lists"]["equipment"]
+    # an imported list: English only, with duplicates
+    s["lists"] = {"labour_desc": [{"ar": "Plaster Masons", "en": "Plaster Masons"}, {"ar": "Excavation team", "en": "Excavation team"},
+                                  {"ar": "Excavation Team", "en": "Excavation Team"}, {"ar": "Hitachi", "en": "Hitachi"}]}
+    r = client.put(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"], json=s).json()
+    assert [x["en"] for x in r["lists"]["labour_desc"]] == ["Plaster Masons", "Excavation team", "Hitachi"]
+    r = client.post(f"/api/v1/projects/{pid}/daily-settings/defaults", headers=site["hc"]).json()
+    assert r["translated"] >= 2 and r["added"] > 20
+    lab = r["settings"]["lists"]["labour_desc"]
+    assert next(x for x in lab if x["en"] == "Plaster Masons")["ar"] == "قصّارون"
+    assert len([x for x in lab if x["en"].lower() == "excavation team"]) == 1 and any(x["en"] == "Hitachi" for x in lab)
+    again = client.post(f"/api/v1/projects/{pid}/daily-settings/defaults", headers=site["hc"]).json()
+    assert again["added"] == 0 and again["translated"] == 0
+    assert client.post(f"/api/v1/projects/{pid}/daily-settings/defaults", headers=site["hce"]).status_code == 403

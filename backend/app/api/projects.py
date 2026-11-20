@@ -107,7 +107,10 @@ def create_project(body: ProjectIn, c: Ctx = Depends(ctx)):
         ptype = c.db.get(ProjectType, body.project_type_id)
         if ptype is None or ptype.org_id != org.id:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "not_found")
+    from app.core.daily_defaults import initial_lists
     project = Project(owner_org_id=org.id, **fields)
+    # the daily report's lists start with the usual positions, trades and equipment (both languages)
+    project.settings = {**(project.settings or {}), "daily": {"lists": initial_lists()}}
     c.db.add(project)
     try:
         c.db.flush()
