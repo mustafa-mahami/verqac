@@ -393,13 +393,15 @@ class Importer:
                                    actor_id=rec.created_by, channel=CHANNEL, at=rec.created_at))
         self.db.add_all(evs)
 
-    def _due(self, rec, code, start):
+    def _due(self, rec, code, start, deadline=None):
         from app.api.records import periods
         from app.core.workcal import add_period
         if start is None:
             return
-        reply, _ = periods(self.p, self.types[code])
-        rec.due_at = add_period(start, reply, self.cal)
+        rec.due_at = odoo_due(self.data, code, start, deadline)
+        if rec.due_at is None:
+            reply, _ = periods(self.p, self.types[code])
+            rec.due_at = add_period(start, reply, self.cal)
         # no resubmission deadline: what Odoo left unresubmitted is history, not a debt to chase now
 
     def _comments(self, rec, r, author):
@@ -470,7 +472,7 @@ class Importer:
                                submitted=sub, answered=ans, response=txt(r.get("submitalsupervnote")),
                                legacy=f"odoo:submit.submit:{r['id']}", group=g,
                                custom={"odoo_description": txt(r.get("submitalitdescrip"))} if txt(r.get("submitalitdescrip")) and txt(r.get("submitalname")) else {})
-            self._due(rec, "submittal", sub)
+            self._due(rec, "submittal", sub, d(r.get("deadline_date")))
             self.db.add(SubmittalDetails(record_id=rec.id, submittal_kind=kind, item=m2o_name(r.get("submitalitem")),
                                          manufacturer=m2o_name(r.get("submitalmanf")), supplier=m2o_name(r.get("submitalagent")),
                                          drawing_ref=txt(r.get("submitaldraw"), 200), boq_ref=txt(r.get("submitalboq"), 100),
@@ -571,7 +573,8 @@ class Importer:
                                discipline=r.get("category"), description=desc or None, by=by, to=to, submitted=issued,
                                answered=acted if state == "closed" else None, response=txt(r.get("contractor_response")),
                                legacy=f"odoo:site.instruction:{r['id']}", party=self.consultant,
-                               custom={"required_action": "\n".join(items)} if items else {})
+                               custom={**({"required_action": "\n".join(items)} if items else {}),
+                                       **({"odoo_subject": m2o_name(r["subject_id"])} if m2o(r.get("subject_id")) else {})})
             self._due(rec, "ncr", issued)
             self.db.flush()
             if issued:
@@ -829,6 +832,22 @@ FIELD_NAMES = {"pdf_file", "file_field", "pdf_file_answer", "photo", "image", "d
 SKIP_FIELDS = {"logo_image"}  # the letterhead Odoo kept on every record: not a document of the record
 
 
+# Odoo's reply periods (calendar days, project settings of dr): an imported record keeps the deadline it had there
+ODOO_PERIOD = {"submittal": ("qa_submittal_review_days", 14), "inspection": ("qa_ir_response_days", 2),
+               "rfi": ("qa_rfi_response_days", 7)}
+
+
+def odoo_due(data: dict, code: str, start, deadline=None):
+    """The record's own deadline, else its date + the project's period in Odoo, to the end of that day."""
+    if code not in ODOO_PERIOD or start is None:
+        return None
+    if deadline is None:
+        field, default = ODOO_PERIOD[code]
+        n = int(((data.get("projects") or [{}])[0]).get(field) or default)
+        deadline = start.astimezone(TZ).date() + timedelta(days=n)
+    return datetime.combine(deadline, time(23, 59), TZ)
+
+
 def kpi_targets(data: dict, project) -> bool:
     """The KPI targets set in Odoo (dr.qa.kpi.target: the company's, overridden by the project's) become the project's,
     unless the project already has its own."""
@@ -983,12 +1002,9 @@ def fix_imported(db, data: dict, project, paths: list | None = None) -> Counter:
     submission dates Odoo had edited afterwards, no resubmission deadlines on imported history,
     no reminders already sent about it, files named after Odoo's fields, no letterhead "photos", photo captions.
     The files whose records are deleted are added to `paths` (to be removed from disk once committed)."""
-    from app.api.records import RESUBMIT_STATES, periods
-    from app.core.workcal import add_period, calendar_for
-    from app.models.records import Notification, Record, RecordEvent, RecordType, StoredFile
+    from app.api.records import RESUBMIT_STATES
+    from app.models.records import Notification, Record, RecordEvent, StoredFile
     rep: Counter = Counter()
-    cal = calendar_for(db, project)
-    types = {t.id: t for t in db.scalars(select(RecordType))}
     recs = {r.legacy_ref: r for r in db.scalars(select(Record).where(Record.project_id == project.id, Record.legacy_ref.is_not(None)))}
     fields = {"submit.submit": ("submitaldate", "submitalanswerdate"), "rfi.rfi": ("rfidate", "rfianswerdate"),
               "inspection.inspection": ("date", "inspectionanswerdate")}
@@ -1009,9 +1025,25 @@ def fix_imported(db, data: dict, project, paths: list | None = None) -> Counter:
                 continue  # corrected already
             # the history (record_events) is append-only by design: it keeps what the import wrote
             rec.submitted_at = new
-            start = max(x for x in (new, rec.requested_for) if x)
-            rec.due_at = add_period(start, periods(project, types[rec.record_type_id])[0], cal)
             rep["submission dates corrected"] += 1
+    # reply deadlines as Odoo had them (its periods in calendar days, or the record's own deadline)
+    code_of = {"submit.submit": "submittal", "inspection.inspection": "inspection", "rfi.rfi": "rfi"}
+    rows = {f"odoo:{m}:{r['id']}": r for m in code_of for r in data["models"].get(m, [])}
+    for ref, rec in recs.items():
+        r = rows.get(ref)
+        if r is None or rec.submitted_at is None:
+            continue
+        code = code_of[ref.split(":")[1]]
+        start = max(x for x in (rec.submitted_at, rec.requested_for) if x) if code == "inspection" else rec.submitted_at
+        due = odoo_due(data, code, start, d(r.get("deadline_date")))
+        if due is not None and rec.due_at != due:
+            rec.due_at = due
+            rep["reply deadlines as in Odoo"] += 1
+    for r in data["models"].get("site.instruction", []):
+        rec = recs.get(f"odoo:site.instruction:{r['id']}")
+        if rec is not None and m2o(r.get("subject_id")) and (rec.custom or {}).get("odoo_subject") != m2o_name(r["subject_id"]):
+            rec.custom = {**(rec.custom or {}), "odoo_subject": m2o_name(r["subject_id"])}
+            rep["NCR subjects from Odoo"] += 1
     # resubmission deadlines left by the import (answered on import, not since)
     for rec in recs.values():
         if rec.resubmit_due_at is None or rec.resubmitted_at is not None or rec.state_category not in RESUBMIT_STATES:

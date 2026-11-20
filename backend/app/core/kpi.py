@@ -123,8 +123,8 @@ DEFS = [
      "تقارير مفتوحة تجاوزت مدة الإغلاق", "Overdue open NCRs",
      "التقارير المفتوحة الأقدم من مدة الإغلاق المحددة للمشروع.", "Open NCRs older than the project's closure period."),
     ("NCR_REPEAT", "ncr", "count", "lower", 0, 2, "10.15 / 14.6", "تقارير عدم مطابقة متكررة", "Repeat NCRs",
-     "تقارير صدرت بنفس الموضوع (المرحلة والموضوع، أو العنوان) لتقرير سابق في المشروع.",
-     "NCRs raised on a subject (stage + topic, or title) already raised earlier in the project."),
+     "تقارير صدرت بنفس موضوع تقرير سابق في المشروع (الموضوع المختار من القائمة، أو المرحلة والموضوع).",
+     "NCRs raised on a subject (picked from the list, or stage + topic) already raised earlier in the project."),
 
     ("RFI_RESPONSE_DAYS", "rfi", "days", "lower", 7, 10, "6.14", "متوسط مدة الرد على الاستيضاح", "Average RFI response time",
      "متوسط الأيام من تقديم الاستيضاح إلى الإجابة.", "Mean days from submission to answer."),
@@ -329,13 +329,18 @@ def compute(db, project, date_from: date | None = None, date_to: date | None = N
         cd = [_days(r.submitted_at, close[r.id]) for r in closed]
         return {"issued": len(reg.recs), "open": len(opened), "close_days": _avg(cd),
                 "contractor_days": _avg([_days(r.submitted_at, r.answered_at) for r in reg.recs if r.answered_at]),
-                "supervision_days": _avg([_days(r.answered_at, close[r.id]) for r in closed if r.answered_at and close[r.id]]),
+                # as in dr: only where the verification was a separate step (closed on a later day than the action)
+                "supervision_days": _avg([_days(r.answered_at, close[r.id]) for r in closed if r.answered_at and close[r.id]
+                                          and close[r.id].astimezone(TZ).date() > r.answered_at.astimezone(TZ).date()]),
                 "on_time": _pct(len([x for x in cd if x is not None and x <= limit]), len([x for x in cd if x is not None])),
                 "overdue": len([r for r in opened if _days(r.submitted_at, now) > limit])}
     ncr = ncr_fig(nreg)
     seen, repeat = set(), 0
     for r in sorted(nreg.recs, key=lambda r: r.submitted_at):
-        key = (r.stage_id, r.topic_id) if r.topic_id else ("t", (r.title or "").strip().lower())
+        subject = (r.custom or {}).get("odoo_subject")
+        if not subject and not r.topic_id:
+            continue  # no subject to repeat (a free title is not one)
+        key = ("s", subject.strip().lower()) if subject else (r.stage_id, r.topic_id)
         if key in seen:
             repeat += 1
         seen.add(key)
