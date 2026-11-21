@@ -156,7 +156,7 @@ export default function KpiPanel({ projectId }: { projectId: string }) {
               <Stack gap={4} mt="sm">
                 <Text size="sm" fw={500}>{t('kpi.byDisc')}</Text>
                 {discTable(d[s].by_discipline, [
-                  ['unique', t('kpi.c.unique'), 'count'], ['records', t('kpi.c.records'), 'count'], ['first_pass', t('kpi.c.firstPass'), 'pct'],
+                  ['unique', t('kpi.c.unique'), 'count'], ['records', t('kpi.c.records'), 'count'], ['first_pass', t('kpi.c.firstPass'), 'pct'], ['returned0', t('kpi.c.returned0'), 'count'],
                   ['approved', t('kpi.c.approved'), 'count'], ['outstanding_n', t('kpi.c.returned'), 'count'], ['pending', t('kpi.c.pending'), 'count'],
                   ['review_days', t('kpi.c.supDays'), 'days'], ['contractor_days', t('kpi.c.conDays'), 'days']])}
               </Stack>

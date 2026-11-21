@@ -1404,7 +1404,7 @@
       "records": "Revisions",
       "firstPass": "First pass",
       "approved": "Approved",
-      "returned": "Returned",
+      "returned": "Awaiting resubmission",
       "pending": "Pending",
       "supDays": "Superv. d",
       "conDays": "Contr. d",
@@ -1421,7 +1421,8 @@
       "reports": "Reports",
       "failed": "Failed",
       "below": "Below fck",
-      "other": "Other"
+      "other": "Other",
+      "returned0": "Returned at first issue"
     },
     "settingsTitle": "QA/QC KPIs",
     "settingsHint": "Each KPI has two thresholds: green (on target) and amber (watch); beyond them it is red. The QMP reference shows next to it. Turn off what the project does not need.",

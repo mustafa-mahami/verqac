@@ -21,7 +21,7 @@ K_T = {
                    "rfi": "الاستيضاحات"},
            "by_disc": "حسب التخصص", "by_mat": "الفحوصات حسب المادة", "by_class": "الخرسانة حسب الفئة", "open_failed": "فحوصات راسبة بلا قرار",
            "c": {"discipline": "التخصص", "unique": "طلبات", "records": "إصدارات", "first_pass": "قبول من أول مرة", "approved": "معتمد",
-                 "outstanding_n": "مُعاد/مرفوض", "pending": "بانتظار الرد", "review_days": "أيام الإشراف", "contractor_days": "أيام المقاول",
+                 "returned0": "أُعيد من أول مرة", "outstanding_n": "بانتظار إعادة التقديم", "pending": "بانتظار الرد", "review_days": "أيام الإشراف", "contractor_days": "أيام المقاول",
                  "issued": "صادر", "open": "مفتوح", "close_days": "أيام الإغلاق", "supervision_days": "أيام الإشراف",
                  "response_days": "أيام الرد", "material": "المادة", "tests": "فحوصات", "pass": "ناجح", "fail": "راسب",
                  "pass_rate": "نسبة النجاح", "grade": "الفئة", "fck": "fck", "reports": "تقارير", "failed": "راسب",
@@ -36,7 +36,7 @@ K_T = {
                    "rfi": "RFIs"},
            "by_disc": "By discipline", "by_mat": "Tests by material", "by_class": "Concrete by class", "open_failed": "Failed tests without a decision",
            "c": {"discipline": "Discipline", "unique": "Requests", "records": "Revisions", "first_pass": "First pass", "approved": "Approved",
-                 "outstanding_n": "Returned", "pending": "Pending", "review_days": "Superv. days", "contractor_days": "Contr. days",
+                 "returned0": "Returned at first issue", "outstanding_n": "Awaiting resubmission", "pending": "Pending", "review_days": "Superv. days", "contractor_days": "Contr. days",
                  "issued": "Issued", "open": "Open", "close_days": "Close days", "supervision_days": "Superv. days",
                  "response_days": "Response days", "material": "Material", "tests": "Tests", "pass": "Pass", "fail": "Fail",
                  "pass_rate": "Pass %", "grade": "Class", "fck": "fck", "reports": "Reports", "failed": "Failed",
@@ -49,8 +49,8 @@ MAT = {"ar": {"CON": "الباطون", "STL": "حديد التسليح", "BC": "
        "en": {"CON": "Concrete", "STL": "Steel", "BC": "Blocks", "SOIL": "Soil", "ASP": "Asphalt", "BLK": "Blocks", "TIL": "Tiles",
               "WP": "Waterproofing", "MEP": "MEP", "OTH": "Other", "other": "Other"}}
 DISC_COLS = {
-    "submittal": ["unique", "records", "first_pass", "approved", "outstanding_n", "pending", "review_days", "contractor_days"],
-    "inspection": ["unique", "records", "first_pass", "approved", "outstanding_n", "pending", "review_days", "contractor_days"],
+    "submittal": ["unique", "records", "first_pass", "returned0", "approved", "outstanding_n", "pending", "review_days", "contractor_days"],
+    "inspection": ["unique", "records", "first_pass", "returned0", "approved", "outstanding_n", "pending", "review_days", "contractor_days"],
     "ncr": ["issued", "open", "close_days", "contractor_days", "supervision_days"],
     "rfi": ["issued", "open", "response_days"],
 }

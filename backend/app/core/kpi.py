@@ -205,6 +205,7 @@ def _review(reg: _Reg, now: datetime, start_of=lambda r: r.submitted_at) -> dict
     return {
         "unique": len(groups), "records": len(reg.recs),
         "first_pass": _pct(len([r for r in decided0 if r.state_category in APPROVED]), len(decided0)),
+        "returned0": len([r for r in decided0 if r.state_category not in APPROVED]),  # first issue sent back
         "review_days": _avg([_days(start_of(r), r.answered_at) for r in answered]),
         "contractor_days": _avg(reg.returned_gaps()),
         "within": _pct(len([r for r in with_due if r.answered_at <= r.due_at]), len(with_due)),
