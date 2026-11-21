@@ -284,7 +284,6 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
         raise HTTPException(status.HTTP_409_CONFLICT, "stage_scope_locked")
     if removed & progress_stages(project_id):
         raise HTTPException(status.HTTP_409_CONFLICT, "stage_in_use")
-    rescope = bool(rescoped)
     units = set(c.db.scalars(select(ProjectLocation.id).where(ProjectLocation.project_id == project_id,
                                                               ProjectLocation.kind == "unit")))
     for i, x in enumerate(body):
@@ -320,9 +319,9 @@ def save_stages(project_id: uuid.UUID, body: list[StageIO], c: Ctx = Depends(ctx
           org_id=a.project.owner_org_id, project_id=project_id,
           changes={"stages": [f"{x.name_ar} {x.weight}" for x in body]}, ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
-    if rescope:
-        from app.api.daily import rebuild_progress
-        rebuild_progress(c.db, project_id)
+    # weights, stages switched on or off, scopes: the progress curve (and the money earned) is recounted with them
+    from app.api.daily import rebuild_progress
+    rebuild_progress(c.db, project_id)
     return structure_of(c, a.project, True)
 
 

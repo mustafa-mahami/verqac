@@ -97,3 +97,37 @@ def test_org_admin_sees_money_whatever_the_project_role(client, site):
     assert r.status_code == 201, r.text
     # an ordinary QA engineer still does not
     assert client.get(f"/api/v1/projects/{pid}/finance", headers=site["hqa"]).status_code == 404
+
+
+def test_earned_follows_the_progress(client, site):
+    """Earned = contract x the approved progress, also after the weights change and when an older day is approved late."""
+    from datetime import date, timedelta
+    from tests.test_daily import _structure
+    pid = site["pid"]
+    st = _structure(client, site)
+    client.put(f"/api/v1/projects/{pid}/finance/settings", headers=site["hc"], json={"contract_value": 5000000, "currency": "ILS"})
+    exc, frame = st["stages"][0], st["stages"][2]
+
+    def report(day, works):
+        rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": day.isoformat()}).json()["id"]
+        client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json={"works": works})
+        act(client, site["hqa"], rid, "submit")
+        assert act(client, site["hce"], rid, "approve").status_code == 200
+
+    today = date.today()
+    report(today - timedelta(days=1), [{"stage_id": frame["id"], "location_ids": [frame["location_ids"][0]] if frame.get("location_ids") else
+                                        [st["locations"][0]["units"][1]["id"]], "description": "x", "progress": 30}])
+    report(today - timedelta(days=3), [{"stage_id": exc["id"], "all_locations": True, "description": "y", "progress": 100}])  # older, approved later
+
+    def check():
+        prog = client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()
+        f = client.get(f"/api/v1/projects/{pid}/finance", headers=site["hc"]).json()
+        assert abs(f["totals"]["earned"] - 5000000 * prog["project"] / 100) <= 5000000 * 0.05 / 100  # same % (to its rounding)
+        return f["totals"]["earned"]
+    e1 = check()
+    assert e1 >= 5000000 * float(exc["weight"]) / 100  # the excavation approved late is in
+    # weights change: the earned money follows at once
+    stages = client.get(f"/api/v1/projects/{pid}/structure", headers=site["hc"]).json()["stages"]
+    body = [{**s, "weight": str(float(s["weight"]) + (1 if s["id"] == exc["id"] else -1 if s["id"] == stages[-1]["id"] else 0))} for s in stages]
+    assert client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=body).status_code == 200
+    assert check() != e1

@@ -286,7 +286,7 @@ def _cells_of(db, project_id, line: dict, stages: dict) -> list[tuple]:
     return [(st.id, u.id) for u in units if str(u.id) in ids or str(u.parent_id) in ids]
 
 
-def project_progress(db, project_id) -> ProgressOut:
+def project_progress(db, project_id, raw: list | None = None) -> ProgressOut:
     stages = [s for s in db.scalars(select(ProjectStage).where(ProjectStage.project_id == project_id, ProjectStage.is_active))]
     units = _units(db, project_id)
     cells = list(db.scalars(select(ProgressCell).where(ProgressCell.project_id == project_id)))
@@ -306,6 +306,8 @@ def project_progress(db, project_id) -> ProgressOut:
     snaps = [{"day": x.day.isoformat(), "actual": float(x.actual), "planned": float(x.planned) if x.planned is not None else None}
              for x in db.scalars(select(ProgressSnapshot).where(ProgressSnapshot.project_id == project_id).order_by(ProgressSnapshot.day))]
     as_of = max((c.progress_on for c in cells if c.progress_on), default=None)
+    if raw is not None:
+        raw.append(project)
     out = ProgressOut(project=round(project, 1), stages=stage_pct, as_of=as_of, snapshots=snaps,
                       cells=[Cell(stage_id=c.stage_id, location_id=c.location_id, progress=float(c.progress), progress_on=c.progress_on,
                                   started_on=c.started_on, finished_on=c.finished_on) for c in cells])
@@ -408,7 +410,7 @@ def rebuild_progress(db, project_id) -> None:
             else:
                 v = sum(cells.get((st.id, u.id), {}).get("progress", 0.0) for u in su) / len(su)
             out += float(st.weight) * v / total_w
-        return round(out, 1)
+        return round(out, 2)  # the curve and the money (contract x %) need the hundredths
 
     rows = db.execute(select(Record.id, DailyReport).join(DailyReport, DailyReport.record_id == Record.id)
                       .where(Record.project_id == project_id, Record.state_category == "approved")
@@ -441,6 +443,11 @@ def apply_progress(db, rec: Record) -> None:
     d = db.get(DailyReport, rec.id)
     if d is None:
         return
+    later = db.scalar(select(func.max(ProgressSnapshot.day)).where(ProgressSnapshot.project_id == d.project_id))
+    if later is not None and later > d.report_date:
+        # an older day approved after newer ones: every snapshot from that day on changes, so recount them all
+        rebuild_progress(db, d.project_id)
+        return
     stages = {str(s.id): s for s in db.scalars(select(ProjectStage).where(ProjectStage.project_id == d.project_id))}
     for line in d.works:
         cells = _cells_of(db, d.project_id, line, stages)
@@ -462,7 +469,9 @@ def apply_progress(db, rec: Record) -> None:
             ended = date.fromisoformat(line["actual_finish"]) if line.get("actual_finish") else d.report_date
             cell.finished_on = ended if pct >= 100 else None
     db.flush()
-    pct = project_progress(db, d.project_id).project
+    raw: list = []
+    project_progress(db, d.project_id, raw)
+    pct = round(raw[0], 2)
     db.execute(insert(ProgressSnapshot).values(project_id=d.project_id, day=d.report_date, actual=pct)
                .on_conflict_do_update(index_elements=["project_id", "day"], set_={"actual": pct}))
 
