@@ -3,6 +3,7 @@ import '@fontsource/ibm-plex-sans-arabic/600.css';
 import '@fontsource/ibm-plex-sans-arabic/700.css';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import './app.css';
 
 import { DirectionProvider, MantineProvider, createTheme } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';

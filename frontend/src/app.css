@@ -1,0 +1,2 @@
+/* the open tab stands out (every tab bar: project pages, settings, daily report) */
+.mantine-Tabs-tab[data-active] { font-weight: 700; }
