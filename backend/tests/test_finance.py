@@ -40,11 +40,14 @@ def test_payments_certification_and_cashflow(client, site):
     today = date.today()
     client.post(f"/api/v1/projects/{pid}/finance/receipts", headers=site["hc"],
                 json={"day": (today - timedelta(days=60)).isoformat(), "amount": 100000, "kind": "advance"})
-    f = client.post(f"/api/v1/projects/{pid}/finance/receipts", headers=site["hk"],
-                    json={"day": today.isoformat(), "amount": 50000, "kind": "payment", "record_id": ipc["id"]}).json()
+    # the money is received by the contractor: supervision sees it, does not record it
+    body = {"day": today.isoformat(), "amount": 50000, "kind": "payment", "record_id": ipc["id"]}
+    assert client.post(f"/api/v1/projects/{pid}/finance/receipts", headers=site["hk"], json=body).json()["detail"] == "cannot_record_payment"
+    assert client.get(f"/api/v1/projects/{pid}/finance", headers=site["hk"]).json()["can_pay"] is False
+    f = client.post(f"/api/v1/projects/{pid}/finance/receipts", headers=site["hc"], json=body).json()
     app = next(x for x in f["applications"] if x["id"] == ipc["id"])
     assert app["paid"] == 50000 and app["remaining"] == 35500
-    assert client.post(f"/api/v1/projects/{pid}/finance/receipts", headers=site["hk"], json={
+    assert client.post(f"/api/v1/projects/{pid}/finance/receipts", headers=site["hc"], json={
         "day": today.isoformat(), "amount": 40000, "kind": "payment", "record_id": ipc["id"]}).json()["detail"] == "payment_exceeds_payable"
     t = f["totals"]
     assert t["certified"] == 95000 and t["payable"] == 85500 and t["paid"] == 150000 and t["advance"] == 100000

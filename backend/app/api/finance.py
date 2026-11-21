@@ -199,7 +199,7 @@ def build(c: Ctx, a, rt) -> FinanceOut:
     }
     _, p = _perms(c, a)
     return FinanceOut(contract_value=f["contract_value"], currency=f["currency"], can_edit=a.can_manage_project,
-                      can_pay=p.can("create") or p.can("respond"), receipts=listed,
+                      can_pay=p.can("create"), receipts=listed,
                       applications=[{"id": str(r.id), "number": r.number, "rev_no": r.rev_no, "state": r.state_category,
                                      "payable": num(r, "payable"), "certified": num(r, "certified"), "claimed": num(r, "claimed"),
                                      "paid": round(paid_by.get(str(r.id), 0.0), 2),
@@ -235,7 +235,7 @@ def put_finance_settings(project_id: uuid.UUID, body: FinanceSettings, c: Ctx = 
 def add_receipt(project_id: uuid.UUID, body: Receipt, c: Ctx = Depends(ctx)):
     """Money paid: the advance payment, a certified application (its number), or other."""
     a, rt, p = access(c, project_id)
-    require(p.can("create") or p.can("respond"), "cannot_record_payment")
+    require(p.can("create"), "cannot_record_payment")
     if body.day > datetime.now(TZ).date():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_in_future")
     f = settings_of(a.project)
@@ -264,7 +264,7 @@ def add_receipt(project_id: uuid.UUID, body: Receipt, c: Ctx = Depends(ctx)):
 def void_receipt(project_id: uuid.UUID, receipt_id: str, body: VoidIn, c: Ctx = Depends(ctx)):
     """A receipt entered by mistake is cancelled with a reason; it stays listed (struck through) and counts for nothing."""
     a, rt, p = access(c, project_id)
-    require(p.can("create") or p.can("respond"), "cannot_record_payment")
+    require(p.can("create"), "cannot_record_payment")
     f = settings_of(a.project)
     x = next((x for x in f["receipts"] if x.get("id") == receipt_id), None)
     if x is None:
