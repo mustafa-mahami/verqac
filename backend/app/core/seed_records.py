@@ -148,6 +148,25 @@ PAYMENT_PERMS = [("contractor_pm", ("view", "create", "edit", "submit", "cancel"
                  ("consultant_pm", ("view", "respond", "export"), "project"),
                  ("owner_rep", ("view", "export"), "project")]
 
+# the project archive: letters (in / out), minutes of meetings, tender and contract documents, reports.
+# Either party files what it holds; a filed document is seen by the whole project. Nothing waits for an answer.
+ARCHIVE_STATES = [
+    ("draft", "مسودة", "Draft", "draft", "gray", True),
+    ("filed", "مؤرشف", "Filed", "approved", "green", False),
+    ("cancelled", "ملغى", "Cancelled", "cancelled", "dark", False),
+]
+ARCHIVE_TRANSITIONS = [
+    ("draft", "filed", "file", "أرشفة", "File", "submit", "none", False, "primary"),
+    ("filed", "draft", "reopen", "إعادة للتعديل", "Reopen to edit", "edit", "none", False, "subtle"),
+    ("draft", "cancelled", "cancel", "إلغاء", "Cancel", "cancel", "cancel", False, "subtle"),
+    ("filed", "cancelled", "cancel", "إلغاء", "Cancel", "cancel", "cancel", True, "subtle"),
+]
+DOCUMENT_TYPE = ("document", "DOC", "وثيقة", "Document", "archive", "any", "consultant", False, 60)
+# the consultant's roles file documents too (their "all types" grant only reads and answers)
+DOCUMENT_PERMS = [("consultant_pm", ("view", "create", "edit", "submit", "cancel", "export"), "project"),
+                  ("consultant_engineer", ("view", "create", "edit", "submit", "cancel", "export"), "disciplines")]
+DOCUMENT_KINDS = ("letter", "minutes", "instruction", "tender", "contract", "report", "other")
+
 # code, prefix, ar, en, workflow, creator, responder, has revisions, sort
 MORE_TYPES = [
     ("material", "MIR", "فحص مواد موردة", "Material inspection", "inspection", "contractor", "consultant", True, 25),
@@ -159,7 +178,7 @@ MORE_TYPES = [
 DEFAULT_PERIODS = {"submittal": (7 * 24, 7 * 24), "inspection": (2, 2), "material": (24, 48),
                    "rfi": (3 * 24, 3 * 24), "ncr": (3 * 24, 3 * 24),
                    "test": (3 * 24, 7 * 24), "daily_report": (24, 24),
-                   "programme": (7 * 24, 7 * 24), "payment": (14 * 24, 7 * 24)}
+                   "programme": (7 * 24, 7 * 24), "payment": (14 * 24, 7 * 24), "document": (0, 0)}
 
 # types with an inspection time (asked for / performed) and that link approved submittals
 TIMED_TYPES = ("inspection", "material")
@@ -167,8 +186,9 @@ TIMED_TYPES = ("inspection", "material")
 # extra fields kept in records.custom, per type
 CUSTOM_FIELDS = {"rfi": ("proposed", "impact"), "material": ("delivery_note", "storage"),
                  "ncr": ("severity", "required_action"),
-                 "payment": ("period_from", "period_to", "claimed", "certified", "payable")}
+                 "payment": ("period_from", "period_to", "claimed", "certified", "payable"),
+                 "document": ("kind", "direction", "doc_date", "sender", "recipient", "their_ref")}
 # fields the answering party writes (when certifying), not the author
 RESPONSE_FIELDS = {"payment": ("certified", "payable")}
 NUMBER_FIELDS = ("claimed", "certified", "payable")
-DATE_FIELDS = ("period_from", "period_to")
+DATE_FIELDS = ("period_from", "period_to", "doc_date")

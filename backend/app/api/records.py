@@ -22,7 +22,7 @@ from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
 from app.models.structure import ProjectLocation, ProjectStage, ProjectStageTopic
-from app.core.seed_records import (CUSTOM_FIELDS, DATE_FIELDS, DEFAULT_PERIODS, FINANCE_TYPES, NUMBER_FIELDS,
+from app.core.seed_records import (CUSTOM_FIELDS, DATE_FIELDS, DEFAULT_PERIODS, DOCUMENT_KINDS, FINANCE_TYPES, NUMBER_FIELDS,
                                    RESPONSE_FIELDS, TIMED_TYPES)
 from app.core.kinds import active_codes, kind_code, kind_name, submittal_kinds
 from app.core.notify import members_who_can, notify
@@ -88,7 +88,9 @@ class Perms:
         if not self.in_scope(action, d):
             return False
         if action in ("create", "edit", "submit", "cancel", "delete"):
-            if self.party_kind != self.rtype.creator_party:
+            # "any": either party writes them (the archive), each its own
+            if self.party_kind != self.rtype.creator_party and not (
+                    self.rtype.creator_party == "any" and self.party_kind in ("contractor", "consultant")):
                 return False
             if rec is not None and rec.from_party_id != self.a.party.id:
                 return False
@@ -490,7 +492,8 @@ def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revi
                              requested_for=r.requested_for, performed_at=r.performed_at,
                              location_ids=r.location_ids or [],
                              lab_result=labs[r.id].result if r.id in labs else None,
-                             lab_decision=labs[r.id].decision if r.id in labs else None))
+                             lab_decision=labs[r.id].decision if r.id in labs else None,
+                             custom={k: v for k, v in (r.custom or {}).items() if k in LIST_FIELDS.get(rt.code, ())}))
     return out
 
 
@@ -599,7 +602,10 @@ def _linked_out(c: Ctx, a: ProjectAccess, rec: Record, rt: RecordType) -> tuple[
     return refs, warning
 
 
-CHOICES = {"impact": ("none", "cost", "time", "cost_time"), "severity": ("minor", "major")}
+LIST_FIELDS = {"document": ("kind", "direction", "doc_date", "sender", "recipient", "their_ref"),
+               "payment": ("claimed", "certified", "payable")}
+CHOICES = {"impact": ("none", "cost", "time", "cost_time"), "severity": ("minor", "major"),
+           "kind": DOCUMENT_KINDS, "direction": ("incoming", "outgoing", "internal")}
 
 
 def _check_custom(rt: RecordType, old: dict, new: dict, responder: bool = False) -> dict:
@@ -797,6 +803,10 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_claim_required")
         if to.category == "approved" and not (cu.get("certified") and cu.get("payable")):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_amounts_required")
+    if rt.code == "document" and to.category == "approved":  # filed: dated by the document itself
+        d = (rec.custom or {}).get("doc_date")
+        rec.submitted_by = c.user.id
+        rec.submitted_at = datetime.combine(date.fromisoformat(d), time(12, 0), calendar_for(c.db, a.project).tz) if d else now
     if t.effect == "submit" and rt.code == "daily_report":
         from app.api.daily import check_works
         check_works(c.db, rec)

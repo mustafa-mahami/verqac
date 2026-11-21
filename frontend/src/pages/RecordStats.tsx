@@ -1,3 +1,4 @@
+import { choiceLabel } from '../recordTypes';
 import { Badge, Card, Group, SegmentedControl, Select, SimpleGrid, Text, UnstyledButton } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
 import type { RecordRow, State, Structure } from '../api';
@@ -24,7 +25,7 @@ export function applyFilter(rows: RecordRow[], f: StatsFilter, ignoreStatus = fa
   const q = (f.q ?? '').trim().toLowerCase();
   return rows.filter((r) => {
     if (f.discipline !== 'all' && r.discipline?.code !== f.discipline) return false;
-    if (f.kind && f.kind !== 'all' && r.submittal_kind !== f.kind) return false;
+    if (f.kind && f.kind !== 'all' && (r.submittal_kind ?? r.custom?.kind) !== f.kind) return false;
     if (f.stage && f.stage !== 'all' && r.stage_id !== f.stage) return false;
     if (f.topic && f.topic !== 'all' && r.topic_id !== f.topic) return false;
     if (f.loc && f.loc !== 'all' && structure && !coversLocation(structure, r, f.loc)) return false;
@@ -58,6 +59,7 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
   const kinds = new Map<string, string>();
   rows.forEach((r) => r.submittal_kind && kinds.set(r.submittal_kind,
     r.submittal_kind_name ? pick({ n_ar: r.submittal_kind_name.ar, n_en: r.submittal_kind_name.en }, 'n') : r.submittal_kind));
+  rows.forEach((r) => r.custom?.kind && kinds.set(r.custom.kind, choiceLabel(r.custom.kind)));  // an archive document's type
   const inScope = applyFilter(rows, filter, true, structure);
   const count = (status: string) => applyFilter(inScope, { ...filter, status }, false, structure).length;
   const usedStages = new Set(rows.map((r) => r.stage_id).filter(Boolean));
@@ -71,8 +73,8 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
     { key: 'all', color: 'verqac' },
     ...CATEGORIES.filter(([c]) => hasCat(c) && (c !== 'draft' || showDraft) && (c !== 'cancelled' || count(c) > 0))
       .map(([key, color]) => ({ key, color })),
-    { key: 'overdue', color: 'red' },
-    { key: 'resubmit_overdue', color: 'red' },
+    // nothing waits for an answer in the archive
+    ...(hasCat('submitted') ? [{ key: 'overdue', color: 'red' }, { key: 'resubmit_overdue', color: 'red' }] : []),
   ];
 
   return (
@@ -90,7 +92,7 @@ export default function RecordStats({ rows, filter, onChange, showDraft, structu
           )}
           {kinds.size > 1 && (
             <Group gap="xs">
-              <Text size="sm" c="dimmed">{t('stats.kind')}</Text>
+              <Text size="sm" c="dimmed">{rows.some((r) => r.custom?.kind) ? `${t('custom.kind')}:` : t('stats.kind')}</Text>
               <SegmentedControl size="xs" value={filter.kind || 'all'}
                 onChange={(v) => onChange({ ...filter, kind: v })}
                 data={[{ value: 'all', label: t('stats.allDisciplines') },

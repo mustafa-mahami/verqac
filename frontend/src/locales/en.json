@@ -286,7 +286,8 @@
       "reports": "Periodic reports",
       "kpi": "QA KPIs",
       "cash": "Cash flow",
-      "payments": "Payments"
+      "payments": "Payments",
+      "documents": "Archive & correspondence"
     }
   },
   "rec": {
@@ -767,6 +768,13 @@
       "description": "Works claimed",
       "respTitle": "Supervision decision",
       "response": "Supervision notes"
+    },
+    "document": {
+      "new": "New document",
+      "back": "Archive",
+      "empty": "No documents in the archive yet.",
+      "description": "Summary / notes",
+      "f": {}
     }
   },
   "custom": {
@@ -782,13 +790,29 @@
       "time": "Time",
       "cost_time": "Cost and time",
       "minor": "Minor",
-      "major": "Major"
+      "major": "Major",
+      "letter": "Letter",
+      "minutes": "Minutes of meeting",
+      "instruction": "Site instruction",
+      "tender": "Tender documents",
+      "contract": "Contract / agreement",
+      "report": "Report",
+      "other": "Other",
+      "incoming": "Incoming",
+      "outgoing": "Outgoing",
+      "internal": "Internal / joint"
     },
     "period_from": "Period from",
     "period_to": "to",
     "claimed": "Claimed (net)",
     "certified": "Certified (incl. retention)",
-    "payable": "Payable"
+    "payable": "Payable",
+    "kind": "Document type",
+    "direction": "Direction",
+    "doc_date": "Document date",
+    "their_ref": "Their reference",
+    "sender": "From",
+    "recipient": "To"
   },
   "lab": {
     "title": "Laboratory test results",

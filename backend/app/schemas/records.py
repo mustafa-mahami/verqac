@@ -170,6 +170,7 @@ class RecordRow(BaseModel):
     location_ids: list[UUID] = []
     lab_result: str | None = None  # lab tests: pass | fail (calculated)
     lab_decision: str | None = None
+    custom: dict[str, str | None] = {}  # the type's list fields (a document's kind, sender, recipient...)
 
 
 class EventOut(BaseModel):

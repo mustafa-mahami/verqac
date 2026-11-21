@@ -16,7 +16,7 @@ import { shrinkPhoto } from './Photos';
 import { linesFromTemplate, saveLab, type ConcreteClass, type LabTemplate } from '../lab';
 import RecordStats, { applyFilter, CATEGORIES, type StatsFilter } from './RecordStats';
 
-import { CustomInput, fieldLabel, LTR_KEYS, profile, typeText, type RegisterType } from '../recordTypes';
+import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, profile, typeText, type RegisterType } from '../recordTypes';
 
 export type { RegisterType };
 
@@ -93,7 +93,7 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
   const kinds = meta.submittal_kinds.map((k) => ({ value: k.code ?? '', label: pick(k, 'name') }));
   const form = useForm({
     initialValues: {
-      title: '', discipline_id: pf.place === false ? '' : meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0]?.value ?? '',
+      title: '', discipline_id: pf.discipline === false ? '' : meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0]?.value ?? '',
       item: '', manufacturer: '', supplier: '', drawing_ref: '', spec_ref: '', boq_ref: '', quantity: '', unit: '',
       required_by: '', required_by_note: '', files: [] as File[], requested_for: '', linked: [] as string[], addressed_to: '',
     },
@@ -162,7 +162,7 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
               title={form.values.title} onTitle={(x) => form.setFieldValue('title', x)} />
           : <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />}
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
-{pf.place !== false && (
+{pf.discipline !== false && (
           <Select label={t('rec.discipline')} allowDeselect={false}
             data={meta.disciplines.map((d) => ({ value: d.id, label: pick(d, 'name') }))} {...form.getInputProps('discipline_id')} />
 )}
@@ -376,9 +376,9 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                   <SortTh label={t('rec.title')} k="title" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={t('rec.discipline')} k="discipline" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={t('rec.state')} k="state" sort={sort} dir={dir} onSort={onSort} />
-                  <SortTh label={t('rec.submitted')} k="submitted" sort={sort} dir={dir} onSort={onSort} />
-                  <SortTh label={t('rec.due')} k="due" sort={sort} dir={dir} onSort={onSort} />
-                  <SortTh label={t('rec.answered')} k="answered" sort={sort} dir={dir} onSort={onSort} />
+                  <SortTh label={type === 'document' ? t('custom.doc_date') : t('rec.submitted')} k="submitted" sort={sort} dir={dir} onSort={onSort} />
+                  {type !== 'document' && <SortTh label={t('rec.due')} k="due" sort={sort} dir={dir} onSort={onSort} />}
+                  {type !== 'document' && <SortTh label={t('rec.answered')} k="answered" sort={sort} dir={dir} onSort={onSort} />}
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -390,6 +390,12 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                     <Table.Td><Text size="sm" fw={500} dir="ltr" ta="start" style={{ whiteSpace: 'nowrap' }}>{r.number} · R{r.rev_no}</Text></Table.Td>
                     <Table.Td>
                       <Text size="sm" lineClamp={2}>{rowTitle(structure.data, r)}</Text>
+                      {type === 'document' && r.custom && (r.custom.kind || r.custom.sender || r.custom.recipient) && (
+                        <Text size="xs" c="dimmed" lineClamp={1}>
+                          {[r.custom.kind ? choiceLabel(r.custom.kind) : '', r.custom.direction ? choiceLabel(r.custom.direction) : '',
+                            [r.custom.sender, r.custom.recipient].filter(Boolean).join(' ← ')].filter(Boolean).join(' · ')}
+                        </Text>
+                      )}
                       {(r.stage_id || r.all_locations || r.location_ids.length > 0) && (
                         <Text size="xs" c="dimmed" lineClamp={1}>{placeText(structure.data, r)}</Text>
                       )}
@@ -403,8 +409,8 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                         </Badge>
                       )}
                     </Table.Td>
-                    <Table.Td><Text size="sm">{fmtDate(r.submitted_at)}</Text></Table.Td>
-                    <Table.Td>
+                    <Table.Td><Text size="sm">{type === 'document' ? fmtDate(r.custom?.doc_date ?? r.submitted_at) : fmtDate(r.submitted_at)}</Text></Table.Td>
+                    {type !== 'document' && <Table.Td>
                       <Text size="sm" c={r.overdue ? 'red' : undefined} fw={r.overdue ? 600 : undefined}>{fmtDate(r.due_at, profile(type).timed)}</Text>
                       {r.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
                       {r.resubmit_due_at && (
@@ -417,14 +423,14 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                           {t('rec.requiredByShort')} {fmtDate(r.required_by)}
                         </Badge>
                       )}
-                    </Table.Td>
-                    <Table.Td>
+                    </Table.Td>}
+                    {type !== 'document' && <Table.Td>
                       {(() => {
                         const late = !!(r.answered_at && r.due_at && new Date(r.answered_at) > new Date(r.due_at));
                         return <Text size="sm" c={late ? 'orange.8' : undefined} title={late ? t('rec.answeredLate') : undefined}>
                           {fmtDate(r.answered_at, profile(type).timed)}</Text>;
                       })()}
-                    </Table.Td>
+                    </Table.Td>}
                   </Table.Tr>
                 ))}
               </Table.Tbody>

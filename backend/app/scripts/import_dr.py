@@ -805,6 +805,35 @@ class Importer:
             self.report["schedule cells with progress"] += 1
         self.db.flush()
 
+    def documents(self):
+        """Odoo's project documents (letters, minutes, agreements, instructions...) into the project archive, filed.
+        Already imported ones (by their Odoo id) are skipped, so this can run on its own on an imported project."""
+        from app.models.records import Record
+        have = set(self.db.scalars(select(Record.legacy_ref).where(Record.project_id == self.p.id,
+                                                                    Record.legacy_ref.like("odoo:documents.documents:%"))))
+        taken = {n.upper() for n in self.db.scalars(select(Record.number).where(Record.project_id == self.p.id))}
+        for r in sorted(self.M.get("documents.documents", []), key=lambda r: r["id"]):
+            legacy = f"odoo:documents.documents:{r['id']}"
+            if legacy in have:
+                self.report["documents already there"] += 1
+                continue
+            sender, recipient = m2o_name(r.get("documentsentfrom")) or "", m2o_name(r.get("documentsentto")) or ""
+            ours = lambda n: bool(re.search(r"المصلح|almosleh|mosleh", n, re.I))  # noqa: E731
+            consultant = lambda n: bool(re.search(r"مدار|madar|diamond", n, re.I))  # noqa: E731
+            direction = "outgoing" if ours(sender) else "incoming" if ours(recipient) else "internal"
+            kind = doc_kind(m2o_name(r.get("documentstype")) or "")
+            day = d(r.get("documentdate")) or d(r.get("date"))
+            n = (txt(r.get("name"), 60) or "").strip() or f"DOC-{r['id']}"
+            base, k = n, 2
+            while n.upper() in taken:
+                n, k = f"{base}-{k}"[:60], k + 1
+            taken.add(n.upper())
+            custom = {k2: v for k2, v in (("kind", kind), ("direction", direction), ("doc_date", day.isoformat() if day else None),
+                                          ("sender", sender[:200] or None), ("recipient", recipient[:200] or None)) if v}
+            self._record("document", n, 0, txt(r.get("documentsubj"), 300) or n, "filed", discipline=r.get("category"),
+                         description=txt(r.get("documentnote")), submitted=at(day, None, time(12, 0)) if day else None,
+                         legacy=legacy, custom=custom, party=self.consultant if consultant(sender) else self.contractor)
+
     def run(self):
         from app.api.daily import rebuild_progress
         from app.core.workcal import calendar_for
@@ -820,6 +849,7 @@ class Importer:
         self.tests()
         self.daily()
         self.progress_from_schedule()
+        self.documents()
         if kpi_targets(self.data, self.p):
             self.report["KPI targets"] += 1
         first = min(self.dr_by_day) if self.dr_by_day else None
@@ -879,6 +909,17 @@ def kpi_targets(data: dict, project) -> bool:
 
 
 SCHEDULE_LINE = "نسبة الإنجاز من جدول Odoo"
+
+
+def doc_kind(name: str) -> str:
+    """Odoo's document type -> the archive's kind."""
+    n = name.strip().lower()
+    for kind, words in (("letter", ("letter", "كتاب", "رسالة")), ("minutes", ("mom", "meeting", "محضر", "اجتماع")),
+                        ("instruction", ("instruction", "تعليمات")), ("contract", ("اتفاق", "contract", "agreement", "عقد")),
+                        ("tender", ("tender", "عطاء")), ("report", ("report", "تقرير"))):
+        if any(w in n for w in words):
+            return kind
+    return "other"
 
 
 def team_of(x: dict) -> dict:
@@ -1162,10 +1203,13 @@ def main(argv=None):
     ap.add_argument("--as", dest="actor", required=True, help="e-mail of the Verqac account the import is done as")
     ap.add_argument("--commit", action="store_true", help="write the import (without it: a trial run that changes nothing)")
     ap.add_argument("--attachments", action="store_true", help="attach the files of an export folder to the imported records")
+    ap.add_argument("--documents", action="store_true", help="add Odoo's project documents to the archive of an imported project")
     ap.add_argument("--fix", action="store_true", help="correct an earlier import in place (dates, deadlines, reminders, file names)")
     a = ap.parse_args(argv)
     if a.attachments:
         return _files(a)
+    if a.documents:
+        return _docs(a)
     if a.fix:
         return _fix(a)
     if a.file.endswith(".zip"):
@@ -1233,6 +1277,34 @@ def _fix(a):
         if paths:
             print(f"  {'files deleted from disk':34} {len(paths)} ({freed // 1048576} MB)")
         print("\nDone.")
+    except TrialRun:
+        print("\nTRIAL RUN: nothing was written. Add --commit to apply.")
+
+
+def _docs(a):
+    import os
+    from app.core.db import session_scope
+    from app.models.core import Project, User
+    if a.file.endswith(".zip"):
+        with zipfile.ZipFile(a.file) as z:
+            data = json.loads(z.read("data.json"))
+    else:
+        data = json.load(open(os.path.join(a.file, "data.json") if os.path.isdir(a.file) else a.file, encoding="utf-8"))
+    try:
+        with session_scope(bypass=True) as db:
+            p = db.scalar(select(Project).where(func.upper(Project.code) == a.project.upper()))
+            actor = db.scalar(select(User).where(func.lower(User.email) == a.actor.lower()))
+            if p is None or actor is None:
+                sys.exit("Project or account not found.")
+            imp = Importer(db, data, p, actor, print)
+            imp.setup()
+            imp.documents()
+            print(f"Archive for {p.code}:")
+            for k, v in sorted(imp.report.items()):
+                print(f"  {k:34} {v}")
+            if not a.commit:
+                raise TrialRun
+            print("\nDone. Now attach their files: the same command with --attachments instead of --documents.")
     except TrialRun:
         print("\nTRIAL RUN: nothing was written. Add --commit to apply.")
 

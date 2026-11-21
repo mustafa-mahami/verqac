@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import i18n from './i18n';
 
 /** What each request type shows and asks for. The engine is the same; the fields differ. */
-export type RegisterType = 'daily_report' | 'submittal' | 'inspection' | 'material' | 'test' | 'rfi' | 'ncr' | 'payment' | 'programme';
+export type RegisterType = 'daily_report' | 'submittal' | 'inspection' | 'material' | 'test' | 'rfi' | 'ncr' | 'payment' | 'document' | 'programme';
 export type DetailKey = 'item' | 'manufacturer' | 'supplier' | 'drawing_ref' | 'spec_ref' | 'boq_ref' | 'quantity' | 'unit';
 export interface CustomField { key: string; kind: 'text' | 'long' | 'select' | 'number' | 'date'; options?: string[]; response?: boolean }
 export interface TypeProfile {
@@ -13,7 +13,8 @@ export interface TypeProfile {
   requiredBy: boolean; // "answer needed by" date
   checklist: boolean;
   tab: string;
-  place?: false; // no stage / location / discipline (payment applications)
+  place?: false; // no stage / location (payment applications, archive documents)
+  discipline?: false; // no discipline (payment applications)
 }
 
 export const PROFILES: Record<RegisterType, TypeProfile> = {
@@ -35,7 +36,12 @@ export const PROFILES: Record<RegisterType, TypeProfile> = {
   // payment application: the contractor's claim; the certified amounts are written by supervision (response fields)
   payment: { keys: [], custom: [{ key: 'period_from', kind: 'date' }, { key: 'period_to', kind: 'date' }, { key: 'claimed', kind: 'number' },
     { key: 'certified', kind: 'number', response: true }, { key: 'payable', kind: 'number', response: true }],
-  kind: false, timed: false, requiredBy: false, checklist: false, tab: 'payments', place: false },
+  kind: false, timed: false, requiredBy: false, checklist: false, tab: 'payments', place: false, discipline: false },
+  // the project archive: letters in / out, minutes, tender and contract documents, reports
+  document: { keys: [], custom: [{ key: 'kind', kind: 'select', options: ['letter', 'minutes', 'instruction', 'tender', 'contract', 'report', 'other'] },
+    { key: 'direction', kind: 'select', options: ['incoming', 'outgoing', 'internal'] }, { key: 'doc_date', kind: 'date' },
+    { key: 'their_ref', kind: 'text' }, { key: 'sender', kind: 'text' }, { key: 'recipient', kind: 'text' }],
+  kind: false, timed: false, requiredBy: false, checklist: false, tab: 'documents', place: false },
   programme: { keys: [], custom: [], kind: false, timed: false, requiredBy: false, checklist: false, tab: 'progress' },
 };
 
@@ -43,7 +49,7 @@ export const profile = (code: string): TypeProfile => PROFILES[code as RegisterT
 // the programme lives in the progress tab, not in a register of its own
 export const TYPE_TABS: [RegisterType, string][] = (Object.keys(PROFILES) as RegisterType[]).filter((k) => k !== 'programme').map((k) => [k, PROFILES[k].tab]);
 
-export const LTR_KEYS = new Set(['drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'delivery_note', 'claimed', 'certified', 'payable', 'period_from', 'period_to']);
+export const LTR_KEYS = new Set(['drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'delivery_note', 'claimed', 'certified', 'payable', 'period_from', 'period_to', 'their_ref']);
 export const money = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 }));
 
 /** Field label: a type may name a field its own way (an inspection's "item" is the work inspected). */

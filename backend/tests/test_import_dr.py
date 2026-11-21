@@ -310,3 +310,33 @@ def test_labour_from_work_lines(client, site, tmp_path, capsys):
         assert sum(c["count"] for d in drs for c in d.crew if c["group"] == "labour") == 12
     main([f, "--fix", "--project", code, "--as", me])
     assert "labour" not in capsys.readouterr().out
+
+
+def test_documents_into_the_archive(client, site, tmp_path, capsys):
+    code = site["code"]
+    _structure(client, site)
+    me = client.get("/api/v1/auth/me", headers=site["hc"]).json()["user"]["email"]
+    f = _export(tmp_path, date.today())
+    main([f, "--project", code, "--as", me, "--commit"])
+    data = json.loads(open(f, encoding="utf-8").read())
+    data["models"]["documents.documents"] = [
+        {"id": 1, "name": "MD-AAU-L-01", "documentsubj": "ازالة العوائق", "documentstype": [1, "Letter"], "category": "civil",
+         "documentsentfrom": [2, "مدار مهندسون استشاريون"], "documentsentto": [3, "المصلح اتلانتك"], "documentdate": "2024-10-08"},
+        {"id": 2, "name": "MOM-01", "documentsubj": "محضر اجتماع رقم 1", "documentstype": [5, "MOM"], "category": "general",
+         "documentdate": "2024-09-28"},
+        {"id": 3, "name": False, "documentsubj": "اتفاقية", "documentstype": [9, "اتفاقيات"], "date": "2024-09-01",
+         "documentsentfrom": [4, "المصلح اتلانتك"]}]
+    open(f, "w", encoding="utf-8").write(json.dumps(data, ensure_ascii=False))
+    main([f, "--documents", "--project", code, "--as", me])
+    assert "TRIAL RUN" in capsys.readouterr().out
+    main([f, "--documents", "--project", code, "--as", me, "--commit"])
+    assert "document" in capsys.readouterr().out
+    rows = client.get(f"/api/v1/projects/{site['pid']}/records?type=document", headers=site["hc"]).json()
+    by = {x["number"]: x for x in rows}
+    assert by["MD-AAU-L-01"]["custom"] == {"kind": "letter", "direction": "incoming", "doc_date": "2024-10-08",
+                                             "sender": "مدار مهندسون استشاريون", "recipient": "المصلح اتلانتك"}
+    assert by["MOM-01"]["custom"]["kind"] == "minutes" and by["DOC-3"]["custom"]["kind"] == "contract"
+    assert by["DOC-3"]["custom"]["direction"] == "outgoing" and by["MD-AAU-L-01"]["state"]["code"] == "filed"
+    assert by["MD-AAU-L-01"]["submitted_at"][:10] == "2024-10-08"
+    main([f, "--documents", "--project", code, "--as", me, "--commit"])  # again: nothing new
+    assert "documents already there" in capsys.readouterr().out

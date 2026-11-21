@@ -124,7 +124,7 @@ export interface RecordRow {
   resubmit_due_at: string | null; resubmit_overdue: boolean; requested_for: string | null; performed_at: string | null;
   submittal_kind: string | null; submittal_kind_name: { ar: string; en: string } | null;
   stage_id: string | null; topic_id: string | null; all_locations: boolean; location_ids: string[];
-  lab_result?: 'pass' | 'fail' | null; lab_decision?: string | null;
+  lab_result?: 'pass' | 'fail' | null; lab_decision?: string | null; custom?: Record<string, string | null>;
 }
 export interface SubmittalDetails {
   submittal_kind: string | null; item: string | null; manufacturer: string | null; supplier: string | null;

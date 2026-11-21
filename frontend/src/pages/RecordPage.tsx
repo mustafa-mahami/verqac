@@ -356,7 +356,7 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
           ? <PlacePicker structure={structure.data} value={place} onChange={setPlace} keep={initialPlace}
               title={form.values.title} onTitle={(x) => form.setFieldValue('title', x)} />
           : <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />}
-{pf.place !== false && (
+{pf.discipline !== false && (
         <Select label={t('rec.discipline')} allowDeselect={false}
           data={(meta.data?.disciplines ?? []).map((x) => ({ value: x.id, label: pick(x, 'name') }))} {...form.getInputProps('discipline_id')} />
 )}
