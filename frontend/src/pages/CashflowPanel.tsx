@@ -72,7 +72,7 @@ function Curves({ f }: { f: FinanceT }) {
         {ticks.map((v) => <g key={v}><line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} stroke="#e9ecef" />
           <text x={L - 6} y={Y(v) + 4} fontSize="11" textAnchor="end" fill="#868e96">{short(v)}</text></g>)}
         {months.map((m) => <text key={m} x={X(m)} y={H - 12} fontSize="10" textAnchor="middle" fill="#868e96">
-          {new Date(m).toISOString().slice(2, 7).replace('-', '/')}</text>)}
+          {`${String(new Date(m).getFullYear()).slice(2)}/${String(new Date(m).getMonth() + 1).padStart(2, '0')}`}</text>)}
         {today > x0 && today < x1 && <line x1={X(today)} x2={X(today)} y1={T} y2={H - B} stroke="#fa5252" strokeDasharray="3 3" />}
         {f.contract_value ? <line x1={L} x2={W - R} y1={Y(f.contract_value)} y2={Y(f.contract_value)} stroke="#adb5bd" strokeDasharray="1 3" /> : null}
         {SERIES.map((s) => data[s.key].length > 0 && (
