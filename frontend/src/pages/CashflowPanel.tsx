@@ -252,6 +252,11 @@ export function ApplicationReceipts({ projectId, recordId }: { projectId: string
     onSuccess: (f) => { qc.setQueryData(['finance', projectId], f); setRc(null); setErr(null); },
     onError: (e) => setErr(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic'))),
   });
+  const del = useMutation({
+    mutationFn: (id: string) => api<FinanceT>(`/projects/${projectId}/finance/receipts/${id}`, { method: 'DELETE' }),
+    onSuccess: (f) => { qc.setQueryData(['finance', projectId], f); setErr(null); },
+    onError: (e) => setErr(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic'))),
+  });
   const f = q.data;
   const app = f?.applications.find((x) => x.id === recordId);
   if (!f || !app) return null;
@@ -288,7 +293,9 @@ export function ApplicationReceipts({ projectId, recordId }: { projectId: string
         <Table withTableBorder fz="sm">
           <Table.Tbody>
             {mine.map((x) => (
-              <Table.Tr key={x.id}><Table.Td w={130}><bdi dir="ltr">{x.day}</bdi></Table.Td><Table.Td w={160}><bdi dir="ltr">{money(x.amount)} {f.currency}</bdi></Table.Td><Table.Td>{x.note}</Table.Td></Table.Tr>
+              <Table.Tr key={x.id}><Table.Td w={130}><bdi dir="ltr">{x.day}</bdi></Table.Td><Table.Td w={160}><bdi dir="ltr">{money(x.amount)} {f.currency}</bdi></Table.Td><Table.Td>{x.note}</Table.Td>
+                {f.can_pay && <Table.Td w={30}><ActionIcon size="sm" variant="subtle" color="red" aria-label="remove"
+                  onClick={() => { if (window.confirm(t('cash.removeConfirm'))) del.mutate(x.id); }}>×</ActionIcon></Table.Td>}</Table.Tr>
             ))}
           </Table.Tbody>
         </Table>
