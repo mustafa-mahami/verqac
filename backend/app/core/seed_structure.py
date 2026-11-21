@@ -14,12 +14,13 @@ FLOORS = [("التسوية", "Basement"), ("الطابق الأرضي", "Ground 
 # code, ar, en, (group ar, en), (unit ar, en), stages [(ar, en, scope, weight)], units
 PROJECT_TYPES = [
     ("buildings", "أبنية", "Buildings", ("مبنى", "Building"), ("طابق", "Floor"), [
-        ("الهيكل الإنشائي", "Structure", P, 20), ("الطوب", "Block walls", P, 8),
-        ("التمديدات الكهروميكانيكية الأولى", "MEP first fix", P, 6), ("القصارة", "Plaster", P, 8),
-        ("العزل", "Insulation", P, 4), ("البلاط", "Tiles", P, 9),
+        ("الحفريات", "Excavation", W, 1), ("القواعد", "Foundations", W, 3),
+        ("الهيكل الإنشائي", "Structure", P, 20), ("الطوب", "Block walls", P, 7),
+        ("التمديدات الكهروميكانيكية الأولى", "MEP first fix", P, 5), ("القصارة", "Plaster", P, 8),
+        ("العزل", "Insulation", P, 1), ("البلاط", "Tiles", P, 9),
         ("الأسقف المستعارة / الجبس", "False ceiling / Gypsum", P, 4),
-        ("أعمال الألمنيوم والحديد", "Aluminum & Steel works", P, 5), ("الأبواب", "Doors", P, 3),
-        ("الدهان", "Paint", P, 4), ("التشطيبات الكهروميكانيكية النهائية", "MEP second / final fix", P, 8),
+        ("أعمال الألمنيوم والحديد", "Aluminum & Steel works", P, 4), ("الأبواب", "Doors", P, 3),
+        ("الدهان", "Paint", P, 4), ("التشطيبات الكهروميكانيكية النهائية", "MEP second / final fix", P, 10),
         ("تكسية الحجر للواجهات", "Facade stone cladding", P, 4),
         ("الواجهات الزجاجية والألوكوبوند", "Curtain wall & Alucobond", P, 4), ("المصاعد", "Elevator", W, 2),
         ("الموقع والأعمال الخارجية", "Site & external works", W, 3),
@@ -52,6 +53,9 @@ PROJECT_TYPES = [
 
 # subjects under each building stage, by the stage's English name (template and existing projects)
 TOPICS = {
+    "Excavation": [("حفريات", "Excavation"), ("ردم ودك", "Backfill & compaction"), ("تسوية الموقع", "Site levelling")],
+    "Foundations": [("خرسانة نظافة", "Blinding concrete"), ("قواعد", "Footings"), ("جسور أرضية", "Grade beams"),
+                    ("عزل الأساسات", "Foundation waterproofing")],
     "Structure": [("حفريات", "Excavation"), ("قواعد", "Footings"), ("جسور أرضية", "Grade beams"),
                   ("جدران تسوية", "Basement walls"), ("خرسانة جاهزة", "Ready-mix concrete"),
                   ("حديد تسليح", "Reinforcement steel"), ("جدران خرسانية", "Concrete walls"), ("أعمدة", "Columns"),

@@ -6,10 +6,11 @@ def test_project_types_seeded_and_editable(client, site):
     org = client.get("/api/v1/auth/me", headers=hc).json()["orgs"][0]["org"]["id"]
     types = client.get(f"/api/v1/orgs/{org}/project-types", headers=hc).json()
     b = next(t for t in types if t["name_en"] == "Buildings")
-    assert len(b["stages"]) == 17 and sum(float(s["weight"]) for s in b["stages"]) == 100 and b["unit_label_ar"] == "طابق"
-    b["stages"][0]["weight"] = 30  # total 110
+    assert len(b["stages"]) == 19 and sum(float(s["weight"]) for s in b["stages"]) == 100 and b["unit_label_ar"] == "طابق"
+    w0 = float(b["stages"][0]["weight"])
+    b["stages"][0]["weight"] = w0 + 10  # total 110
     assert client.put(f"/api/v1/orgs/{org}/project-types", headers=hc, json=types).json()["detail"] == "weights_must_total_100"
-    b["stages"][0]["weight"] = 20
+    b["stages"][0]["weight"] = w0
     types.append({"name_ar": "جسور", "name_en": "Bridges", "group_label_ar": "جسر", "group_label_en": "Bridge",
                   "unit_label_ar": "بحر", "unit_label_en": "Span", "stages": [], "units": []})
     r = client.put(f"/api/v1/orgs/{org}/project-types", headers=hc, json=types)
@@ -28,11 +29,11 @@ def test_apply_type_stages_locations_and_records(client, site):
     assert st["stages"] == [] and st["can_edit"] and any(t["name_en"] == "Buildings" for t in st["types"])
     btype = next(t for t in st["types"] if t["name_en"] == "Buildings")
     st = client.post(f"/api/v1/projects/{pid}/apply-type", headers=hc, json={"project_type_id": btype["id"]}).json()
-    assert len(st["stages"]) == 17 and st["labels"]["unit_ar"] == "طابق" and st["project_type"]["name_en"] == "Buildings"
+    assert len(st["stages"]) == 19 and st["labels"]["unit_ar"] == "طابق" and st["project_type"]["name_en"] == "Buildings"
     assert len(st["locations"]) == 1 and len(st["locations"][0]["units"]) == 6
     # the consultant reads it but cannot edit
     k = _structure(client, site, site["hk"])
-    assert k["can_edit"] is False and len(k["stages"]) == 17
+    assert k["can_edit"] is False and len(k["stages"]) == 19
     assert client.put(f"/api/v1/projects/{pid}/stages", headers=site["hk"], json=k["stages"]).status_code == 403
 
     # a second building
@@ -129,3 +130,27 @@ def test_stage_topics(client, site):
     # register rows carry the topic
     row = next(x for x in client.get(f"/api/v1/projects/{pid}/records", headers=hc).json() if x["id"] == rec["id"])
     assert row["topic_id"] == cols["id"]
+
+
+def test_project_stages_become_the_type_template(client, site):
+    """An org admin saves the project's stages (weights, scope, topics) as its type's template for the next projects."""
+    pid, hc = site["pid"], site["hc"]
+    st = _structure(client, site)
+    btype = next(t for t in st["types"] if t["name_en"] == "Buildings")
+    st = client.post(f"/api/v1/projects/{pid}/apply-type", headers=hc, json={"project_type_id": btype["id"]}).json()
+    assert [s["name_en"] for s in st["stages"][:2]] == ["Excavation", "Foundations"] and st["stages"][0]["scope"] == "whole"
+    stages = st["stages"]
+    stages[0]["weight"], stages[2]["weight"] = 2, float(stages[2]["weight"]) - 1  # excavation 2, structure 19
+    stages[-1]["is_active"] = False  # staircases off: its 5 % to the elevator
+    elev = next(s for s in stages if s["name_en"] == "Elevator")
+    elev["weight"] = float(elev["weight"]) + float(stages[-1]["weight"])
+    st = client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=stages)
+    assert st.status_code == 200, st.text
+    assert client.post(f"/api/v1/projects/{pid}/save-as-type", headers=site["hqa"]).status_code == 403
+    r = client.post(f"/api/v1/projects/{pid}/save-as-type", headers=hc)
+    assert r.status_code == 200 and r.json()["stages"] == 18
+    org = client.get("/api/v1/auth/me", headers=hc).json()["orgs"][0]["org"]["id"]
+    b = next(t for t in client.get(f"/api/v1/orgs/{org}/project-types", headers=hc).json() if t["name_en"] == "Buildings")
+    assert len(b["stages"]) == 18 and float(b["stages"][0]["weight"]) == 2 and sum(float(s["weight"]) for s in b["stages"]) == 100
+    assert all(s["name_en"] != "Staircases (finishes)" for s in b["stages"])
+    assert b["stages"][2]["topics"] and b["stages"][2]["topics"][0]["name_en"]

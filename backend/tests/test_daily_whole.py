@@ -8,10 +8,10 @@ def test_whole_stage_progress(client, site):
     pid = site["pid"]
     st = _structure(client, site)
     stages = st["stages"]
-    stages[0]["scope"] = "whole"
+    stages[2]["scope"] = "whole"
     r = client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages)
     assert r.status_code == 200, r.text
-    stg = r.json()["stages"][0]
+    stg = r.json()["stages"][2]
     topic = stg["topics"][0]["id"] if stg["topics"] else None
     d1 = date.today() - timedelta(days=2)
     rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1.isoformat()}).json()["id"]
@@ -28,7 +28,7 @@ def test_location_required_and_rebuild(client, site):
     pid = site["pid"]
     st = _structure(client, site)
     stages = st["stages"]
-    stg = stages[0]  # per location
+    stg = stages[2]  # per location
     d1 = date.today() - timedelta(days=2)
     rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1.isoformat()}).json()["id"]
     body = {"works": [{"stage_id": stg["id"], "location_ids": [], "all_locations": False, "progress": 40}]}
@@ -37,7 +37,7 @@ def test_location_required_and_rebuild(client, site):
     r = act(client, site["hqa"], rid, "submit")
     assert r.status_code == 422 and r.json()["detail"] == "dr_location_required"
     # the stage becomes whole-project (as intended): now it is fine, and approved
-    stages[0]["scope"] = "whole"
+    stages[2]["scope"] = "whole"
     client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages)
     act(client, site["hqa"], rid, "submit")
     act(client, site["hce"], rid, "approve")
@@ -49,20 +49,20 @@ def test_location_required_and_rebuild(client, site):
     # once approved reports gave the stage a %, its scope is locked (it would move or drop that progress)
     st2 = client.get(f"/api/v1/projects/{pid}/structure", headers=site["hc"]).json()
     assert next(x for x in st2["stages"] if x["id"] == stg["id"])["scope_locked"] is True
-    stages[0]["scope"] = "per_location"
+    stages[2]["scope"] = "per_location"
     r = client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages)
     assert r.status_code == 409 and r.json()["detail"] == "stage_scope_locked"
     assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["stages"][stg["id"]] == 40
-    stages[0]["scope"] = "whole"
+    stages[2]["scope"] = "whole"
     # a stage without approved progress still changes scope freely
-    stages[1]["scope"] = "whole"
+    stages[3]["scope"] = "whole"
     assert client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages).status_code == 200
 
 
 def test_actual_dates(client, site):
     pid = site["pid"]
     st = _structure(client, site)
-    stg, floor = st["stages"][0], st["locations"][0]["units"][0]
+    stg, floor = st["stages"][2], st["locations"][0]["units"][0]
     d1 = date.today() - timedelta(days=2)
     rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1.isoformat()}).json()["id"]
     began, ended = d1 - timedelta(days=60), d1 - timedelta(days=10)

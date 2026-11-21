@@ -72,7 +72,7 @@ def test_inspection_checklist(client, site):
     types = client.get(f"/api/v1/projects/{pid}/structure", headers=hc).json()["types"]
     btype = next(t for t in types if t["name_en"] == "Buildings")
     st = client.post(f"/api/v1/projects/{pid}/apply-type", headers=hc, json={"project_type_id": btype["id"]}).json()
-    structure = st["stages"][0]
+    structure = st["stages"][2]
     slabs = next(tp for tp in structure["topics"] if tp["name_en"] == "Slabs")
     assert any(x["ar"].startswith("الغطاء الخرساني") for x in slabs["checklist"])
     # off by default: no checklist on the request
@@ -82,7 +82,7 @@ def test_inspection_checklist(client, site):
     # the project edits its own copy: keep three lines (English falls back to Arabic)
     slabs["checklist"] = [{"ar": "الشدّات", "en": "Formwork"}, {"ar": "الحديد", "en": ""}, {"ar": "التمديدات", "en": "MEP"}]
     st = client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=st["stages"]).json()
-    assert next(tp for tp in st["stages"][0]["topics"] if tp["name_en"] == "Slabs")["checklist"][1] == {"ar": "الحديد", "en": "الحديد"}
+    assert next(tp for tp in st["stages"][2]["topics"] if tp["name_en"] == "Slabs")["checklist"][1] == {"ar": "الحديد", "en": "الحديد"}
     ir = _ir(client, site, stage_id=structure["id"], topic_id=slabs["id"], all_locations=True)
     assert [x["ar"] for x in ir["checklist"]] == ["الشدّات", "الحديد", "التمديدات"] and ir["checklist"][0]["result"] is None
     act(client, site["hqa"], ir["id"], "submit")
@@ -100,7 +100,7 @@ def test_inspection_checklist(client, site):
     assert client.get(f"/api/v1/verify/{r['events'][-1]['stamp']}").json()["intact"] is True
     assert client.get(f"/api/v1/records/{ir['id']}/pdf?lang=ar", headers=site["hqa"]).status_code == 200
     # the checklist was fixed at submission: editing the topic later does not change the answered request
-    slabs2 = next(tp for tp in st["stages"][0]["topics"] if tp["name_en"] == "Slabs")
+    slabs2 = next(tp for tp in st["stages"][2]["topics"] if tp["name_en"] == "Slabs")
     slabs2["checklist"] = [{"ar": "بند جديد", "en": "New"}]
     client.put(f"/api/v1/projects/{pid}/stages", headers=hc, json=st["stages"])
     assert len(client.get(f"/api/v1/records/{ir['id']}", headers=site["hqa"]).json()["checklist"]) == 3

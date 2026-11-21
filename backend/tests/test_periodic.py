@@ -26,7 +26,7 @@ def _report(client, site, day, body):
 def test_weekly_report(client, site):
     pid = site["pid"]
     st = _structure(client, site)
-    structure = st["stages"][0]
+    structure = st["stages"][2]
     floors = st["locations"][0]["units"]
     start, end = period("week", date.today() - timedelta(days=14), {5})
     client.put(f"/api/v1/projects/{pid}/settings", headers=site["hc"],

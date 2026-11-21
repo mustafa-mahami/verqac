@@ -13,7 +13,7 @@ from tests.test_records import act, site  # noqa: F401
 def test_stage_limited_to_some_floors(client, site):
     pid = site["pid"]
     st = _structure(client, site)
-    stg, floors = st["stages"][0], st["locations"][0]["units"]
+    stg, floors = st["stages"][2], st["locations"][0]["units"]
     d1 = date.today() - timedelta(days=2)
     rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1.isoformat()}).json()["id"]
     client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"],
@@ -24,13 +24,13 @@ def test_stage_limited_to_some_floors(client, site):
     assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["stages"][stg["id"]] == round(100 / n, 1)
     # the stage applies to two floors only: 1 of 2 done
     stages = st["stages"]
-    stages[0]["location_ids"] = [floors[0]["id"], floors[1]["id"]]
+    stages[2]["location_ids"] = [floors[0]["id"], floors[1]["id"]]
     r = client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages)
-    assert r.status_code == 200 and r.json()["stages"][0]["location_ids"] == [floors[0]["id"], floors[1]["id"]]
+    assert r.status_code == 200 and r.json()["stages"][2]["location_ids"] == [floors[0]["id"], floors[1]["id"]]
     assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["stages"][stg["id"]] == 50
     # all floors ticked = no limit; a whole-project stage keeps none
-    stages[0]["location_ids"] = []
-    assert client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages).json()["stages"][0]["location_ids"] is None
+    stages[2]["location_ids"] = []
+    assert client.put(f"/api/v1/projects/{pid}/stages", headers=site["hc"], json=stages).json()["stages"][2]["location_ids"] is None
 
 
 def _export(tmp_path, today):

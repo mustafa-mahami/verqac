@@ -169,7 +169,9 @@
     "answered_on_imported_only": "An actual answer date is for imported records only.",
     "kpi_target_required": "Enter the green and amber targets of every active KPI.",
     "kpi_amber_order": "Amber must be past green (lower for “higher is better”, higher for “lower is better”).",
-    "invalid_range": "The start date is after the end date."
+    "invalid_range": "The start date is after the end date.",
+    "no_project_type": "This project has no type.",
+    "no_stages": "No active stages."
   },
   "common": {
     "cancel": "Cancel",
@@ -572,7 +574,10 @@
     "scopeLocked": "The scope is locked: approved daily reports gave this stage progress, and changing it would drop or move that progress. To change it, switch the stage off and add a new one with the right scope.",
     "allFloors": "All floors",
     "someFloors": "{{n}} of {{of}} floors",
-    "floorsHint": "The floors this stage applies to. Its % is counted on them only (e.g. finishes on the fitted-out floors)."
+    "floorsHint": "The floors this stage applies to. Its % is counted on them only (e.g. finishes on the fitted-out floors).",
+    "saveAsType": "Use these stages as the “{{type}}” template",
+    "saveAsTypeConfirm": "This project's saved stages (active ones, with weights, scope, topics and checklists) become the “{{type}}” template for the next projects. Existing projects do not change. Save your changes first. Continue?",
+    "savedAsType": "The “{{type}}” template now has {{n}} stages for the next projects."
   },
   "account": {
     "title": "My account",

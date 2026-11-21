@@ -176,6 +176,35 @@ def structure_of(c: Ctx, project: Project, can_edit: bool) -> StructureOut:
                         checklists=bool((project.settings or {}).get("checklists", False)))
 
 
+@router.post("/projects/{project_id}/save-as-type")
+def save_as_type(project_id: uuid.UUID, c: Ctx = Depends(ctx)):
+    """The project's stages (active ones: names, scope, weights, topics with their checklists) become the template
+    of its project type, for the organization's next projects. Projects made before keep their own stages."""
+    a = project_access(c, project_id)
+    p = a.project
+    role = c.db.scalar(select(OrgMember.org_role).where(OrgMember.org_id == p.owner_org_id, OrgMember.user_id == c.user.id,
+                                                        OrgMember.is_active))
+    require(role == "admin", "org_admin_required")
+    t = c.db.get(ProjectType, p.project_type_id) if p.project_type_id else None
+    if t is None or t.org_id != p.owner_org_id:
+        _bad("no_project_type")
+    stages = c.db.scalars(select(ProjectStage).where(ProjectStage.project_id == p.id, ProjectStage.is_active)
+                          .order_by(ProjectStage.sort)).all()
+    if not stages:
+        _bad("no_stages")
+    topics = {}
+    for tp in c.db.scalars(select(ProjectStageTopic).where(ProjectStageTopic.project_id == p.id, ProjectStageTopic.is_active)
+                           .order_by(ProjectStageTopic.sort)):
+        topics.setdefault(tp.stage_id, []).append({"name_ar": tp.name_ar, "name_en": tp.name_en, "checklist": tp.checklist or []})
+    t.stages = [{"name_ar": s.name_ar, "name_en": s.name_en, "scope": s.scope, "weight": float(s.weight),
+                 "topics": topics.get(s.id, [])} for s in stages]
+    audit(c.db, entity="org", action="project_type_from_project", entity_id=t.id, actor=c.user.id, org_id=p.owner_org_id,
+          project_id=p.id, changes={"type": t.name_ar, "stages": [s.name_ar for s in stages]}, ip=c.meta.ip,
+          user_agent=c.meta.user_agent)
+    c.db.flush()
+    return {"type_ar": t.name_ar, "type_en": t.name_en, "stages": len(stages)}
+
+
 def apply_type(c: Ctx, project: Project, t: ProjectType) -> None:
     """Set the project's type and copy its templates where the project has none yet."""
     project.project_type_id = t.id

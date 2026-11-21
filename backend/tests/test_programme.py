@@ -16,7 +16,7 @@ def _prg(client, s):
 def test_programme_cycle_approval_and_plan(client, site):
     s, pid = site, site["pid"]
     st = _structure(client, s)
-    structure = st["stages"][0]
+    structure = st["stages"][2]
     floors = st["locations"][0]["units"]
     today = date.today()
     rid = _prg(client, s)
@@ -78,7 +78,7 @@ def test_programme_import_template_and_match(client, site):
     rows = client.post(f"/api/v1/records/{rid}/programme/import", headers=s["hqa"],
                        files={"file": ("p.xlsx", buf.getvalue())}).json()
     first = rows[0]
-    assert first["stage_id"] == st["stages"][0]["id"] and first["location_id"] == st["locations"][0]["units"][0]["id"]
+    assert first["stage_id"] == st["stages"][0]["id"] and first["location_id"] is None  # excavation: whole project
     assert first["start"] == "2026-12-01"
     # an MS Project style export: outline levels give the floor, names give the stage (English names here)
     wb = Workbook()
@@ -86,13 +86,13 @@ def test_programme_import_template_and_match(client, site):
     floor = st["locations"][0]["units"][1]
     ws.append(["ID", "Task Name", "Duration", "Start", "Finish", "Outline Level"])
     ws.append([1, floor["name_en"], "20 days", "Mon 12/1/26", "Fri 12/26/26", 1])
-    ws.append([2, st["stages"][0]["name_en"], "20 days", "Mon 12/1/26", "Fri 12/26/26", 2])
+    ws.append([2, st["stages"][2]["name_en"], "20 days", "Mon 12/1/26", "Fri 12/26/26", 2])
     buf = io.BytesIO()
     wb.save(buf)
     rows = client.post(f"/api/v1/records/{rid}/programme/import", headers=s["hqa"],
                        files={"file": ("msp.xlsx", buf.getvalue())}).json()
     task = rows[1]
-    assert task["stage_id"] == st["stages"][0]["id"] and task["location_id"] == floor["id"]
+    assert task["stage_id"] == st["stages"][2]["id"] and task["location_id"] == floor["id"]
     assert task["start"] == "2026-12-01" and task["finish"] == "2026-12-26"
     # MS Project XML and Primavera XER
     xml = f"""<?xml version="1.0"?><Project xmlns="http://schemas.microsoft.com/project"><Tasks>
@@ -109,7 +109,7 @@ def test_programme_import_template_and_match(client, site):
                      f"%R\t10\t2\t{st['stages'][0]['name_en']} works\t2026-12-01 08:00\t2026-12-15 17:00"])
     rows = client.post(f"/api/v1/records/{rid}/programme/import", headers=s["hqa"],
                        files={"file": ("p.xer", xer.encode())}).json()
-    assert rows[0]["stage_id"] == st["stages"][0]["id"] and rows[0]["location_id"] == floor["id"]
+    assert rows[0]["stage_id"] == st["stages"][2]["id"] and rows[0]["location_id"] == floor["id"]
     assert client.post(f"/api/v1/records/{rid}/programme/import", headers=s["hqa"],
                        files={"file": ("p.pdf", b"%PDF")}).status_code == 422
 
@@ -119,7 +119,7 @@ def test_programme_exports(client, site):
     st = _structure(client, s)
     rid = _prg(client, s)
     floors = st["locations"][0]["units"]
-    lines = [{"stage_id": st["stages"][0]["id"], "location_id": f["id"], "start": f"2026-12-{1 + i * 3:02d}", "finish": f"2026-12-{3 + i * 3:02d}"}
+    lines = [{"stage_id": st["stages"][2]["id"], "location_id": f["id"], "start": f"2026-12-{1 + i * 3:02d}", "finish": f"2026-12-{3 + i * 3:02d}"}
              for i, f in enumerate(floors)]
     client.put(f"/api/v1/records/{rid}/programme", headers=s["hqa"], json={"lines": lines})
     r = client.get(f"/api/v1/records/{rid}/programme/xlsx?lang=ar", headers=s["hqa"])

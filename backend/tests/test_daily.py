@@ -12,7 +12,7 @@ def _structure(client, s):
 def test_daily_cycle_and_progress(client, site):
     pid = site["pid"]
     st = _structure(client, site)
-    structure, block = st["stages"][0], st["stages"][1]  # Structure 20 %, Block walls 8 %
+    structure, block = st["stages"][2], st["stages"][3]  # Structure 20 %, Block walls 7 %
     floors = st["locations"][0]["units"]  # 6 floors of building 1
     # settings: names for supervision, counts for the rest
     s = client.put(f"/api/v1/projects/{pid}/daily-settings", headers=site["hc"], json={
@@ -59,7 +59,7 @@ def test_daily_cycle_and_progress(client, site):
     p = client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()
     # Structure: (100 + 30) / 6 floors = 21.7 % of 20 ; Block: 10 % of 8 ; total weights 100
     assert p["stages"][structure["id"]] == 21.7 and p["stages"][block["id"]] == 10.0
-    assert p["project"] == round(20 * 130 / 6 / 100 + 8 * 10 / 100, 1)
+    assert p["project"] == round(20 * 130 / 6 / 100 + 7 * 10 / 100, 1)
     assert p["snapshots"][0]["day"] == d1.isoformat() and p["as_of"] == d1.isoformat()
     # the next day starts from yesterday: crew and equipment copied, the plan becomes the work list
     rid2 = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"],

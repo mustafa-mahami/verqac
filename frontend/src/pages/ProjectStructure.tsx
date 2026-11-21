@@ -37,7 +37,7 @@ function UnitRow({ u, onChange, onMove, onRemove, first, last, editable }: {
 
 /** Project settings: project type, weighted stages, buildings / zones and their floors / sections. */
 export default function ProjectStructure({ projectId }: { projectId: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const q = useStructure(projectId);
   const [stages, setStages] = useState<StageT[]>([]);
@@ -53,6 +53,11 @@ export default function ProjectStructure({ projectId }: { projectId: string }) {
       api<Structure>(`/projects/${projectId}/${path}`, { method: path === 'apply-type' ? 'POST' : 'PUT', body: JSON.stringify(body) }),
     onSuccess: (s, v) => { done(s); setMsg({ ok: true, text: t('settings.saved'), at: v.at }); },
     onError: (e, v) => setMsg({ ok: false, text: err(e), at: v.at }),
+  });
+  const asType = useMutation({
+    mutationFn: () => api<{ type_ar: string; type_en: string; stages: number }>(`/projects/${projectId}/save-as-type`, { method: 'POST' }),
+    onSuccess: (r) => setMsg({ ok: true, text: t('structure.savedAsType', { type: i18n.language === 'en' ? r.type_en : r.type_ar, n: r.stages }), at: 'stages' }),
+    onError: (e) => setMsg({ ok: false, text: err(e), at: 'stages' }),
   });
   const note = (at: string) => msg?.at === at && <Alert mt="sm" color={msg.ok ? 'green' : 'red'}>{msg.text}</Alert>;
   if (!q.data) return null;
@@ -94,8 +99,17 @@ export default function ProjectStructure({ projectId }: { projectId: string }) {
           units={s.locations.filter((g) => g.is_active).flatMap((g) => g.units.filter((u) => u.is_active && u.id)
             .map((u) => ({ value: u.id!, label: s.locations.filter((x) => x.is_active).length > 1 ? `${pick(g, 'name')} – ${pick(u, 'name')}` : pick(u, 'name') })))} />
         {note('stages')}
-        {editable && <Button mt="md" variant="light" loading={save.isPending}
-          onClick={() => save.mutate({ at: 'stages', path: 'stages', body: stages })}>{t('rec.save')}</Button>}
+        {editable && (
+          <Group mt="md">
+            <Button variant="light" loading={save.isPending} onClick={() => save.mutate({ at: 'stages', path: 'stages', body: stages })}>{t('rec.save')}</Button>
+            {s.project_type && (
+              <Button variant="subtle" loading={asType.isPending}
+                onClick={() => { if (window.confirm(t('structure.saveAsTypeConfirm', { type: pick(s.project_type!, 'name') }))) asType.mutate(); }}>
+                {t('structure.saveAsType', { type: pick(s.project_type, 'name') })}
+              </Button>
+            )}
+          </Group>
+        )}
       </Card>
 
       <Card withBorder>
