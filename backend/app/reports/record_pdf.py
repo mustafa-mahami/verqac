@@ -138,6 +138,7 @@ def _daily(c: Ctx, d: RecordDetail, lang: str) -> dict | None:
             "crew": [{"title": L["groups"][g], "rows": rows, "total": sum(int(y.get("count") or 0) for y in rows)}
                      for g, rows in ((g, crew.get(g, [])) for g in ("supervision", "contractor", "labour")) if rows],
             "equipment": r.equipment, "materials": r.materials, "works": works(r.works), "planned": works(r.planned),
+            "qty_shown": {k: any(x["qty"] for x in works(getattr(r, k))) for k in ("works", "planned")},
             "delays": [{**x, "cause": v.get("weather_c" if x.get("cause") == "weather" else x.get("cause"), "")} for x in r.delays],
             "hse": hse if any(hse.get(k) for k in ("incidents", "near_misses", "toolbox", "notes")) else None,
             "qa": [{"name": getattr(q, n), "submitted": q.submitted, "answered": q.answered} for q in _qa(c, r.project_id, r.report_date)],

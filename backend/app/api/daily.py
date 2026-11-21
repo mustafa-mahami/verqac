@@ -151,6 +151,7 @@ class DailySettings(BaseModel):
     crew: dict[str, Literal["names", "counts"]] = {"supervision": "names", "contractor": "counts", "labour": "counts"}
     link_materials: bool = False
     actual_dates: bool = False  # work lines may carry the real start / finish (projects taken over while running)
+    show_qty: bool = True  # the work lines have quantity and unit columns
     forecast: bool = False  # the progress tab forecasts the finish from the actual progress
     forecast_basis: Literal["planned", "pace"] = "planned"  # what is left takes the planned time, or the actual pace
     # per crew group two lists: <group>_names (people, "names" mode) and <group>_desc (positions / trades, "counts" mode);

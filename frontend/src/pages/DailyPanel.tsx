@@ -43,6 +43,8 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
     return lo === hi ? `${lo}%` : `${lo}–${hi}%`;
   };
   const ALL = '__all__';
+  // quantity and unit: when the project uses them (or a line already has them)
+  const showQty = settings?.show_qty !== false || lines.some((w) => w.qty != null || w.unit);
   // who did it: a team from the project's labour list (or typed), its subcontractor, workers and hours
   const lang = i18n.language === 'en' ? 'en' : 'ar';
   const teamItems = settings ? (settings.lists[crewList(settings, 'labour')] ?? []).filter((x) => x.active) : [];
@@ -62,8 +64,8 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
               <Table.Th w={180}>{t('structure.stage')}</Table.Th>
               <Table.Th w={190}>{t('structure.location')}</Table.Th>
               <Table.Th>{t('daily.desc')}</Table.Th>
-              <Table.Th w={58}>{t('daily.qty')}</Table.Th>
-              <Table.Th w={48}>{t('daily.unit')}</Table.Th>
+              {showQty && <Table.Th w={58}>{t('daily.qty')}</Table.Th>}
+              {showQty && <Table.Th w={48}>{t('daily.unit')}</Table.Th>}
               <Table.Th w={170}>{t('daily.team')}</Table.Th>
               <Table.Th w={46}>{t('daily.crewN')}</Table.Th>
               <Table.Th w={46}>{t('daily.hoursShort')}</Table.Th>
@@ -103,8 +105,8 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
                     <Table.Td>
                       <TextInput size="xs" value={w.description ?? ''} disabled={!editable} onChange={(e) => set(i, { description: e.currentTarget.value || null })} />
                     </Table.Td>
-                    <Table.Td><NumberInput size="xs" hideControls value={w.qty ?? ''} disabled={!editable} onChange={(v) => set(i, { qty: num(v) })} /></Table.Td>
-                    <Table.Td><TextInput size="xs" dir="ltr" value={w.unit ?? ''} disabled={!editable} onChange={(e) => set(i, { unit: e.currentTarget.value || null })} /></Table.Td>
+                    {showQty && <Table.Td><NumberInput size="xs" hideControls value={w.qty ?? ''} disabled={!editable} onChange={(v) => set(i, { qty: num(v) })} /></Table.Td>}
+                    {showQty && <Table.Td><TextInput size="xs" dir="ltr" value={w.unit ?? ''} disabled={!editable} onChange={(e) => set(i, { unit: e.currentTarget.value || null })} /></Table.Td>}
                     <Table.Td>
                       <Autocomplete size="xs" data={teamOpts} value={teamShown(w)} disabled={!editable} placeholder={t('daily.team')}
                         onChange={(v) => pickTeam(i, v)} />
