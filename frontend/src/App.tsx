@@ -15,6 +15,7 @@ import Reset from './pages/Reset';
 import ProjectPage from './pages/ProjectPage';
 import RecordPage from './pages/RecordPage';
 import Projects from './pages/Projects';
+import Portfolio from './pages/Portfolio';
 import Register from './pages/Register';
 
 export function LanguageButton() {
@@ -56,6 +57,7 @@ function Shell() {
             </Text>
             <NavLink to="/inbox" label={t('nav.inbox')} />
             <NavLink to="/projects" label={t('nav.projects')} />
+            <NavLink to="/kpi" label={t('nav.portfolio')} />
             {isAdmin && <NavLink to="/org" label={t('nav.orgUsers')} />}
           </Group>
           <Group gap="xs">
@@ -72,6 +74,7 @@ function Shell() {
         <Routes>
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/projects" element={<Projects />} />
+          <Route path="/kpi" element={<Portfolio />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
           <Route path="/records/:id" element={<RecordPage />} />
           <Route path="/org" element={<OrgPage />} />

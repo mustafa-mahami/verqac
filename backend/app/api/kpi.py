@@ -113,3 +113,29 @@ def put_kpi_settings(project_id: uuid.UUID, body: KpiSettings, c: Ctx = Depends(
           org_id=a.project.owner_org_id, project_id=project_id, changes=new, ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
     return _out(a)
+
+
+@router.get("/kpi/portfolio")
+def kpi_portfolio(date_from: date | None = Query(None, alias="from"), date_to: date | None = Query(None, alias="to"),
+                  c: Ctx = Depends(ctx)):
+    """The scorecard of every project the user can reach, side by side (each against its own targets)."""
+    from app.models.core import Project
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_range")
+    rows, used = [], []
+    for p in c.db.scalars(select(Project).where(Project.is_archived.is_(False)).order_by(Project.code)):
+        k = kpi.compute(c.db, p, date_from, date_to)
+        vals = {x["code"]: {"value": x["value"], "status": x["status"]} for x in k["kpis"]}
+        if not any(v["value"] is not None for v in vals.values()):
+            continue  # nothing recorded in the period
+        for code in vals:
+            if code not in used:
+                used.append(code)
+        score = {s: sum(1 for v in vals.values() if v["status"] == s) for s in ("green", "amber", "red")}
+        rows.append({"id": str(p.id), "code": p.code, "name_ar": p.name_ar, "name_en": p.name_en, "kpis": vals,
+                     "score": score, "counts": {s: k[s].get("records", k[s].get("issued")) for s in kpi.SECTIONS}})
+    order = {d[0]: i for i, d in enumerate(kpi.DEFS)}
+    defs = [{"code": d[0], "section": d[1], "unit": d[2], "direction": d[3], "name_ar": d[7], "name_en": d[8]}
+            for d in kpi.DEFS if d[0] in used]
+    defs.sort(key=lambda d: order[d["code"]])
+    return {"projects": rows, "defs": defs}

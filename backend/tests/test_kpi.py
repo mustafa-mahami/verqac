@@ -56,3 +56,16 @@ def test_kpi_exports(client, site):
     codes = [row[8] for row in wb.worksheets[0].iter_rows(values_only=True) if row and len(row) > 8]
     assert "SUB_FIRST_PASS" in codes
     assert client.get(f"/api/v1/projects/{pid}/kpi/doc", headers=site["hc"]).status_code == 404
+
+
+def test_portfolio_lists_projects_with_their_scorecards(client, site):
+    from tests.test_records import new_sub, submit
+    submit(client, site, new_sub(client, site))
+    r = client.get("/api/v1/kpi/portfolio", headers=site["hc"])
+    assert r.status_code == 200, r.text
+    body = r.json()
+    row = next(p for p in body["projects"] if p["id"] == site["pid"])
+    assert row["counts"]["submittal"] >= 1 and "SUB_FIRST_PASS" in row["kpis"]
+    assert {"green", "amber", "red"} <= set(row["score"])
+    assert any(d["code"] == "SUB_FIRST_PASS" for d in body["defs"])
+    assert client.get("/api/v1/kpi/portfolio?from=2026-02-01&to=2026-01-01", headers=site["hc"]).status_code == 422

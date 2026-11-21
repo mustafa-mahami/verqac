@@ -190,7 +190,8 @@
   "nav": {
     "projects": "Projects",
     "orgUsers": "Organization",
-    "inbox": "Awaiting me"
+    "inbox": "Awaiting me",
+    "portfolio": "Company KPIs"
   },
   "team": {
     "title": "Project team",
@@ -1477,5 +1478,13 @@
     "payableHint": "Net amount to pay after retention and recoveries",
     "saveAmounts": "Save amounts",
     "amountsSaved": "Amounts saved"
+  },
+  "portfolio": {
+    "title": "QA KPIs across projects",
+    "hint": "Each project is measured against its own targets (Project settings > KPIs). Projects with no records in the period are not shown. Click a project code to open its scorecard.",
+    "empty": "No records in this period.",
+    "projects": "Projects",
+    "kpi": "Indicator",
+    "records": "{{n}} records"
   }
 }
