@@ -1485,7 +1485,7 @@
     "removeConfirm": "Remove this payment?",
     "monthly": "By month (cumulative at month end)",
     "month": "Month",
-    "monthlyHint": "Values are cumulative to the end of the month.",
+    "monthlyHint": "Cumulative to the end of each month. Months to come show the plan only. Paid includes the advance payment (recovered from later claims), so it can exceed the amount certified for payment.",
     "contract": "Contract amount",
     "contractHint": "Each stage's value = its weight × the contract (shown under the weight). Seen only by those who see payments.",
     "currency": "Currency",
@@ -1496,7 +1496,8 @@
     "remaining": "Remaining",
     "noneYet": "Nothing received against it yet.",
     "voidReason": "Why cancel this receipt? (it stays listed, struck through, and counts for nothing)",
-    "voided": "Cancelled: {{reason}} — {{by}}, {{at}}"
+    "voided": "Cancelled: {{reason}} — {{by}}, {{at}}",
+    "ofAdvance": "of which advance"
   },
   "pay": {
     "certifyTitle": "Payment review",

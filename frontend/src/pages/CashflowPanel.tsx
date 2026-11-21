@@ -13,7 +13,7 @@ export interface FinanceT {
   contract_value: number | null; currency: string; can_edit: boolean; can_pay: boolean; receipts: Receipt[];
   applications: { id: string; number: string; rev_no: number; state: string; payable: number; certified: number; claimed: number; paid: number; remaining: number }[];
   planned: Point[]; baseline: Point[]; earned: Point[]; certified: Point[]; payable: Point[]; paid: Point[];
-  months: { month: string; planned: number | null; earned: number | null; certified: number; payable: number; paid: number }[];
+  months: { month: string; planned: number | null; earned: number | null; certified: number | null; payable: number | null; paid: number | null; advance?: number | null }[];
   totals: Record<string, number | null>;
 }
 export const CURRENCIES = ['ILS', 'USD', 'JOD', 'EUR'];
@@ -196,11 +196,11 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
           <Table.ScrollContainer minWidth={640}>
             <Table striped withTableBorder fz="sm">
               <Table.Thead><Table.Tr><Table.Th style={{ textAlign: 'center' }}>{t('cash.month')}</Table.Th>
-                {(['planned', 'earned', 'certified', 'payable', 'paid'] as const).map((k) => <Table.Th key={k} style={{ textAlign: 'center' }}>{t(`cash.s.${k}`)}</Table.Th>)}</Table.Tr></Table.Thead>
+                {(['planned', 'earned', 'certified', 'payable', 'paid', 'advance'] as const).map((k) => <Table.Th key={k} style={{ textAlign: 'center' }}>{t(k === 'advance' ? 'cash.ofAdvance' : `cash.s.${k}`)}</Table.Th>)}</Table.Tr></Table.Thead>
               <Table.Tbody>
                 {f.months.map((r) => (
                   <Table.Tr key={r.month}><Table.Td dir="ltr" style={{ textAlign: 'center' }}>{r.month}</Table.Td>
-                    {(['planned', 'earned', 'certified', 'payable', 'paid'] as const).map((k) => <Table.Td key={k} style={{ textAlign: 'center' }} dir="ltr">{r[k] == null ? '—' : money(r[k])}</Table.Td>)}
+                    {(['planned', 'earned', 'certified', 'payable', 'paid', 'advance'] as const).map((k) => <Table.Td key={k} style={{ textAlign: 'center' }} dir="ltr">{r[k] == null ? '—' : money(r[k])}</Table.Td>)}
                   </Table.Tr>
                 ))}
               </Table.Tbody>

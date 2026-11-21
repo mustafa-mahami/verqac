@@ -61,9 +61,11 @@ class MonthRow(BaseModel):
     month: str
     planned: float | None
     earned: float | None
-    certified: float
-    payable: float
-    paid: float
+    # what happened: none for months still to come (only the plan reaches them)
+    certified: float | None
+    payable: float | None
+    paid: float | None
+    advance: float | None = None  # of the paid, the advance payment (it is not against a certified claim)
 
 
 class FinanceOut(BaseModel):
@@ -173,6 +175,7 @@ def build(c: Ctx, a, rt) -> FinanceOut:
         if x.record_id:
             paid_by[str(x.record_id)] += x.amount
     paid = _cum([(x.day, x.amount) for x in receipts])
+    advance_c = _cum([(x.day, x.amount) for x in receipts if x.kind == "advance"])
     today = datetime.now(TZ).date()
     # months from the first to the last thing that happened (or is planned)
     days = [p.day for s in (planned, earned, certified, payable_c, paid) for p in s]
@@ -182,9 +185,13 @@ def build(c: Ctx, a, rt) -> FinanceOut:
         while m <= last:
             nxt = (m + timedelta(days=32)).replace(day=1)
             end = nxt - timedelta(days=1)
-            months.append(MonthRow(month=m.strftime("%Y-%m"), planned=_at(planned, end), earned=_at(earned, min(end, today)) if m <= today else None,
-                                   certified=_at(certified, end) or 0.0, payable=_at(payable_c, end) or 0.0,
-                                   paid=_at(paid, end) or 0.0))
+            past = m <= today
+            months.append(MonthRow(month=m.strftime("%Y-%m"), planned=_at(planned, end),
+                                   earned=_at(earned, min(end, today)) if past else None,
+                                   certified=(_at(certified, end) or 0.0) if past else None,
+                                   payable=(_at(payable_c, end) or 0.0) if past else None,
+                                   paid=(_at(paid, end) or 0.0) if past else None,
+                                   advance=(_at(advance_c, end) or 0.0) if past else None))
             m = nxt
     payable = sum(num(r, "payable") for r in done)
     advance = sum(x.amount for x in receipts if x.kind == "advance")
