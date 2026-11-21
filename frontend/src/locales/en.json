@@ -399,7 +399,15 @@
     "noCaption": "No caption",
     "download": "Download",
     "prevPage": "Previous page",
-    "nextPage": "Next page"
+    "nextPage": "Next page",
+    "money": {
+      "claimed": "Claimed",
+      "certified": "Certified",
+      "payable": "For payment",
+      "paid": "Paid",
+      "remaining": "Remaining",
+      "total": "Total ({{n}})"
+    }
   },
   "back": {
     "projects": "All projects",

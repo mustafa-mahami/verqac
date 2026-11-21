@@ -16,7 +16,8 @@ import { shrinkPhoto } from './Photos';
 import { linesFromTemplate, saveLab, type ConcreteClass, type LabTemplate } from '../lab';
 import RecordStats, { applyFilter, CATEGORIES, type StatsFilter } from './RecordStats';
 
-import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, profile, typeText, type RegisterType } from '../recordTypes';
+import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, money, profile, typeText, type RegisterType } from '../recordTypes';
+import { useFinance } from './CashflowPanel';
 
 export type { RegisterType };
 
@@ -307,6 +308,17 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
   const pages = Math.max(1, Math.ceil(shown.length / PAGE));
   const page = Math.min(pages, Math.max(1, Number(params.get('pg')) || 1));
   const pageRows = useMemo(() => shown.slice((page - 1) * PAGE, page * PAGE), [shown, page]);
+  // payment applications: the amounts in the list, with what was paid and what is left, and their totals
+  const pay = type === 'payment';
+  const fin = useFinance(projectId, pay);
+  const paidOf = useMemo(() => new Map((fin.data?.applications ?? []).map((a) => [a.id, a])), [fin.data]);
+  const amt = (r: RecordRow, k: string): number => {
+    if (k === 'paid' || k === 'remaining') { const a = paidOf.get(r.id); return a && r.state.category === 'approved' ? a[k] : 0; }
+    const v = Number(r.custom?.[k] ?? 0);
+    return Number.isFinite(v) ? v : 0;
+  };
+  const MONEY = ['claimed', 'certified', 'payable', 'paid', 'remaining'];
+  const total = (k: string) => shown.reduce((sum, r) => sum + amt(r, k), 0);
   const goPage = (n: number) => {
     const next = new URLSearchParams(params);
     n <= 1 ? next.delete('pg') : next.set('pg', String(n));
@@ -374,11 +386,12 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                   </Table.Th>
                   <SortTh label={t('rec.number')} k="number" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={t('rec.title')} k="title" sort={sort} dir={dir} onSort={onSort} />
-                  <SortTh label={t('rec.discipline')} k="discipline" sort={sort} dir={dir} onSort={onSort} />
+                  {!pay && <SortTh label={t('rec.discipline')} k="discipline" sort={sort} dir={dir} onSort={onSort} />}
                   <SortTh label={t('rec.state')} k="state" sort={sort} dir={dir} onSort={onSort} />
                   <SortTh label={type === 'document' ? t('custom.doc_date') : t('rec.submitted')} k="submitted" sort={sort} dir={dir} onSort={onSort} />
-                  {type !== 'document' && <SortTh label={t('rec.due')} k="due" sort={sort} dir={dir} onSort={onSort} />}
+                  {type !== 'document' && !pay && <SortTh label={t('rec.due')} k="due" sort={sort} dir={dir} onSort={onSort} />}
                   {type !== 'document' && <SortTh label={t('rec.answered')} k="answered" sort={sort} dir={dir} onSort={onSort} />}
+                  {pay && MONEY.map((k) => <Table.Th key={k} ta="end" style={{ whiteSpace: 'nowrap' }}>{t(`rec.money.${k}`)}</Table.Th>)}
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -400,7 +413,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                         <Text size="xs" c="dimmed" lineClamp={1}>{placeText(structure.data, r)}</Text>
                       )}
                     </Table.Td>
-                    <Table.Td><Text size="sm">{r.discipline ? pick(r.discipline, 'name') : ''}</Text></Table.Td>
+                    {!pay && <Table.Td><Text size="sm">{r.discipline ? pick(r.discipline, 'name') : ''}</Text></Table.Td>}
                     <Table.Td>
                       <Badge tt="none" variant="light" color={stateColor(r.state.color)}>{pick(r.state, 'name')}</Badge>
                       {r.lab_result && (
@@ -410,7 +423,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                       )}
                     </Table.Td>
                     <Table.Td><Text size="sm">{type === 'document' ? fmtDate(r.custom?.doc_date ?? r.submitted_at) : fmtDate(r.submitted_at)}</Text></Table.Td>
-                    {type !== 'document' && <Table.Td>
+                    {type !== 'document' && !pay && <Table.Td>
                       <Text size="sm" c={r.overdue ? 'red' : undefined} fw={r.overdue ? 600 : undefined}>{fmtDate(r.due_at, profile(type).timed)}</Text>
                       {r.overdue && <Badge size="xs" color="red" tt="none">{t('rec.overdue')}</Badge>}
                       {r.resubmit_due_at && (
@@ -431,9 +444,23 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
                           {fmtDate(r.answered_at, profile(type).timed)}</Text>;
                       })()}
                     </Table.Td>}
+                    {pay && MONEY.map((k) => {
+                      const v = amt(r, k);
+                      const none = (k === 'certified' || k === 'payable' || k === 'paid' || k === 'remaining') && r.state.category !== 'approved';
+                      return <Table.Td key={k} ta="end"><Text size="sm" c={k === 'remaining' && v > 0 ? 'orange.8' : undefined}><bdi dir="ltr">{none ? '—' : money(v)}</bdi></Text></Table.Td>;
+                    })}
                   </Table.Tr>
                 ))}
               </Table.Tbody>
+              {pay && (
+                <Table.Tfoot>
+                  <Table.Tr style={{ background: 'var(--mantine-color-gray-1)' }}>
+                    <Table.Td />
+                    <Table.Td colSpan={5}><Text size="sm" fw={700}>{t('rec.money.total', { n: shown.length })}{fin.data ? ` (${fin.data.currency})` : ''}</Text></Table.Td>
+                    {MONEY.map((k) => <Table.Td key={k} ta="end"><Text size="sm" fw={700}><bdi dir="ltr">{money(total(k))}</bdi></Text></Table.Td>)}
+                  </Table.Tr>
+                </Table.Tfoot>
+              )}
             </Table>
           </Table.ScrollContainer>
         </Card>

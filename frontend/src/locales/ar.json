@@ -399,7 +399,15 @@
     "noCaption": "بلا وصف",
     "download": "تنزيل",
     "prevPage": "الصفحة السابقة",
-    "nextPage": "الصفحة التالية"
+    "nextPage": "الصفحة التالية",
+    "money": {
+      "claimed": "المطالب به",
+      "certified": "المعتمد",
+      "payable": "المعتمد للصرف",
+      "paid": "المصروف",
+      "remaining": "المتبقي",
+      "total": "المجموع ({{n}})"
+    }
   },
   "back": {
     "projects": "كل المشاريع",

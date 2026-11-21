@@ -18,8 +18,8 @@ export interface FinanceT {
 }
 export const CURRENCIES = ['ILS', 'USD', 'JOD', 'EUR'];
 
-export const useFinance = (projectId: string) => useQuery({
-  queryKey: ['finance', projectId], retry: false,
+export const useFinance = (projectId: string, enabled = true) => useQuery({
+  queryKey: ['finance', projectId], retry: false, enabled: enabled && !!projectId,
   queryFn: async () => {
     try {
       return await api<FinanceT>(`/projects/${projectId}/finance`);
