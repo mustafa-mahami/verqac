@@ -69,3 +69,20 @@ def test_portfolio_lists_projects_with_their_scorecards(client, site):
     assert {"green", "amber", "red"} <= set(row["score"])
     assert any(d["code"] == "SUB_FIRST_PASS" for d in body["defs"])
     assert client.get("/api/v1/kpi/portfolio?from=2026-02-01&to=2026-01-01", headers=site["hc"]).status_code == 422
+
+
+def test_kept_results_follow_the_data(client, site):
+    """A register and the scorecard are served again while unchanged, and never stale after a change."""
+    from tests.test_records import new_sub, submit
+    pid = site["pid"]
+    url = f"/api/v1/projects/{pid}/records?type=submittal"
+    rec = new_sub(client, site)
+    submit(client, site, rec)
+    first = client.get(url, headers=site["hc"]).json()
+    assert client.get(url, headers=site["hc"]).json() == first  # kept
+    k1 = client.get(f"/api/v1/projects/{pid}/kpi", headers=site["hc"]).json()
+    assert act(client, site["hce"], rec["id"], "approve").status_code == 200
+    after = client.get(url, headers=site["hc"]).json()
+    assert next(r for r in after if r["id"] == rec["id"])["state"]["category"] == "approved"
+    k2 = client.get(f"/api/v1/projects/{pid}/kpi", headers=site["hc"]).json()
+    assert k1["submittal"]["approved"] != k2["submittal"]["approved"]

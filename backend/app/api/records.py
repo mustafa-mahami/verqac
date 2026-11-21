@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, TypeAdapter
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
@@ -458,11 +458,27 @@ def link_candidates(project_id: uuid.UUID, stage_id: uuid.UUID | None = None, c:
     return out
 
 
+_ROWS = TypeAdapter(list[RecordRow])
+
+
 @router.get("/projects/{project_id}/records", response_model=list[RecordRow])
 def list_records(project_id: uuid.UUID, type: str = Query("submittal"), all_revisions: bool = False,
                  c: Ctx = Depends(ctx)):
+    from app.core import cache
     a = project_access(c, project_id)
     rt = _rtype(c, type)
+    # the same register for the same person, unchanged since: served as it was (a thousand rows take a while to build)
+    key = ("records", c.user.id, project_id, rt.id, all_revisions, a.role.id if a.role else None,
+           a.party.id if a.party else None, tuple(sorted(a.admin_org_ids)), cache.time_slot())
+    fp = cache.fingerprint(c.db, cache.RECORDS_FP, {"p": project_id, "t": rt.id})
+    body = cache.get(key, fp)
+    if body is None:
+        body = _ROWS.dump_json(_list_rows(c, a, rt, project_id, all_revisions))
+        cache.put(key, fp, body)
+    return Response(content=body, media_type="application/json")
+
+
+def _list_rows(c: Ctx, a, rt, project_id, all_revisions: bool) -> list[RecordRow]:
     p = Perms(c, a, rt)
     q = select(Record).where(Record.project_id == project_id, Record.record_type_id == rt.id)
     rows = c.db.scalars(q.order_by(Record.number, Record.rev_no)).all()

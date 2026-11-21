@@ -59,7 +59,19 @@ def get_kpi(project_id: uuid.UUID, date_from: date | None = Query(None, alias="f
     a = project_access(c, project_id)
     if date_from and date_to and date_from > date_to:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_range")
-    return kpi.compute(c.db, a.project, date_from, date_to, discipline or None)
+    return _computed(c, a.project, date_from, date_to, discipline or None)
+
+
+def _computed(c: Ctx, project, date_from=None, date_to=None, discipline=None) -> dict:
+    """The scorecard, kept while the project's records, events, lab results and settings are unchanged."""
+    from app.core import cache
+    key = ("kpi", c.user.id, project.id, date_from, date_to, discipline, cache.time_slot())
+    fp = cache.fingerprint(c.db, cache.PROJECT_FP, {"p": project.id})
+    out = cache.get(key, fp)
+    if out is None:
+        out = kpi.compute(c.db, project, date_from, date_to, discipline)
+        cache.put(key, fp, out)
+    return out
 
 
 def _disc_name(c: Ctx, code: str | None, lang: str) -> str | None:
@@ -124,7 +136,7 @@ def kpi_portfolio(date_from: date | None = Query(None, alias="from"), date_to: d
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_range")
     rows, used = [], []
     for p in c.db.scalars(select(Project).where(Project.is_archived.is_(False)).order_by(Project.code)):
-        k = kpi.compute(c.db, p, date_from, date_to)
+        k = _computed(c, p, date_from, date_to)
         vals = {x["code"]: {"value": x["value"], "status": x["status"]} for x in k["kpis"]}
         if not any(v["value"] is not None for v in vals.values()):
             continue  # nothing recorded in the period
