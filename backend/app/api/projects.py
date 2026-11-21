@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.access import project_access, require
 from app.core.roles import role_out
+from app.core.seed_records import DEFAULT_PERIODS
 from app.core.audit import audit, diff
 from app.core.deps import Ctx, ctx
 from app.core.kinds import new_code, submittal_kinds
@@ -217,6 +218,10 @@ def put_settings(project_id: UUID, body: ProjectSettingsIn, c: Ctx = Depends(ctx
     a = project_access(c, project_id)
     require(a.can_manage_project, "manage_project_required")
     codes = set(c.db.scalars(select(RecordType.code).where(RecordType.org_id.is_(None))))
+    # types nobody answers (the archive) have no periods: whatever the page sends for them is dropped
+    for d in (body.reply_hours, body.resubmit_hours):
+        for code in [k for k in d if DEFAULT_PERIODS.get(k) == (0, 0)]:
+            d.pop(code)
     for code, hours in [*body.reply_hours.items(), *body.resubmit_hours.items()]:
         if code not in codes or not 1 <= hours <= 24 * 365:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_review_days")

@@ -145,7 +145,7 @@ export default function ProjectSettings({ projectId }: { projectId: string }) {
                   <Text size="xs" c="dimmed" w={190} ta="center">{t('settings.resubmitDays')}</Text>
                 </Group>
               </Group>
-              {types.data.map((rt) => (
+              {types.data.filter((rt) => rt.code !== 'document').map((rt) => (
                 <Group key={rt.code} justify="space-between" wrap="nowrap">
                   <Text size="sm">{pick(rt, 'name')}</Text>
                   <Group gap="lg" wrap="nowrap">

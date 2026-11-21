@@ -31,3 +31,13 @@ def test_archive_both_parties_file(client, site):
     bad = client.post(f"/api/v1/projects/{pid}/records", headers=site["hqa"], json={
         "record_type": "document", "title": "x", "custom": {"kind": "poem"}})
     assert bad.status_code == 422
+
+
+def test_settings_save_with_the_archive_on(client, site):
+    pid = site["pid"]
+    s = client.get(f"/api/v1/projects/{pid}/settings", headers=site["hc"]).json()
+    body = {"reply_hours": {**s["reply_hours"], "document": 0}, "resubmit_hours": {**s["resubmit_hours"], "document": 0},
+            "types": sorted(set(s["types"]) | {"document", "payment"})}
+    r = client.put(f"/api/v1/projects/{pid}/settings", headers=site["hc"], json=body)
+    assert r.status_code == 200, r.text
+    assert "payment" in r.json()["types"]
