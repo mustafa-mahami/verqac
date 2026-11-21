@@ -59,6 +59,12 @@ class Perms:
                 # a specific grant for the type wins over the '*' grant
                 if rp.record_type != "*" or rp.action not in self.scopes:
                     self.scopes[rp.action] = rp.scope
+        # money: an organization's admin sees (and acts for) its own party's payments, whatever its project role
+        if rtype.code in FINANCE_TYPES and a.party is not None and a.party.org_id in a.admin_org_ids:
+            mine = ("view", "export", *(("create", "edit", "submit", "cancel", "delete") if a.party.kind == rtype.creator_party
+                                        else ("respond",) if a.party.kind == rtype.responder_party else ()))
+            for action in mine:
+                self.scopes.setdefault(action, "project")
 
     @property
     def party_kind(self) -> str | None:

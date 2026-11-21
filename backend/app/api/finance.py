@@ -84,7 +84,8 @@ def access(c: Ctx, project_id: uuid.UUID):
     """(project access, payment type, perms); 404 for whoever may not see the project's money."""
     a = project_access(c, project_id)
     rt, p = _perms(c, a)
-    if rt is None or not p.can("view"):
+    # the project owner's organization admin sees it even when not on the project team
+    if rt is None or not (p.can("view") or a.is_owner_org_admin):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
     return a, rt, p
 

@@ -42,7 +42,11 @@ const SERIES = [
 function Curves({ f }: { f: FinanceT }) {
   const { t } = useTranslation();
   const W = 900, H = 320, L = 70, R = 16, T = 12, B = 34;
-  const all = SERIES.flatMap((s) => f[s.key]);
+  // what has happened so far stays at its last value until today (a single report still draws a line)
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const upTo = (pts: Point[]) => (pts.length && pts[pts.length - 1].day < todayIso ? [...pts, { day: todayIso, value: pts[pts.length - 1].value }] : pts);
+  const data: Record<string, Point[]> = Object.fromEntries(SERIES.map((s) => [s.key, s.key === 'planned' || s.key === 'baseline' ? f[s.key] : upTo(f[s.key])]));
+  const all = SERIES.flatMap((s) => data[s.key]);
   if (!all.length) return <Text c="dimmed" size="sm">{t('cash.noData')}</Text>;
   const ts = all.map((p) => Date.parse(p.day));
   const today = Date.now();
@@ -71,9 +75,15 @@ function Curves({ f }: { f: FinanceT }) {
           {new Date(m).toISOString().slice(2, 7).replace('-', '/')}</text>)}
         {today > x0 && today < x1 && <line x1={X(today)} x2={X(today)} y1={T} y2={H - B} stroke="#fa5252" strokeDasharray="3 3" />}
         {f.contract_value ? <line x1={L} x2={W - R} y1={Y(f.contract_value)} y2={Y(f.contract_value)} stroke="#adb5bd" strokeDasharray="1 3" /> : null}
-        {SERIES.map((s) => f[s.key].length > 0 && (
-          <path key={s.key} d={path(f[s.key], s.key === 'certified' || s.key === 'payable' || s.key === 'paid')} fill="none" stroke={s.color}
-            strokeWidth={s.key === 'baseline' ? 1.5 : 2.2} strokeDasharray={s.dash} />
+        {SERIES.map((s) => data[s.key].length > 0 && (
+          <g key={s.key}>
+            <path d={path(data[s.key], s.key === 'certified' || s.key === 'payable' || s.key === 'paid')} fill="none" stroke={s.color}
+              strokeWidth={s.key === 'baseline' ? 1.5 : 2.2} strokeDasharray={s.dash} />
+            {s.key !== 'planned' && s.key !== 'baseline' && f[s.key].length > 0 && (() => {
+              const p = f[s.key][f[s.key].length - 1];
+              return <circle cx={X(Date.parse(p.day))} cy={Y(p.value)} r={3.5} fill={s.color}><title>{`${p.day}: ${money(p.value)}`}</title></circle>;
+            })()}
+          </g>
         ))}
       </svg>
       <Group gap="md" justify="center" mt={4}>
@@ -180,12 +190,12 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
           <Title order={5} mb="xs">{t('cash.monthly')}</Title>
           <Table.ScrollContainer minWidth={640}>
             <Table striped withTableBorder fz="sm">
-              <Table.Thead><Table.Tr><Table.Th>{t('cash.month')}</Table.Th>
-                {(['planned', 'earned', 'certified', 'payable', 'paid'] as const).map((k) => <Table.Th key={k} ta="end">{t(`cash.s.${k}`)}</Table.Th>)}</Table.Tr></Table.Thead>
+              <Table.Thead><Table.Tr><Table.Th style={{ textAlign: 'center' }}>{t('cash.month')}</Table.Th>
+                {(['planned', 'earned', 'certified', 'payable', 'paid'] as const).map((k) => <Table.Th key={k} style={{ textAlign: 'center' }}>{t(`cash.s.${k}`)}</Table.Th>)}</Table.Tr></Table.Thead>
               <Table.Tbody>
                 {f.months.map((r) => (
-                  <Table.Tr key={r.month}><Table.Td dir="ltr" ta="start">{r.month}</Table.Td>
-                    {(['planned', 'earned', 'certified', 'payable', 'paid'] as const).map((k) => <Table.Td key={k} ta="end" dir="ltr">{r[k] == null ? '—' : money(r[k])}</Table.Td>)}
+                  <Table.Tr key={r.month}><Table.Td dir="ltr" style={{ textAlign: 'center' }}>{r.month}</Table.Td>
+                    {(['planned', 'earned', 'certified', 'payable', 'paid'] as const).map((k) => <Table.Td key={k} style={{ textAlign: 'center' }} dir="ltr">{r[k] == null ? '—' : money(r[k])}</Table.Td>)}
                   </Table.Tr>
                 ))}
               </Table.Tbody>

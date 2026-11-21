@@ -57,3 +57,23 @@ def test_payments_certification_and_cashflow(client, site):
     assert act(client, site["hk"], ipc2["id"], "return", comment="الكميات زائدة").status_code == 200
     r1 = client.post(f"/api/v1/records/{ipc2['id']}/revise", headers=site["hc"]).json()
     assert "certified" not in r1["custom"] and r1["custom"]["claimed"] == "200000"
+
+
+def test_org_admin_sees_money_whatever_the_project_role(client, site):
+    """The contractor's organization admin, on the project as QA engineer, still sees and records payments."""
+    from app.core.db import session_scope
+    from app.models.core import OrgMember, ProjectMember, Role
+    from sqlalchemy import select
+    pid = site["pid"]
+    me = client.get("/api/v1/auth/me", headers=site["hc"]).json()["user"]["id"]
+    with session_scope(bypass=True) as db:
+        qa = db.scalar(select(Role).where(Role.org_id.is_(None), Role.code == "qa_engineer"))
+        m = db.scalar(select(ProjectMember).where(ProjectMember.project_id == pid, ProjectMember.user_id == me))
+        m.role_id = qa.id
+        assert db.scalar(select(OrgMember.org_role).where(OrgMember.user_id == me)) == "admin"
+    assert client.get(f"/api/v1/projects/{pid}/finance", headers=site["hc"]).status_code == 200
+    r = client.post(f"/api/v1/projects/{pid}/records", headers=site["hc"],
+                    json={"record_type": "payment", "title": "دفعة", "custom": {"claimed": "10"}})
+    assert r.status_code == 201, r.text
+    # an ordinary QA engineer still does not
+    assert client.get(f"/api/v1/projects/{pid}/finance", headers=site["hqa"]).status_code == 404
