@@ -135,12 +135,12 @@ PAYMENT_STATES = [
 ]
 PAYMENT_TRANSITIONS = [
     ("draft", "submitted", "submit", "تقديم للتدقيق", "Submit", "submit", "submit", False, "primary"),
-    ("submitted", "certified", "certify", "اعتماد الدفعة", "Certify", "respond", "respond", False, "green"),
+    ("submitted", "certified", "certify", "اعتماد المطالبة", "Certify", "respond", "respond", False, "green"),
     ("submitted", "returned", "return", "إعادة للتصحيح", "Return", "respond", "respond", True, "orange"),
     ("draft", "cancelled", "cancel", "إلغاء", "Cancel", "cancel", "cancel", False, "subtle"),
     ("submitted", "cancelled", "cancel", "سحب وإلغاء", "Withdraw", "cancel", "cancel", True, "subtle"),
 ]
-PAYMENT_TYPE = ("payment", "IPC", "دفعة", "Payment application", "payment", "contractor", "consultant", True, 50)
+PAYMENT_TYPE = ("payment", "IPC", "مطالبة مالية", "Payment application", "payment", "contractor", "consultant", True, 50)
 # money is seen only by the roles given the type itself (the "all types" grants do not reach it)
 FINANCE_TYPES = ("payment",)
 # role code (platform roles, their organization and project copies), actions, scope

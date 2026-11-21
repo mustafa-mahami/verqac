@@ -238,3 +238,61 @@ export function ContractSettings({ projectId }: { projectId: string }) {
     </Group>
   );
 }
+
+/** In a certified payment application: what was certified for payment, what came in, what is left; record a receipt here. */
+export function ApplicationReceipts({ projectId, recordId }: { projectId: string; recordId: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useFinance(projectId);
+  const [err, setErr] = useState<string | null>(null);
+  const [rc, setRc] = useState<{ day: string; amount: number | ''; note: string } | null>(null);
+  const add = useMutation({
+    mutationFn: () => api<FinanceT>(`/projects/${projectId}/finance/receipts`, { method: 'POST',
+      body: JSON.stringify({ day: rc!.day, amount: Number(rc!.amount), kind: 'payment', record_id: recordId, note: rc!.note || null }) }),
+    onSuccess: (f) => { qc.setQueryData(['finance', projectId], f); setRc(null); setErr(null); },
+    onError: (e) => setErr(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic'))),
+  });
+  const f = q.data;
+  const app = f?.applications.find((x) => x.id === recordId);
+  if (!f || !app) return null;
+  const mine = f.receipts.filter((x) => x.record_id === recordId);
+  const m = (v: number) => `${money(v)} ${f.currency}`;
+  return (
+    <Card withBorder>
+      <Group justify="space-between" mb="xs">
+        <Title order={5}>{t('cash.appTitle')}</Title>
+        {f.can_pay && app.remaining > 0 && !rc && (
+          <Button size="xs" onClick={() => setRc({ day: new Date().toISOString().slice(0, 10), amount: app.remaining, note: '' })}>{t('cash.record')}</Button>
+        )}
+      </Group>
+      <SimpleGrid cols={{ base: 2, sm: 4 }} mb="sm">
+        {([['certified', app.certified], ['payable', app.payable], ['paid', app.paid], ['left', app.remaining]] as [string, number][]).map(([k, v]) => (
+          <div key={k}>
+            <Text size="xs" c="dimmed">{t(k === 'left' ? 'cash.remaining' : `cash.s.${k}`)}</Text>
+            <Text fw={700} c={k === 'left' && v > 0 ? 'orange' : k === 'left' ? 'green' : undefined}><bdi dir="ltr">{m(v)}</bdi></Text>
+          </div>
+        ))}
+      </SimpleGrid>
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      {rc && (
+        <Group align="flex-end" mb="sm" wrap="wrap">
+          <TextInput type="date" label={t('cash.day')} w={160} value={rc.day} onChange={(e) => setRc({ ...rc, day: e.currentTarget.value })} />
+          <NumberInput label={`${t('cash.amount')} (${f.currency})`} w={170} min={0} max={app.remaining} thousandSeparator="," hideControls
+            value={rc.amount} onChange={(v) => setRc({ ...rc, amount: v === '' ? '' : Number(v) })} />
+          <TextInput label={t('cash.note')} style={{ flex: 1, minWidth: 160 }} value={rc.note} onChange={(e) => setRc({ ...rc, note: e.currentTarget.value })} />
+          <Button loading={add.isPending} disabled={!rc.amount || !rc.day} onClick={() => add.mutate()}>{t('cash.add')}</Button>
+          <Button variant="subtle" onClick={() => setRc(null)}>{t('common.cancel')}</Button>
+        </Group>
+      )}
+      {mine.length === 0 ? <Text size="sm" c="dimmed">{t('cash.noneYet')}</Text> : (
+        <Table withTableBorder fz="sm">
+          <Table.Tbody>
+            {mine.map((x) => (
+              <Table.Tr key={x.id}><Table.Td w={130}><bdi dir="ltr">{x.day}</bdi></Table.Td><Table.Td w={160}><bdi dir="ltr">{money(x.amount)} {f.currency}</bdi></Table.Td><Table.Td>{x.note}</Table.Td></Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
+    </Card>
+  );
+}

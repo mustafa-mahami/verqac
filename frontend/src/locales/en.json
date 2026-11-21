@@ -287,7 +287,7 @@
       "reports": "Periodic reports",
       "kpi": "QA KPIs",
       "cash": "Cash flow",
-      "payments": "Payments",
+      "payments": "Payment applications",
       "documents": "Archive & correspondence"
     },
     "groups": {
@@ -1478,7 +1478,11 @@
     "contractHint": "Each stage's value = its weight × the contract (shown under the weight). Seen only by those who see payments.",
     "currency": "Currency",
     "left": "left",
-    "noneToPay": "No certified application left to pay"
+    "noneToPay": "No certified application left to pay",
+    "appTitle": "Paid against this application",
+    "record": "Record a receipt",
+    "remaining": "Remaining",
+    "noneYet": "Nothing received against it yet."
   },
   "pay": {
     "certifyTitle": "Payment review",

@@ -19,6 +19,7 @@ import Photos, { isPhoto, PdfViewer, shrinkPhoto } from './Photos';
 import LabPanel from './LabPanel';
 import DailyPanel from './DailyPanel';
 import ProgrammePanel from './ProgrammePanel';
+import { ApplicationReceipts } from './CashflowPanel';
 import { PlacePicker, useStructure } from './Structure';
 import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, money, profile, typeText } from '../recordTypes';
 
@@ -539,6 +540,7 @@ export default function RecordPage() {
             )}
 
             {r.checklist.length > 0 && responses.length === 0 && <ChecklistCard rec={r} />}
+            {r.record_type.code === 'payment' && r.state.category === 'approved' && <ApplicationReceipts projectId={r.project_id} recordId={r.id} />}
             {r.record_type.code === 'test' && <LabPanel rec={r} />}
             {r.record_type.code === 'daily_report' && <DailyPanel rec={r} />}
             {r.record_type.code === 'programme' && <ProgrammePanel rec={r} />}
