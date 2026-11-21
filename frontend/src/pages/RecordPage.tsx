@@ -20,7 +20,7 @@ import LabPanel from './LabPanel';
 import DailyPanel from './DailyPanel';
 import ProgrammePanel from './ProgrammePanel';
 import { PlacePicker, useStructure } from './Structure';
-import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, profile, typeText } from '../recordTypes';
+import { choiceLabel, CustomInput, fieldLabel, LTR_KEYS, money, profile, typeText } from '../recordTypes';
 
 /** ISO timestamp -> value of an <input type="datetime-local"> in the browser's time zone, and back. */
 const toLocalInput = (iso: string | null) => {
@@ -80,6 +80,38 @@ function ActionForm({ rec, tr, onDone }: { rec: RecordDetail; tr: Transition; on
 }
 
 /** The consultant writes the comments in a large field on the page, then picks the decision under it. */
+/** Supervision writes the certified amount (with the retention kept) and the amount to pay, then certifies. */
+function CertifyPanel({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail) => void }) {
+  const { t } = useTranslation();
+  const [certified, setCertified] = useState(rec.custom.certified ?? '');
+  const [payable, setPayable] = useState(rec.custom.payable ?? '');
+  const [err, setErr] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: () => api<RecordDetail>(`/records/${rec.id}/certification`, { method: 'PUT', body: JSON.stringify({ certified, payable }) }),
+    onSuccess: (r) => { setErr(null); onDone(r); },
+    onError: (e) => setErr(errText(e)),
+  });
+  const changed = certified !== (rec.custom.certified ?? '') || payable !== (rec.custom.payable ?? '');
+  return (
+    <Card withBorder>
+      <Title order={5} mb={4}>{t('pay.certifyTitle')}</Title>
+      <Text size="sm" c="dimmed" mb="sm">{t('pay.certifyHint', { claimed: money(rec.custom.claimed) })}</Text>
+      <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        <TextInput label={t('custom.claimed')} value={money(rec.custom.claimed)} readOnly dir="ltr" />
+        <TextInput label={t('custom.certified')} description={t('pay.certifiedHint')} value={certified} dir="ltr" inputMode="decimal"
+          onChange={(e) => setCertified(e.currentTarget.value.replace(/[^0-9.,]/g, ''))} />
+        <TextInput label={t('custom.payable')} description={t('pay.payableHint')} value={payable} dir="ltr" inputMode="decimal"
+          onChange={(e) => setPayable(e.currentTarget.value.replace(/[^0-9.,]/g, ''))} />
+      </SimpleGrid>
+      {err && <Alert mt="sm" color="red">{err}</Alert>}
+      <Group mt="sm">
+        <Button variant="light" disabled={!changed} loading={save.isPending} onClick={() => save.mutate()}>{t('pay.saveAmounts')}</Button>
+        {!changed && rec.custom.certified && rec.custom.payable && <Text size="sm" c="green">{t('pay.amountsSaved')}</Text>}
+      </Group>
+    </Card>
+  );
+}
+
 function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transitions: Transition[]; onDone: (r: RecordDetail) => void }) {
   const { t } = useTranslation();
   const key = `verqac.resp.${rec.id}`;
@@ -113,7 +145,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
       return api<RecordDetail>(`/records/${rec.id}/transitions`, {
         method: 'POST', body: JSON.stringify({ action: tr.action, comment: text.trim() || null, on_behalf_of: onBehalf,
           performed_at: profile(rec.record_type.code).timed ? fromLocalInput(performed) : null,
-          answered_on: rec.imported && answeredOn ? answeredOn : null,
+          answered_on: (rec.imported || rec.record_type.code === 'payment') && answeredOn ? answeredOn : null,
           checklist: rec.checklist.length ? answers.map((x) => ({ result: x.result, note: x.note.trim() || null })) : null }),
       });
     },
@@ -141,7 +173,7 @@ function ResponsePanel({ rec, transitions, onDone }: { rec: RecordDetail; transi
         <TextInput mt="sm" w={260} type="datetime-local" label={t('ir.performedAt')} description={t('ir.performedHint')}
           value={performed} onChange={(e) => setPerformed(e.currentTarget.value)} />
       )}
-      {rec.imported && (
+      {(rec.imported || rec.record_type.code === 'payment') && (
         <TextInput mt="sm" w={260} type="date" label={t('resp.answeredOn')} description={t('resp.answeredOnHint')}
           max={new Date().toISOString().slice(0, 10)} min={rec.submitted_at?.slice(0, 10)}
           value={answeredOn} onChange={(e) => setAnsweredOn(e.currentTarget.value)} />
@@ -308,7 +340,7 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
         body: JSON.stringify({
           title: place.topic_id ? null : v.title.trim(), description: blank(v.description), discipline_id: v.discipline_id || null,
           details: { ...Object.fromEntries(pf.keys.map((k) => [k, blank(v[k])])), ...(pf.kind ? { submittal_kind: v.submittal_kind || null } : {}) },
-          custom: Object.fromEntries(pf.custom.map((f) => [f.key, blank(custom[f.key] ?? '')])),
+          custom: Object.fromEntries(pf.custom.filter((f) => !f.response).map((f) => [f.key, blank(custom[f.key] ?? '')])),
           ...place,
           ...(isIR ? { requested_for: fromLocalInput(requested), linked_ids: linked } : {}),
         }),
@@ -320,12 +352,14 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
     <form onSubmit={form.onSubmit((v) => save.mutate(v))}>
       <Stack>
         {error && <Alert color="red">{error}</Alert>}
-        {structure.data
+        {structure.data && pf.place !== false
           ? <PlacePicker structure={structure.data} value={place} onChange={setPlace} keep={initialPlace}
               title={form.values.title} onTitle={(x) => form.setFieldValue('title', x)} />
           : <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />}
+{pf.place !== false && (
         <Select label={t('rec.discipline')} allowDeselect={false}
           data={(meta.data?.disciplines ?? []).map((x) => ({ value: x.id, label: pick(x, 'name') }))} {...form.getInputProps('discipline_id')} />
+)}
         {isIR && (
           <TextInput type="datetime-local" w={260} label={t('ir.requestedFor')} description={t('ir.requestedForHint')}
             value={requested} onChange={(e) => setRequested(e.currentTarget.value)} />
@@ -339,7 +373,7 @@ function EditForm({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail
           {pf.keys.map((k) => (
             <TextInput key={k} label={fieldLabel(type, k)} dir={LTR_KEYS.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />
           ))}
-          {pf.custom.map((f) => (
+          {pf.custom.filter((f) => !f.response).map((f) => (
             <CustomInput key={f.key} code={type} f={f} value={custom[f.key] ?? ''} onChange={(x) => setCustom({ ...custom, [f.key]: x })} />
           ))}
         </SimpleGrid>
@@ -489,6 +523,9 @@ export default function RecordPage() {
       <Grid gutter="md">
         <Grid.Col span={{ base: 12, md: wide ? 12 : 8 }}>
           <Stack>
+            {r.record_type.code === 'payment' && r.state.category === 'submitted' && responses.some((x) => x.action === 'certify') && (
+              <CertifyPanel rec={r} onDone={put} />
+            )}
             {responses.length > 0 && <ResponsePanel rec={r} transitions={responses} onDone={put} />}
             {r.answered_at && (
               <Card withBorder style={{ borderInlineStartWidth: 4, borderInlineStartColor: `var(--mantine-color-${stateColor(r.state.color)}-6)` }}>
@@ -525,7 +562,7 @@ export default function RecordPage() {
                 ))}
                 {profile(r.record_type.code).custom.filter((f) => f.kind !== 'long').map((f) => (
                   <Field key={f.key} label={fieldLabel(r.record_type.code, f.key)} ltr={LTR_KEYS.has(f.key)}
-                    value={r.custom[f.key] ? (f.kind === 'select' ? choiceLabel(r.custom[f.key]!) : r.custom[f.key]) : null} />
+                    value={r.custom[f.key] ? (f.kind === 'select' ? choiceLabel(r.custom[f.key]!) : f.kind === 'number' ? money(r.custom[f.key]) : r.custom[f.key]) : null} />
                 ))}
                 <Field label={t('rec.submitted')} value={fmtDate(r.submitted_at, true)} />
                 <Field label={t('rec.due')} value={fmtDate(r.due_at, profile(r.record_type.code).timed)} />

@@ -93,7 +93,7 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
   const kinds = meta.submittal_kinds.map((k) => ({ value: k.code ?? '', label: pick(k, 'name') }));
   const form = useForm({
     initialValues: {
-      title: '', discipline_id: meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0]?.value ?? '',
+      title: '', discipline_id: pf.place === false ? '' : meta.disciplines[0]?.id ?? '', description: '', number: '', submittal_kind: kinds[0]?.value ?? '',
       item: '', manufacturer: '', supplier: '', drawing_ref: '', spec_ref: '', boq_ref: '', quantity: '', unit: '',
       required_by: '', required_by_note: '', files: [] as File[], requested_for: '', linked: [] as string[], addressed_to: '',
     },
@@ -129,7 +129,7 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
             ...Object.fromEntries(pf.keys.map((k) => [k, blank(v[k])])),
             ...(pf.kind ? { submittal_kind: v.submittal_kind || null } : {}),
           },
-          custom: Object.fromEntries(pf.custom.map((f) => [f.key, blank(custom[f.key] ?? '')])),
+          custom: Object.fromEntries(pf.custom.filter((f) => !f.response).map((f) => [f.key, blank(custom[f.key] ?? '')])),
         }),
       });
       if (isTest && tpl) {
@@ -157,13 +157,15 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
     <form onSubmit={submit}>
       <Stack>
         {error && <Alert color="red">{error}</Alert>}
-        {structure.data
+        {structure.data && pf.place !== false
           ? <PlacePicker structure={structure.data} value={place} onChange={setPlace}
               title={form.values.title} onTitle={(x) => form.setFieldValue('title', x)} />
           : <TextInput label={t('rec.title')} required {...form.getInputProps('title')} />}
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
+{pf.place !== false && (
           <Select label={t('rec.discipline')} allowDeselect={false}
             data={meta.disciplines.map((d) => ({ value: d.id, label: pick(d, 'name') }))} {...form.getInputProps('discipline_id')} />
+)}
           {isIR && <TextInput type="datetime-local" label={t('ir.requestedFor')} description={t('ir.requestedForHint')} {...form.getInputProps('requested_for')} />}
           {pf.kind && <Select label={t('rec.f.submittal_kind')} data={kinds} allowDeselect={false} searchable {...form.getInputProps('submittal_kind')} />}
           <TextInput label={t('rec.number')} placeholder={t('rec.numberHint')} dir="ltr" {...form.getInputProps('number')} />
@@ -190,7 +192,7 @@ function NewSubmittal({ projectId, meta, onClose, type }: { projectId: string; m
           {pf.keys.map((k) => (
             <TextInput key={k} label={fieldLabel(type, k)} dir={LTR_KEYS.has(k) ? 'ltr' : undefined} {...form.getInputProps(k)} />
           ))}
-          {pf.custom.map((f) => (
+          {pf.custom.filter((f) => !f.response).map((f) => (
             <CustomInput key={f.key} code={type} f={f} value={custom[f.key] ?? ''} onChange={(x) => setCustom({ ...custom, [f.key]: x })} />
           ))}
         </SimpleGrid>

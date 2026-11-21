@@ -20,7 +20,7 @@ from app.models.structure import ProjectLocation, ProjectStage
 
 router = APIRouter(tags=["periodic"])
 APPROVED = ("approved", "approved_as_noted")
-SKIP_TYPES = ("daily_report", "programme")
+SKIP_TYPES = ("daily_report", "programme", "payment")  # money is not in the site report
 
 
 # ----------------------------------------------------------------------------- schemas

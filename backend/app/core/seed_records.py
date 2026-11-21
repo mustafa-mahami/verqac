@@ -124,6 +124,30 @@ DAILY_TYPE = ("daily_report", "DR", "تقرير يومي", "Daily report", "dail
 # the time programme: submitted by the contractor, approved by supervision; updates are new revisions
 PROGRAMME_TYPE = ("programme", "PRG", "البرنامج الزمني", "Time programme", "review", "contractor", "consultant", True, 3)
 
+# payment applications (IPC): the contractor claims, supervision certifies the amount (with the retention kept)
+# and the amount to pay; returned ones are claimed again as a new revision. What is paid is recorded apart.
+PAYMENT_STATES = [
+    ("draft", "مسودة", "Draft", "draft", "gray", True),
+    ("submitted", "مقدَّمة للتدقيق", "Submitted", "submitted", "blue", False),
+    ("certified", "معتمدة", "Certified", "approved", "green", False),
+    ("returned", "مُعادة للتصحيح", "Returned", "revise_and_resubmit", "orange", False),
+    ("cancelled", "ملغاة", "Cancelled", "cancelled", "dark", False),
+]
+PAYMENT_TRANSITIONS = [
+    ("draft", "submitted", "submit", "تقديم للتدقيق", "Submit", "submit", "submit", False, "primary"),
+    ("submitted", "certified", "certify", "اعتماد الدفعة", "Certify", "respond", "respond", False, "green"),
+    ("submitted", "returned", "return", "إعادة للتصحيح", "Return", "respond", "respond", True, "orange"),
+    ("draft", "cancelled", "cancel", "إلغاء", "Cancel", "cancel", "cancel", False, "subtle"),
+    ("submitted", "cancelled", "cancel", "سحب وإلغاء", "Withdraw", "cancel", "cancel", True, "subtle"),
+]
+PAYMENT_TYPE = ("payment", "IPC", "دفعة", "Payment application", "payment", "contractor", "consultant", True, 50)
+# money is seen only by the roles given the type itself (the "all types" grants do not reach it)
+FINANCE_TYPES = ("payment",)
+# role code (platform roles, their organization and project copies), actions, scope
+PAYMENT_PERMS = [("contractor_pm", ("view", "create", "edit", "submit", "cancel", "delete", "export"), "project"),
+                 ("consultant_pm", ("view", "respond", "export"), "project"),
+                 ("owner_rep", ("view", "export"), "project")]
+
 # code, prefix, ar, en, workflow, creator, responder, has revisions, sort
 MORE_TYPES = [
     ("material", "MIR", "فحص مواد موردة", "Material inspection", "inspection", "contractor", "consultant", True, 25),
@@ -135,11 +159,16 @@ MORE_TYPES = [
 DEFAULT_PERIODS = {"submittal": (7 * 24, 7 * 24), "inspection": (2, 2), "material": (24, 48),
                    "rfi": (3 * 24, 3 * 24), "ncr": (3 * 24, 3 * 24),
                    "test": (3 * 24, 7 * 24), "daily_report": (24, 24),
-                   "programme": (7 * 24, 7 * 24)}
+                   "programme": (7 * 24, 7 * 24), "payment": (14 * 24, 7 * 24)}
 
 # types with an inspection time (asked for / performed) and that link approved submittals
 TIMED_TYPES = ("inspection", "material")
 
 # extra fields kept in records.custom, per type
 CUSTOM_FIELDS = {"rfi": ("proposed", "impact"), "material": ("delivery_note", "storage"),
-                 "ncr": ("severity", "required_action")}
+                 "ncr": ("severity", "required_action"),
+                 "payment": ("period_from", "period_to", "claimed", "certified", "payable")}
+# fields the answering party writes (when certifying), not the author
+RESPONSE_FIELDS = {"payment": ("certified", "payable")}
+NUMBER_FIELDS = ("claimed", "certified", "payable")
+DATE_FIELDS = ("period_from", "period_to")

@@ -8,7 +8,7 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
@@ -22,7 +22,8 @@ from app.core.access import ProjectAccess, project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
 from app.models.structure import ProjectLocation, ProjectStage, ProjectStageTopic
-from app.core.seed_records import CUSTOM_FIELDS, DEFAULT_PERIODS, TIMED_TYPES
+from app.core.seed_records import (CUSTOM_FIELDS, DATE_FIELDS, DEFAULT_PERIODS, FINANCE_TYPES, NUMBER_FIELDS,
+                                   RESPONSE_FIELDS, TIMED_TYPES)
 from app.core.kinds import active_codes, kind_code, kind_name, submittal_kinds
 from app.core.notify import members_who_can, notify
 from app.core.workcal import add_period, calendar_for
@@ -53,7 +54,8 @@ class Perms:
         self._code_cache: dict[uuid.UUID, str | None] = {}
         if a.role is not None:
             for rp in c.db.scalars(select(RolePermission).where(RolePermission.role_id == a.role.id,
-                                                                RolePermission.record_type.in_([rtype.code, "*"]))):
+                                                                RolePermission.record_type.in_(
+                                                                    [rtype.code] if rtype.code in FINANCE_TYPES else [rtype.code, "*"]))):
                 # a specific grant for the type wins over the '*' grant
                 if rp.record_type != "*" or rp.action not in self.scopes:
                     self.scopes[rp.action] = rp.scope
@@ -594,9 +596,11 @@ def _linked_out(c: Ctx, a: ProjectAccess, rec: Record, rt: RecordType) -> tuple[
 CHOICES = {"impact": ("none", "cost", "time", "cost_time"), "severity": ("minor", "major")}
 
 
-def _check_custom(rt: RecordType, old: dict, new: dict) -> dict:
-    """The type's extra fields only; text is trimmed, empty removes the field."""
-    allowed = CUSTOM_FIELDS.get(rt.code, ())
+def _check_custom(rt: RecordType, old: dict, new: dict, responder: bool = False) -> dict:
+    """The type's extra fields only; text is trimmed, empty removes the field. Amounts are numbers, periods dates;
+    the fields of the answer (a payment's certified amounts) are written by the answering party only."""
+    allowed = RESPONSE_FIELDS.get(rt.code, ()) if responder else \
+        tuple(k for k in CUSTOM_FIELDS.get(rt.code, ()) if k not in RESPONSE_FIELDS.get(rt.code, ()))
     out = {k: v for k, v in old.items()}
     for k, v in (new or {}).items():
         if k not in allowed:
@@ -604,6 +608,19 @@ def _check_custom(rt: RecordType, old: dict, new: dict) -> dict:
         v = (v or "").strip()
         if len(v) > 4000 or (v and k in CHOICES and v not in CHOICES[k]):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_field")
+        if v and k in NUMBER_FIELDS:
+            try:
+                n = float(v.replace(",", ""))
+            except ValueError:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_amount") from None
+            if n < 0 or n > 1e12:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_amount")
+            v = f"{round(n, 2):g}" if n < 1e15 else str(n)
+        if v and k in DATE_FIELDS:
+            try:
+                date.fromisoformat(v)
+            except ValueError:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_field") from None
         if v:
             out[k] = v
         else:
@@ -768,6 +785,12 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
 
     to = c.db.get(WorkflowState, t.to_state_id)
     now = datetime.now(UTC)
+    if rt.code == "payment":
+        cu = rec.custom or {}
+        if t.effect == "submit" and not cu.get("claimed"):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_claim_required")
+        if to.category == "approved" and not (cu.get("certified") and cu.get("payable")):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_amounts_required")
     if t.effect == "submit" and rt.code == "daily_report":
         from app.api.daily import check_works
         check_works(c.db, rec)
@@ -790,11 +813,14 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
     elif t.effect == "respond":
         when = now
         if body.answered_on:  # an answer given on paper before the record came over from Odoo
-            require(rec.legacy_ref is not None, "answered_on_imported_only")
+            # imported records answered on paper, and payment applications certified before they were entered
+            require(rec.legacy_ref is not None or rt.code == "payment", "answered_on_imported_only")
             local = datetime.combine(body.answered_on, time(12, 0), calendar_for(c.db, a.project).tz)
-            if body.answered_on > now.astimezone(local.tzinfo).date() or (rec.submitted_at and local < rec.submitted_at - timedelta(days=1)):
+            old_ipc = rt.code == "payment" and rec.legacy_ref is None  # entered after it was certified on paper
+            if body.answered_on > now.astimezone(local.tzinfo).date() or (
+                    not old_ipc and rec.submitted_at and local < rec.submitted_at - timedelta(days=1)):
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "answered_on_range")
-            when = max(local, rec.submitted_at) if rec.submitted_at else local
+            when = local if old_ipc else max(local, rec.submitted_at) if rec.submitted_at else local
         rec.answered_by, rec.answered_at, rec.answered_on_behalf_of = c.user.id, when, on_behalf
         rec.response_comment = comment
         if rt.code in TIMED_TYPES:
@@ -970,7 +996,7 @@ def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
     new = Record(project_id=rec.project_id, record_type_id=rt.id, number=rec.number, rev_no=rec.rev_no + 1,
                  revision_group_id=rec.revision_group_id, discipline_id=rec.discipline_id, title=rec.title,
                  description=rec.description, state_id=initial.id, state_category=initial.category,
-                 from_party_id=a.party.id, to_party_id=rec.to_party_id, created_by=c.user.id, custom=rec.custom,
+                 from_party_id=a.party.id, to_party_id=rec.to_party_id, created_by=c.user.id, custom={k: v for k, v in (rec.custom or {}).items() if k not in RESPONSE_FIELDS.get(rt.code, ())},
                  required_by=rec.required_by, required_by_note=rec.required_by_note,
                  stage_id=rec.stage_id, all_locations=rec.all_locations, location_ids=rec.location_ids,
                  topic_id=rec.topic_id, linked_ids=rec.linked_ids)
@@ -1027,6 +1053,25 @@ def upload(record_id: uuid.UUID, file: UploadFile = File(...), kind: str = Form(
     c.db.add(Attachment(record_id=rec.id, file_id=f.id, kind=kind, party_id=a.party.id))
     _audit(c, rec, "attach", {"file": f.filename, "size": size, "sha256": sha, "kind": kind}, a)
     c.db.flush()
+    return _detail(c, rec, a, rt, p)
+
+
+class CertificationIn(BaseModel):
+    certified: str | None = None  # certified amount, with the retention kept
+    payable: str | None = None  # net amount to pay
+
+
+@router.put("/records/{record_id}/certification", response_model=RecordDetail)
+def put_certification(record_id: uuid.UUID, body: CertificationIn, c: Ctx = Depends(ctx)):
+    """A payment's certified amounts, written by supervision while it reviews it (before certifying)."""
+    rec, a, rt, p = _load(c, record_id)
+    require(rt.code in RESPONSE_FIELDS and rec.state_category == "submitted" and p.can("respond", rec), "cannot_respond")
+    new = _check_custom(rt, rec.custom or {}, body.model_dump(), responder=True)
+    if new != (rec.custom or {}):
+        _audit(c, rec, "certification", {"from": {k: (rec.custom or {}).get(k) for k in RESPONSE_FIELDS[rt.code]},
+                                        "to": {k: new.get(k) for k in RESPONSE_FIELDS[rt.code]}}, a)
+        rec.custom = new
+        c.db.flush()
     return _detail(c, rec, a, rt, p)
 
 

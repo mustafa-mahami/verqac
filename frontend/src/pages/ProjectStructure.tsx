@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError, type GroupT, type StageT, type Structure, type UnitT } from '../api';
 import { pick } from '../i18n';
 import { groupLabel, move, StagesEditor, unitLabel, useStructure } from './Structure';
+import { ContractSettings, useFinance } from './CashflowPanel';
+import { money } from '../recordTypes';
 
 const blankStage: StageT = { id: null, name_ar: '', name_en: '', scope: 'per_location', weight: 0, is_active: true, used: false, topics: [] };
 const blankUnit = (): UnitT => ({ id: null, name_ar: '', name_en: '', is_active: true, used: false });
@@ -40,6 +42,7 @@ export default function ProjectStructure({ projectId }: { projectId: string }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const q = useStructure(projectId);
+  const fin = useFinance(projectId).data;
   const [stages, setStages] = useState<StageT[]>([]);
   const [groups, setGroups] = useState<GroupT[]>([]);
   const [typeId, setTypeId] = useState<string | null>(null);
@@ -95,7 +98,9 @@ export default function ProjectStructure({ projectId }: { projectId: string }) {
           </div>
           {s.project_type && <Text size="sm" c="dimmed">{t('structure.projectType')}: {pick(s.project_type, 'name')}</Text>}
         </Group>
+        <ContractSettings projectId={projectId} />
         <StagesEditor stages={stages} onChange={setStages} editable={editable} blank={blankStage} checklists={s.checklists}
+          stageValue={fin?.contract_value ? (w) => `${money(fin.contract_value! * w / 100)} ${fin.currency}` : undefined}
           units={s.locations.filter((g) => g.is_active).flatMap((g) => g.units.filter((u) => u.is_active && u.id)
             .map((u) => ({ value: u.id!, label: s.locations.filter((x) => x.is_active).length > 1 ? `${pick(g, 'name')} – ${pick(u, 'name')}` : pick(u, 'name') })))} />
         {note('stages')}

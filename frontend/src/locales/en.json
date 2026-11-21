@@ -171,7 +171,14 @@
     "kpi_amber_order": "Amber must be past green (lower for “higher is better”, higher for “lower is better”).",
     "invalid_range": "The start date is after the end date.",
     "no_project_type": "This project has no type.",
-    "no_stages": "No active stages."
+    "no_stages": "No active stages.",
+    "payment_claim_required": "Enter the claimed amount before submitting.",
+    "payment_amounts_required": "Enter and save the certified and payable amounts before certifying.",
+    "invalid_amount": "Invalid amount.",
+    "invalid_currency": "Unsupported currency.",
+    "payment_in_future": "The payment date is in the future.",
+    "invalid_application": "Invalid application.",
+    "cannot_record_payment": "You cannot record payments."
   },
   "common": {
     "cancel": "Cancel",
@@ -276,7 +283,9 @@
       "daily": "Daily reports",
       "progress": "Progress",
       "reports": "Periodic reports",
-      "kpi": "QA KPIs"
+      "kpi": "QA KPIs",
+      "cash": "Cash flow",
+      "payments": "Payments"
     }
   },
   "rec": {
@@ -749,6 +758,14 @@
       "new": "Programme",
       "back": "Progress",
       "empty": "No programme."
+    },
+    "payment": {
+      "new": "New payment application",
+      "back": "Payment applications",
+      "empty": "No payment applications yet.",
+      "description": "Works claimed",
+      "respTitle": "Supervision decision",
+      "response": "Supervision notes"
     }
   },
   "custom": {
@@ -765,7 +782,12 @@
       "cost_time": "Cost and time",
       "minor": "Minor",
       "major": "Major"
-    }
+    },
+    "period_from": "Period from",
+    "period_to": "to",
+    "claimed": "Claimed (net)",
+    "certified": "Certified (incl. retention)",
+    "payable": "Payable"
   },
   "lab": {
     "title": "Laboratory test results",
@@ -1380,5 +1402,52 @@
     "noTarget": "No target (information)",
     "legend": "E.g. “higher is better” with green ≥ 75 and amber ≥ 60: 80 is green, 65 amber, 50 red.",
     "resetDefaults": "Restore defaults"
+  },
+  "cash": {
+    "title": "Cash-flow curves (cumulative)",
+    "noData": "No data yet: set the contract amount, approve the programme and daily reports, and record the payments.",
+    "noContract": "No contract amount: set it in Settings › Structure and stages to draw the planned and earned curves.",
+    "s": {
+      "contract": "Contract",
+      "planned": "Planned",
+      "baseline": "Original plan",
+      "earned": "Earned",
+      "certified": "Certified (incl. retention)",
+      "paid": "Paid"
+    },
+    "payable": "Certified for payment",
+    "unpaid": "Certified, not paid",
+    "advance": "Advance payment",
+    "pending": "Claims under review",
+    "vsPlan": "Earned − planned",
+    "hint": "Planned: contract × the approved programme's %. Earned: contract × the approved progress of the daily reports. Certified: applications certified by supervision on their date (retention included). Paid: what was paid on its date, the advance included. Dashed red line: today.",
+    "receipts": "Payments received",
+    "day": "Date",
+    "kind": "Kind",
+    "k": {
+      "payment": "Certified application paid",
+      "advance": "Advance payment",
+      "other": "Other"
+    },
+    "application": "Application",
+    "amount": "Amount",
+    "note": "Note",
+    "add": "Record",
+    "noReceipts": "Nothing paid yet.",
+    "removeConfirm": "Remove this payment?",
+    "monthly": "By month (cumulative at month end)",
+    "month": "Month",
+    "monthlyHint": "Values are cumulative to the end of the month.",
+    "contract": "Contract amount",
+    "contractHint": "Each stage's value = its weight × the contract (shown under the weight). Seen only by those who see payments.",
+    "currency": "Currency"
+  },
+  "pay": {
+    "certifyTitle": "Payment review",
+    "certifyHint": "Claimed (net): {{claimed}}. Enter the certified and payable amounts, then “Certify” below.",
+    "certifiedHint": "Value of the works certified, with the retention",
+    "payableHint": "Net amount to pay after retention and recoveries",
+    "saveAmounts": "Save amounts",
+    "amountsSaved": "Amounts saved"
   }
 }

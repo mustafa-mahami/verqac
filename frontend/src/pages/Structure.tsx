@@ -137,9 +137,10 @@ function StageFloors({ units, value, onChange, editable }: {
 }
 
 /** Rows of stages with name, scope, weight and their subjects; for type templates and a project's own stages. */
-export function StagesEditor<S extends TemplateStage & { is_active?: boolean; used?: boolean; scope_locked?: boolean; location_ids?: string[] | null }>({ stages, onChange, editable, blank, checklists = true, units }: {
+export function StagesEditor<S extends TemplateStage & { is_active?: boolean; used?: boolean; scope_locked?: boolean; location_ids?: string[] | null }>({ stages, onChange, editable, blank, checklists = true, units, stageValue }: {
   stages: S[]; onChange: (s: S[]) => void; editable: boolean; blank: S; checklists?: boolean;
   units?: { value: string; label: string }[]; // a project's floors: a per-location stage can be limited to some
+  stageValue?: (weight: number) => string; // the stage's share of the contract amount
 }) {
   const { t } = useTranslation();
   const set = (i: number, patch: Partial<S>) => onChange(stages.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -179,6 +180,7 @@ export function StagesEditor<S extends TemplateStage & { is_active?: boolean; us
                 <Table.Td>
                   <NumberInput size="xs" min={0} max={100} decimalScale={2} hideControls disabled={!editable} rightSection="%"
                     value={Number(s.weight)} onChange={(v) => set(i, { weight: Number(v) || 0 } as Partial<S>)} />
+                  {stageValue && s.is_active !== false && <Text size="xs" c="dimmed" dir="ltr" ta="center" mt={2}>{stageValue(Number(s.weight) || 0)}</Text>}
                 </Table.Td>
                 <Table.Td>
                   <Button size="compact-xs" variant={open === i ? 'light' : 'subtle'} onClick={() => setOpen(open === i ? null : i)}>
