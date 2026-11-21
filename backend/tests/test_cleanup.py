@@ -71,3 +71,27 @@ def test_revert_test_answers(client, site):
         assert not db.scalar(select(func.count()).select_from(RecordEvent).where(RecordEvent.record_id == r.id,
                                                                                  RecordEvent.actor_id == uid))
     assert act(client, site["hce"], rec["id"], "approve").status_code == 200  # it can be answered again
+
+
+def test_revert_daily_report_approval_recounts_progress(client, site):
+    from datetime import date, timedelta
+
+    from app.models.core import Project
+    from app.scripts.revert_answers import main
+    from tests.test_daily import _structure
+    from tests.test_records import act
+    pid = site["pid"]
+    st = _structure(client, site)
+    d1 = (date.today() - timedelta(days=1)).isoformat()
+    rid = client.post(f"/api/v1/projects/{pid}/daily-reports", headers=site["hqa"], json={"report_date": d1}).json()["id"]
+    client.put(f"/api/v1/records/{rid}/daily", headers=site["hqa"], json={
+        "works": [{"stage_id": st["stages"][3]["id"], "all_locations": True, "description": "بلوك", "progress": 50}]})
+    act(client, site["hqa"], rid, "submit")
+    assert act(client, site["hce"], rid, "approve").status_code == 200
+    assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["project"] > 0
+    ce = client.get("/api/v1/auth/me", headers=site["hce"]).json()["user"]["email"]
+    with session_scope(bypass=True) as db:
+        code = db.get(Project, pid).code
+    main(["--project", code, "--by", ce, "--commit"])
+    assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["project"] == 0
+    assert client.get(f"/api/v1/records/{rid}", headers=site["hqa"]).json()["state"]["category"] == "submitted"

@@ -41,7 +41,7 @@ def main(argv=None):
             first = {}
             for e in test:
                 first.setdefault(e.record_id, e)
-            n_ev, done = 0, set()
+            n_ev, done, reports = 0, set(), False
             for rid, e0 in first.items():
                 rec = db.get(Record, rid)
                 before = list(db.scalars(select(RecordEvent).where(RecordEvent.record_id == rid, RecordEvent.id != e0.id,
@@ -60,6 +60,9 @@ def main(argv=None):
                     answer = None
                 print(f"  {rec.number} R{rec.rev_no}: {states[rec.state_id].code} -> {prior.code}"
                       f"{'  (keeps the Odoo answer of ' + answer.at.date().isoformat() + ')' if answer else ''}")
+                if rec.state_category == "approved" and prior.category != "approved" and db.scalar(
+                        text("SELECT 1 FROM daily_reports WHERE record_id = :r"), {"r": rid}):
+                    reports = True  # its approval set the progress matrix
                 rec.state_id, rec.state_category = prior.id, prior.category
                 if answer:
                     rec.answered_by, rec.answered_on_behalf_of, rec.answered_at = answer.actor_id, answer.on_behalf_of, answer.at
@@ -78,6 +81,10 @@ def main(argv=None):
                 print(f"  lab decision removed: {db.get(Record, lab.record_id).number} ({lab.decision})")
                 lab.decision = lab.decision_note = lab.decision_by = lab.decision_at = None
             db.flush()
+            if reports:
+                from app.api.daily import rebuild_progress
+                rebuild_progress(db, p.id)
+                print("  progress matrix and curve recounted from the approved daily reports")
             print(f"\n  records put back: {len(done)}   their events removed: {n_ev}   lab decisions removed: {len(labs)}")
             if n_ev != len([e for e in test if e.record_id in done]):
                 sys.exit("Events could not be removed (database migration 0030 missing?). Nothing was changed.")
