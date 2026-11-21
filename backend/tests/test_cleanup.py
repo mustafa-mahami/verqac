@@ -95,3 +95,33 @@ def test_revert_daily_report_approval_recounts_progress(client, site):
     main(["--project", code, "--by", ce, "--commit"])
     assert client.get(f"/api/v1/projects/{pid}/progress", headers=site["hk"]).json()["project"] == 0
     assert client.get(f"/api/v1/records/{rid}", headers=site["hqa"]).json()["state"]["category"] == "submitted"
+
+
+def test_claim_placeholder_as_a_working_account(client, site, tmp_path):
+    import json
+    import uuid
+
+    from app.models.core import OrgMember, ProjectMember, ProjectParty, User
+    from app.scripts.claim_users import main
+    with session_scope(bypass=True) as db:
+        party = db.scalar(select(ProjectParty).where(ProjectParty.project_id == uuid.UUID(site["pid"]),
+                                                     ProjectParty.kind == "consultant"))
+        role = db.scalar(select(ProjectMember.role_id).where(ProjectMember.project_id == uuid.UUID(site["pid"]),
+                                                             ProjectMember.party_id == party.id))
+        for k in ("u77", "p88"):
+            u = User(id=uuid.uuid4(), email=f"odoo-t-{k}@import.verqac.invalid", password_hash="!", full_name_ar="م. سامر",
+                     full_name_en="Samer", is_active=False)
+            db.add(u)
+            db.flush()
+            db.add(ProjectMember(project_id=uuid.UUID(site["pid"]), user_id=u.id, party_id=party.id, role_id=role, is_active=False))
+        org = party.org_id
+    (tmp_path / "data.json").write_text(json.dumps({"users": [{"id": 77, "login": "Samer@Madar.example", "name": "x"}]}))
+    main([str(tmp_path), "--person", "u77+p88"])  # trial
+    with session_scope(bypass=True) as db:
+        assert db.scalar(select(User).where(User.email == "samer@madar.example")) is None
+    main([str(tmp_path), "--person", "u77+p88", "--commit"])
+    with session_scope(bypass=True) as db:
+        u = db.scalar(select(User).where(User.email == "samer@madar.example"))
+        assert u.is_active and db.scalar(select(ProjectMember.is_active).where(ProjectMember.user_id == u.id))
+        assert db.scalar(select(func.count()).select_from(User).where(User.email.like("odoo-t-%"))) == 0
+        assert db.scalar(select(OrgMember.id).where(OrgMember.user_id == u.id, OrgMember.org_id == org))
