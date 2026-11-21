@@ -13,4 +13,6 @@ RUN useradd --system --uid 1001 verqac && mkdir -p /data/files && chown -R verqa
 USER verqac
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers"]
+# worker processes (uvicorn reads WEB_CONCURRENCY): a page asks for several things at once, each one in its own worker
+ENV WEB_CONCURRENCY=4
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
