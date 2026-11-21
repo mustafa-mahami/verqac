@@ -75,7 +75,10 @@ def get_team(project_id: UUID, c: Ctx = Depends(ctx)):
     mrows = c.db.execute(
         select(ProjectMember, User, Role).join(User, User.id == ProjectMember.user_id)
         .join(Role, Role.id == ProjectMember.role_id)
-        .where(ProjectMember.project_id == project_id).order_by(Role.sort, User.full_name_en)
+        .where(ProjectMember.project_id == project_id,
+               # people of the imported history who never joined: their names stay on the records, not in the team
+               ~(User.email.like("%@import.verqac.invalid") & ProjectMember.is_active.is_(False)))
+        .order_by(Role.sort, User.full_name_en)
     ).all()
     members = [MemberOut(id=m.id, user=UserOut.model_validate(u), party_id=m.party_id, role=role_out(a.project, r),
                          discipline_ids=m.discipline_ids, is_active=m.is_active) for m, u, r in mrows]

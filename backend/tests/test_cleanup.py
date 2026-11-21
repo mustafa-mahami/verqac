@@ -125,3 +125,18 @@ def test_claim_placeholder_as_a_working_account(client, site, tmp_path):
         assert u.is_active and db.scalar(select(ProjectMember.is_active).where(ProjectMember.user_id == u.id))
         assert db.scalar(select(func.count()).select_from(User).where(User.email.like("odoo-t-%"))) == 0
         assert db.scalar(select(OrgMember.id).where(OrgMember.user_id == u.id, OrgMember.org_id == org))
+
+
+def test_team_hides_imported_people_who_never_joined(client, site):
+    import uuid
+
+    from app.models.core import ProjectMember, User
+    with session_scope(bypass=True) as db:
+        m = db.scalar(select(ProjectMember).where(ProjectMember.project_id == uuid.UUID(site["pid"])))
+        u = User(id=uuid.uuid4(), email="odoo-t-u5@import.verqac.invalid", password_hash="!", full_name_ar="قديم",
+                 full_name_en="Old", is_active=False)
+        db.add(u)
+        db.flush()
+        db.add(ProjectMember(project_id=m.project_id, user_id=u.id, party_id=m.party_id, role_id=m.role_id, is_active=False))
+    team = client.get(f"/api/v1/projects/{site['pid']}/team", headers=site["hc"]).json()
+    assert team["members"] and all("import.verqac.invalid" not in x["user"]["email"] for x in team["members"])
