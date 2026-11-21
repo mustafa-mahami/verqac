@@ -52,8 +52,15 @@ def test_payments_certification_and_cashflow(client, site):
     assert [p["value"] for p in f["paid"]] == [100000, 150000] and f["certified"][-1]["value"] == 95000 and f["payable"][-1]["value"] == 85500
     assert client.post(f"/api/v1/projects/{pid}/finance/receipts", headers=site["hc"],
                        json={"day": (today + timedelta(days=2)).isoformat(), "amount": 1}).status_code == 422
-    rid = f["receipts"][0]["id"]
-    assert len(client.delete(f"/api/v1/projects/{pid}/finance/receipts/{rid}", headers=site["hc"]).json()["receipts"]) == 1
+    # a receipt entered by mistake is cancelled with a reason: it stays listed, and counts for nothing
+    rid = next(x["id"] for x in f["receipts"] if x["kind"] == "payment")
+    url = f"/api/v1/projects/{pid}/finance/receipts/{rid}/void"
+    assert client.post(url, headers=site["hc"], json={"reason": ""}).status_code == 422
+    v = client.post(url, headers=site["hc"], json={"reason": "مبلغ خاطئ"}).json()
+    gone = next(x for x in v["receipts"] if x["id"] == rid)
+    assert len(v["receipts"]) == 2 and gone["void_reason"] == "مبلغ خاطئ" and gone["void_at"] and gone["void_by"]
+    assert next(x for x in v["applications"] if x["id"] == ipc["id"])["remaining"] == 85500 and v["totals"]["paid"] == 100000
+    assert client.post(url, headers=site["hc"], json={"reason": "مرة أخرى"}).status_code == 409
     # the consultant PM reads it too
     assert client.get(f"/api/v1/projects/{pid}/finance", headers=site["hk"]).status_code == 200
     # a returned application is claimed again as a revision, without the earlier certified amounts

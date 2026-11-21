@@ -22,6 +22,7 @@ from app.core.access import project_access, require
 from app.core.audit import audit
 from app.core.deps import Ctx, ctx
 from app.models.daily import ProgressSnapshot
+from app.models.core import User
 from app.models.records import Record, RecordType
 
 router = APIRouter(tags=["finance"])
@@ -36,6 +37,14 @@ class Receipt(BaseModel):
     kind: Literal["advance", "payment", "other"] = "payment"
     record_id: uuid.UUID | None = None  # the payment application it pays
     note: str | None = Field(default=None, max_length=300)
+    # cancelled, not deleted: it stays in the list with who, when and why, and counts for nothing
+    void_reason: str | None = None
+    void_by: str | None = None
+    void_at: str | None = None
+
+
+class VoidIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=300)
 
 
 class FinanceSettings(BaseModel):
@@ -153,7 +162,12 @@ def build(c: Ctx, a, rt) -> FinanceOut:
     done = [r for r in apps if r.state_category == "approved"]
     certified = _cum([(r.answered_at.astimezone(TZ).date(), num(r, "certified")) for r in done if r.answered_at])
     payable_c = _cum([(r.answered_at.astimezone(TZ).date(), num(r, "payable")) for r in done if r.answered_at])
-    receipts = [Receipt(**x) for x in f["receipts"]]
+    listed = [Receipt(**x) for x in f["receipts"]]
+    for x in listed:
+        if x.void_by:
+            u = c.db.get(User, uuid.UUID(x.void_by))
+            x.void_by = u.full_name_ar if u else None
+    receipts = [x for x in listed if not x.void_at]
     paid_by: dict[str, float] = defaultdict(float)  # what was paid of each application
     for x in receipts:
         if x.record_id:
@@ -185,7 +199,7 @@ def build(c: Ctx, a, rt) -> FinanceOut:
     }
     _, p = _perms(c, a)
     return FinanceOut(contract_value=f["contract_value"], currency=f["currency"], can_edit=a.can_manage_project,
-                      can_pay=p.can("create") or p.can("respond"), receipts=receipts,
+                      can_pay=p.can("create") or p.can("respond"), receipts=listed,
                       applications=[{"id": str(r.id), "number": r.number, "rev_no": r.rev_no, "state": r.state_category,
                                      "payable": num(r, "payable"), "certified": num(r, "certified"), "claimed": num(r, "claimed"),
                                      "paid": round(paid_by.get(str(r.id), 0.0), 2),
@@ -234,10 +248,10 @@ def add_receipt(project_id: uuid.UUID, body: Receipt, c: Ctx = Depends(ctx)):
             payable = float((r.custom or {}).get("payable") or 0)
         except ValueError:
             payable = 0.0
-        done = sum(float(x["amount"]) for x in f["receipts"] if x.get("record_id") == str(r.id))
+        done = sum(float(x["amount"]) for x in f["receipts"] if x.get("record_id") == str(r.id) and not x.get("void_at"))
         if body.amount > payable - done + 0.005:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_exceeds_payable")
-    x = body.model_dump(mode="json") | {"id": uuid.uuid4().hex[:12], "by": str(c.user.id), "at": datetime.now(UTC).isoformat()}
+    x = body.model_dump(mode="json", exclude={"void_reason", "void_by", "void_at"}) | {"id": uuid.uuid4().hex[:12], "by": str(c.user.id), "at": datetime.now(UTC).isoformat()}
     f["receipts"] = sorted([*f["receipts"], x], key=lambda y: y["day"])
     _save(a.project, f)
     audit(c.db, entity="project", action="payment_received", entity_id=project_id, actor=c.user.id, org_id=a.project.owner_org_id,
@@ -246,17 +260,21 @@ def add_receipt(project_id: uuid.UUID, body: Receipt, c: Ctx = Depends(ctx)):
     return build(c, a, rt)
 
 
-@router.delete("/projects/{project_id}/finance/receipts/{receipt_id}", response_model=FinanceOut)
-def delete_receipt(project_id: uuid.UUID, receipt_id: str, c: Ctx = Depends(ctx)):
+@router.post("/projects/{project_id}/finance/receipts/{receipt_id}/void", response_model=FinanceOut)
+def void_receipt(project_id: uuid.UUID, receipt_id: str, body: VoidIn, c: Ctx = Depends(ctx)):
+    """A receipt entered by mistake is cancelled with a reason; it stays listed (struck through) and counts for nothing."""
     a, rt, p = access(c, project_id)
     require(p.can("create") or p.can("respond"), "cannot_record_payment")
     f = settings_of(a.project)
-    gone = [x for x in f["receipts"] if x.get("id") == receipt_id]
-    if not gone:
+    x = next((x for x in f["receipts"] if x.get("id") == receipt_id), None)
+    if x is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "not_found")
-    f["receipts"] = [x for x in f["receipts"] if x.get("id") != receipt_id]
+    if x.get("void_at"):
+        raise HTTPException(status.HTTP_409_CONFLICT, "already_void")
+    x = {**x, "void_reason": body.reason.strip(), "void_by": str(c.user.id), "void_at": datetime.now(UTC).isoformat()}
+    f = {**f, "receipts": [x if y.get("id") == receipt_id else y for y in f["receipts"]]}  # a new value: saved for sure
     _save(a.project, f)
-    audit(c.db, entity="project", action="payment_removed", entity_id=project_id, actor=c.user.id, org_id=a.project.owner_org_id,
-          project_id=project_id, changes=gone[0], ip=c.meta.ip, user_agent=c.meta.user_agent)
+    audit(c.db, entity="project", action="payment_voided", entity_id=project_id, actor=c.user.id, org_id=a.project.owner_org_id,
+          project_id=project_id, changes=x, ip=c.meta.ip, user_agent=c.meta.user_agent)
     c.db.flush()
     return build(c, a, rt)

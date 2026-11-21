@@ -1483,7 +1483,9 @@
     "appTitle": "Paid against this application",
     "record": "Record a receipt",
     "remaining": "Remaining",
-    "noneYet": "Nothing received against it yet."
+    "noneYet": "Nothing received against it yet.",
+    "voidReason": "Why cancel this receipt? (it stays listed, struck through, and counts for nothing)",
+    "voided": "Cancelled: {{reason}} — {{by}}, {{at}}"
   },
   "pay": {
     "certifyTitle": "Payment review",

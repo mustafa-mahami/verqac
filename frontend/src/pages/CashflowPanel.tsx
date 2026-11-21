@@ -5,9 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { money } from '../recordTypes';
+import { fmtDate } from '../format';
 
 export interface Point { day: string; value: number }
-export interface Receipt { id: string; day: string; amount: number; kind: 'advance' | 'payment' | 'other'; record_id: string | null; note: string | null }
+export interface Receipt { id: string; day: string; amount: number; kind: 'advance' | 'payment' | 'other'; record_id: string | null; note: string | null; void_reason?: string | null; void_by?: string | null; void_at?: string | null }
 export interface FinanceT {
   contract_value: number | null; currency: string; can_edit: boolean; can_pay: boolean; receipts: Receipt[];
   applications: { id: string; number: string; rev_no: number; state: string; payable: number; certified: number; claimed: number; paid: number; remaining: number }[];
@@ -111,7 +112,7 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
     onSuccess: (f) => { done(f); setRc({ ...rc, amount: '', note: '', record_id: null }); }, onError: onErr,
   });
   const del = useMutation({
-    mutationFn: (id: string) => api<FinanceT>(`/projects/${projectId}/finance/receipts/${id}`, { method: 'DELETE' }),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => api<FinanceT>(`/projects/${projectId}/finance/receipts/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
     onSuccess: done, onError: onErr,
   });
   const f = q.data;
@@ -175,12 +176,13 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
               <Table.Th ta="end">{t('cash.amount')}</Table.Th><Table.Th>{t('cash.note')}</Table.Th>{f.can_pay && <Table.Th w={30} />}</Table.Tr></Table.Thead>
             <Table.Tbody>
               {f.receipts.map((x) => (
-                <Table.Tr key={x.id}>
+                <Table.Tr key={x.id} style={x.void_at ? { textDecoration: 'line-through', opacity: 0.55 } : undefined}
+                  title={x.void_at ? t('cash.voided', { reason: x.void_reason, by: x.void_by ?? '', at: fmtDate(x.void_at) }) : undefined}>
                   <Table.Td dir="ltr" ta="start">{x.day}</Table.Td><Table.Td>{t(`cash.k.${x.kind}`)}</Table.Td>
                   <Table.Td dir="ltr" ta="start">{x.record_id ? <Link to={`/records/${x.record_id}`}>{appLabel(x.record_id)}</Link> : ''}</Table.Td>
                   <Table.Td ta="end" dir="ltr">{money(x.amount)}</Table.Td><Table.Td>{x.note}</Table.Td>
-                  {f.can_pay && <Table.Td><ActionIcon size="sm" variant="subtle" color="red" aria-label="remove"
-                    onClick={() => { if (window.confirm(t('cash.removeConfirm'))) del.mutate(x.id); }}>×</ActionIcon></Table.Td>}
+                  {f.can_pay && <Table.Td>{!x.void_at && <ActionIcon size="sm" variant="subtle" color="red" aria-label="remove"
+                    onClick={() => { const reason = window.prompt(t('cash.voidReason'))?.trim(); if (reason) del.mutate({ id: x.id, reason }); }}>×</ActionIcon>}</Table.Td>}
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -253,7 +255,7 @@ export function ApplicationReceipts({ projectId, recordId }: { projectId: string
     onError: (e) => setErr(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic'))),
   });
   const del = useMutation({
-    mutationFn: (id: string) => api<FinanceT>(`/projects/${projectId}/finance/receipts/${id}`, { method: 'DELETE' }),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => api<FinanceT>(`/projects/${projectId}/finance/receipts/${id}/void`, { method: 'POST', body: JSON.stringify({ reason }) }),
     onSuccess: (f) => { qc.setQueryData(['finance', projectId], f); setErr(null); },
     onError: (e) => setErr(t(`errors.${e instanceof ApiError ? e.code : 'generic'}`, t('errors.generic'))),
   });
@@ -293,9 +295,9 @@ export function ApplicationReceipts({ projectId, recordId }: { projectId: string
         <Table withTableBorder fz="sm">
           <Table.Tbody>
             {mine.map((x) => (
-              <Table.Tr key={x.id}><Table.Td w={130}><bdi dir="ltr">{x.day}</bdi></Table.Td><Table.Td w={160}><bdi dir="ltr">{money(x.amount)} {f.currency}</bdi></Table.Td><Table.Td>{x.note}</Table.Td>
-                {f.can_pay && <Table.Td w={30}><ActionIcon size="sm" variant="subtle" color="red" aria-label="remove"
-                  onClick={() => { if (window.confirm(t('cash.removeConfirm'))) del.mutate(x.id); }}>×</ActionIcon></Table.Td>}</Table.Tr>
+              <Table.Tr key={x.id} style={x.void_at ? { opacity: 0.55 } : undefined}><Table.Td w={130} style={x.void_at ? { textDecoration: 'line-through' } : undefined}><bdi dir="ltr">{x.day}</bdi></Table.Td><Table.Td w={160} style={x.void_at ? { textDecoration: 'line-through' } : undefined}><bdi dir="ltr">{money(x.amount)} {f.currency}</bdi></Table.Td><Table.Td>{x.void_at ? <Text size="xs" c="red">{t('cash.voided', { reason: x.void_reason, by: x.void_by ?? '', at: fmtDate(x.void_at) })}</Text> : x.note}</Table.Td>
+                {f.can_pay && <Table.Td w={30}>{!x.void_at && <ActionIcon size="sm" variant="subtle" color="red" aria-label="remove"
+                  onClick={() => { const reason = window.prompt(t('cash.voidReason'))?.trim(); if (reason) del.mutate({ id: x.id, reason }); }}>×</ActionIcon>}</Table.Td>}</Table.Tr>
             ))}
           </Table.Tbody>
         </Table>
