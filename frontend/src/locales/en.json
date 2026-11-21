@@ -289,6 +289,14 @@
       "cash": "Cash flow",
       "payments": "Payments",
       "documents": "Archive & correspondence"
+    },
+    "groups": {
+      "quality": "Quality",
+      "progress": "Progress & reports",
+      "finance": "Finance",
+      "project": "Project",
+      "daily": "Daily reports",
+      "documents": "Archive"
     }
   },
   "rec": {
