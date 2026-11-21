@@ -4,6 +4,7 @@ Four cumulative curves in the project's currency:
   planned   = contract x the programme's planned % (current approved programme; and its first one, the baseline)
   earned    = contract x the approved progress % (the daily snapshots)
   certified = payment applications certified by supervision (with the retention kept), on the day certified
+  payable   = their net amount to pay (after retention and recoveries), on the same day
   paid      = what was paid (advance payment included), on the day paid
 Only the roles given the payment type see any of it.
 """
@@ -52,6 +53,7 @@ class MonthRow(BaseModel):
     planned: float | None
     earned: float | None
     certified: float
+    payable: float
     paid: float
 
 
@@ -66,6 +68,7 @@ class FinanceOut(BaseModel):
     baseline: list[Point]
     earned: list[Point]
     certified: list[Point]
+    payable: list[Point]
     paid: list[Point]
     months: list[MonthRow]
     totals: dict
@@ -148,11 +151,12 @@ def build(c: Ctx, a, rt) -> FinanceOut:
             return 0.0
     done = [r for r in apps if r.state_category == "approved"]
     certified = _cum([(r.answered_at.astimezone(TZ).date(), num(r, "certified")) for r in done if r.answered_at])
+    payable_c = _cum([(r.answered_at.astimezone(TZ).date(), num(r, "payable")) for r in done if r.answered_at])
     receipts = [Receipt(**x) for x in f["receipts"]]
     paid = _cum([(x.day, x.amount) for x in receipts])
     today = datetime.now(TZ).date()
     # months from the first to the last thing that happened (or is planned)
-    days = [p.day for s in (planned, earned, certified, paid) for p in s]
+    days = [p.day for s in (planned, earned, certified, payable_c, paid) for p in s]
     months = []
     if days:
         m, last = min(days).replace(day=1), max(days)
@@ -160,7 +164,8 @@ def build(c: Ctx, a, rt) -> FinanceOut:
             nxt = (m + timedelta(days=32)).replace(day=1)
             end = nxt - timedelta(days=1)
             months.append(MonthRow(month=m.strftime("%Y-%m"), planned=_at(planned, end), earned=_at(earned, min(end, today)) if m <= today else None,
-                                   certified=_at(certified, end) or 0.0, paid=_at(paid, end) or 0.0))
+                                   certified=_at(certified, end) or 0.0, payable=_at(payable_c, end) or 0.0,
+                                   paid=_at(paid, end) or 0.0))
             m = nxt
     payable = sum(num(r, "payable") for r in done)
     advance = sum(x.amount for x in receipts if x.kind == "advance")
@@ -179,7 +184,7 @@ def build(c: Ctx, a, rt) -> FinanceOut:
                       applications=[{"id": str(r.id), "number": r.number, "rev_no": r.rev_no, "state": r.state_category,
                                      "payable": num(r, "payable"), "certified": num(r, "certified"), "claimed": num(r, "claimed")}
                                     for r in apps],
-                      planned=planned, baseline=baseline, earned=earned, certified=certified, paid=paid, months=months, totals=totals)
+                      planned=planned, baseline=baseline, earned=earned, certified=certified, payable=payable_c, paid=paid, months=months, totals=totals)
 
 
 @router.get("/projects/{project_id}/finance", response_model=FinanceOut)

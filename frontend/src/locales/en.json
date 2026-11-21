@@ -1413,14 +1413,15 @@
       "baseline": "Original plan",
       "earned": "Earned",
       "certified": "Certified (incl. retention)",
-      "paid": "Paid"
+      "paid": "Paid",
+      "payable": "Certified for payment"
     },
     "payable": "Certified for payment",
     "unpaid": "Certified, not paid",
     "advance": "Advance payment",
     "pending": "Claims under review",
     "vsPlan": "Earned − planned",
-    "hint": "Planned: contract × the approved programme's %. Earned: contract × the approved progress of the daily reports. Certified: applications certified by supervision on their date (retention included). Paid: what was paid on its date, the advance included. Dashed red line: today.",
+    "hint": "Planned: contract × the approved programme's %. Earned: contract × the approved progress of the daily reports. Certified: applications certified by supervision on their date (retention included). Payable: the net of those applications after retention and recoveries, on their date. Paid: what was paid on its date, the advance included. Dashed red line: today.",
     "receipts": "Payments received",
     "day": "Date",
     "kind": "Kind",

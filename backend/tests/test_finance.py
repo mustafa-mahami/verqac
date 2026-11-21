@@ -43,7 +43,7 @@ def test_payments_certification_and_cashflow(client, site):
     t = f["totals"]
     assert t["certified"] == 95000 and t["payable"] == 85500 and t["paid"] == 150000 and t["advance"] == 100000
     assert t["unpaid"] == 35500
-    assert [p["value"] for p in f["paid"]] == [100000, 150000] and f["certified"][-1]["value"] == 95000
+    assert [p["value"] for p in f["paid"]] == [100000, 150000] and f["certified"][-1]["value"] == 95000 and f["payable"][-1]["value"] == 85500
     assert client.post(f"/api/v1/projects/{pid}/finance/receipts", headers=site["hc"],
                        json={"day": (today + timedelta(days=2)).isoformat(), "amount": 1}).status_code == 422
     rid = f["receipts"][0]["id"]

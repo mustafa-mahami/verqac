@@ -11,8 +11,8 @@ export interface Receipt { id: string; day: string; amount: number; kind: 'advan
 export interface FinanceT {
   contract_value: number | null; currency: string; can_edit: boolean; can_pay: boolean; receipts: Receipt[];
   applications: { id: string; number: string; rev_no: number; state: string; payable: number; certified: number; claimed: number }[];
-  planned: Point[]; baseline: Point[]; earned: Point[]; certified: Point[]; paid: Point[];
-  months: { month: string; planned: number | null; earned: number | null; certified: number; paid: number }[];
+  planned: Point[]; baseline: Point[]; earned: Point[]; certified: Point[]; payable: Point[]; paid: Point[];
+  months: { month: string; planned: number | null; earned: number | null; certified: number; payable: number; paid: number }[];
   totals: Record<string, number | null>;
 }
 export const CURRENCIES = ['ILS', 'USD', 'JOD', 'EUR'];
@@ -34,6 +34,7 @@ const SERIES = [
   { key: 'baseline', color: '#ced4da', dash: '2 4' },
   { key: 'earned', color: '#2f9e44', dash: '' },
   { key: 'certified', color: '#1c7ed6', dash: '' },
+  { key: 'payable', color: '#7048e8', dash: '' },
   { key: 'paid', color: '#e8590c', dash: '' },
 ] as const;
 
@@ -71,7 +72,7 @@ function Curves({ f }: { f: FinanceT }) {
         {today > x0 && today < x1 && <line x1={X(today)} x2={X(today)} y1={T} y2={H - B} stroke="#fa5252" strokeDasharray="3 3" />}
         {f.contract_value ? <line x1={L} x2={W - R} y1={Y(f.contract_value)} y2={Y(f.contract_value)} stroke="#adb5bd" strokeDasharray="1 3" /> : null}
         {SERIES.map((s) => f[s.key].length > 0 && (
-          <path key={s.key} d={path(f[s.key], s.key === 'certified' || s.key === 'paid')} fill="none" stroke={s.color}
+          <path key={s.key} d={path(f[s.key], s.key === 'certified' || s.key === 'payable' || s.key === 'paid')} fill="none" stroke={s.color}
             strokeWidth={s.key === 'baseline' ? 1.5 : 2.2} strokeDasharray={s.dash} />
         ))}
       </svg>
@@ -114,8 +115,8 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
   return (
     <Stack>
       {!f.contract_value && <Alert color="yellow">{t('cash.noContract')}</Alert>}
-      <SimpleGrid cols={{ base: 2, md: 5 }}>
-        {([['contract', tt.contract], ['planned', tt.planned], ['earned', tt.earned], ['certified', tt.certified], ['paid', tt.paid]] as [string, number | null][]).map(([k, v]) => (
+      <SimpleGrid cols={{ base: 2, md: 6 }}>
+        {([['contract', tt.contract], ['planned', tt.planned], ['earned', tt.earned], ['certified', tt.certified], ['payable', tt.payable], ['paid', tt.paid]] as [string, number | null][]).map(([k, v]) => (
           <Card key={k} withBorder p="sm">
             <Text size="xs" c="dimmed">{t(`cash.s.${k}`)}</Text>
             <Text fw={700} dir="ltr" ta="start">{m(v)}</Text>
@@ -124,7 +125,6 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
         ))}
       </SimpleGrid>
       <Group gap="xs">
-        <Badge variant="light" color="blue" tt="none">{t('cash.payable')}: {m(tt.payable)}</Badge>
         <Badge variant="light" color="orange" tt="none">{t('cash.unpaid')}: {m(tt.unpaid)}</Badge>
         <Badge variant="light" color="grape" tt="none">{t('cash.advance')}: {m(tt.advance)}</Badge>
         {!!tt.claimed_pending && <Badge variant="light" color="gray" tt="none">{t('cash.pending')}: {m(tt.claimed_pending)}</Badge>}
@@ -181,11 +181,11 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
           <Table.ScrollContainer minWidth={640}>
             <Table striped withTableBorder fz="sm">
               <Table.Thead><Table.Tr><Table.Th>{t('cash.month')}</Table.Th>
-                {(['planned', 'earned', 'certified', 'paid'] as const).map((k) => <Table.Th key={k} ta="end">{t(`cash.s.${k}`)}</Table.Th>)}</Table.Tr></Table.Thead>
+                {(['planned', 'earned', 'certified', 'payable', 'paid'] as const).map((k) => <Table.Th key={k} ta="end">{t(`cash.s.${k}`)}</Table.Th>)}</Table.Tr></Table.Thead>
               <Table.Tbody>
                 {f.months.map((r) => (
                   <Table.Tr key={r.month}><Table.Td dir="ltr" ta="start">{r.month}</Table.Td>
-                    {(['planned', 'earned', 'certified', 'paid'] as const).map((k) => <Table.Td key={k} ta="end" dir="ltr">{r[k] == null ? '—' : money(r[k])}</Table.Td>)}
+                    {(['planned', 'earned', 'certified', 'payable', 'paid'] as const).map((k) => <Table.Td key={k} ta="end" dir="ltr">{r[k] == null ? '—' : money(r[k])}</Table.Td>)}
                   </Table.Tr>
                 ))}
               </Table.Tbody>
