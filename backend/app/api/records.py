@@ -803,6 +803,8 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_claim_required")
         if to.category == "approved" and not (cu.get("certified") and cu.get("payable")):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_amounts_required")
+        if to.category == "approved":
+            _payable_within(cu)
     if rt.code == "document" and to.category == "approved":  # filed: dated by the document itself
         d = (rec.custom or {}).get("doc_date")
         rec.submitted_by = c.user.id
@@ -1083,12 +1085,23 @@ def put_certification(record_id: uuid.UUID, body: CertificationIn, c: Ctx = Depe
     rec, a, rt, p = _load(c, record_id)
     require(rt.code in RESPONSE_FIELDS and rec.state_category == "submitted" and p.can("respond", rec), "cannot_respond")
     new = _check_custom(rt, rec.custom or {}, body.model_dump(), responder=True)
+    _payable_within(new)
     if new != (rec.custom or {}):
         _audit(c, rec, "certification", {"from": {k: (rec.custom or {}).get(k) for k in RESPONSE_FIELDS[rt.code]},
                                         "to": {k: new.get(k) for k in RESPONSE_FIELDS[rt.code]}}, a)
         rec.custom = new
         c.db.flush()
     return _detail(c, rec, a, rt, p)
+
+
+def _payable_within(cu: dict) -> None:
+    """The amount for payment is what was certified less retention and recoveries: never more than the certified."""
+    try:
+        certified, payable = float(cu.get("certified") or 0), float(cu.get("payable") or 0)
+    except ValueError:
+        return
+    if cu.get("certified") and cu.get("payable") and payable > certified:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payable_exceeds_certified")
 
 
 class CaptionIn(BaseModel):

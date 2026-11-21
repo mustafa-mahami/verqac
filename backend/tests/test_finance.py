@@ -30,6 +30,8 @@ def test_payments_certification_and_cashflow(client, site):
     r = client.put(f"/api/v1/records/{ipc['id']}/certification", headers=site["hk"], json={"certified": "95,000", "payable": "85500"})
     assert r.status_code == 200 and r.json()["custom"]["certified"] == "95000"
     assert client.put(f"/api/v1/records/{ipc['id']}/certification", headers=site["hk"], json={"certified": "abc"}).status_code == 422
+    assert client.put(f"/api/v1/records/{ipc['id']}/certification", headers=site["hk"],
+                      json={"certified": "95000", "payable": "96000"}).json()["detail"] == "payable_exceeds_certified"
     # certified on paper earlier: its real date
     old = (date.today() - timedelta(days=200)).isoformat()
     r = act(client, site["hk"], ipc["id"], "certify", answered_on=old).json()

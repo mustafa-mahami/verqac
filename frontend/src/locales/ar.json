@@ -179,7 +179,8 @@
     "payment_in_future": "تاريخ الصرف في المستقبل.",
     "invalid_application": "المطالبة المختارة غير صحيحة.",
     "cannot_record_payment": "لا تملك تسجيل الصرف.",
-    "payment_exceeds_payable": "المبلغ أكبر من المتبقي للصرف من هذه المطالبة."
+    "payment_exceeds_payable": "المبلغ أكبر من المتبقي للصرف من هذه المطالبة.",
+    "payable_exceeds_certified": "المعتمد للصرف لا يمكن أن يزيد عن المعتمد (شامل المحتجزات)."
   },
   "common": {
     "cancel": "إلغاء",

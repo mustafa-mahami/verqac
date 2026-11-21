@@ -179,7 +179,8 @@
     "payment_in_future": "The payment date is in the future.",
     "invalid_application": "Invalid application.",
     "cannot_record_payment": "You cannot record payments.",
-    "payment_exceeds_payable": "The amount is more than what is left to pay of this application."
+    "payment_exceeds_payable": "The amount is more than what is left to pay of this application.",
+    "payable_exceeds_certified": "The amount for payment cannot exceed the certified amount (with retention)."
   },
   "common": {
     "cancel": "Cancel",
