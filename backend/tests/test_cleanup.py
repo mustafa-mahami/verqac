@@ -47,3 +47,27 @@ def test_merge_placeholder_into_real_account(client, site):
         assert db.scalar(select(User).where(User.email == "odoo-t-u9@import.verqac.invalid")) is None
         r = db.get(Record, rid)
         assert db.get(User, r.created_by).email == real
+
+
+def test_revert_test_answers(client, site):
+    from app.models.core import Project, User
+    from app.models.records import Record, RecordEvent
+    from app.scripts.revert_answers import main
+    from tests.test_records import act
+    rec = new_sub(client, site)
+    submit(client, site, rec)
+    assert act(client, site["hce"], rec["id"], "approve").status_code == 200
+    ce = client.get("/api/v1/auth/me", headers=site["hce"]).json()["user"]["email"]
+    with session_scope(bypass=True) as db:
+        code = db.get(Project, site["pid"]).code
+    main(["--project", code, "--by", ce])  # trial
+    with session_scope(bypass=True) as db:
+        assert db.get(Record, rec["id"]).state_category == "approved"
+    main(["--project", code, "--by", ce, "--commit"])
+    with session_scope(bypass=True) as db:
+        r = db.get(Record, rec["id"])
+        assert r.state_category == "submitted" and r.answered_at is None and r.answered_by is None
+        uid = db.scalar(select(User.id).where(User.email == ce))
+        assert not db.scalar(select(func.count()).select_from(RecordEvent).where(RecordEvent.record_id == r.id,
+                                                                                 RecordEvent.actor_id == uid))
+    assert act(client, site["hce"], rec["id"], "approve").status_code == 200  # it can be answered again
