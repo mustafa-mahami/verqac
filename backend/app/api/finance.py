@@ -154,6 +154,10 @@ def build(c: Ctx, a, rt) -> FinanceOut:
     certified = _cum([(r.answered_at.astimezone(TZ).date(), num(r, "certified")) for r in done if r.answered_at])
     payable_c = _cum([(r.answered_at.astimezone(TZ).date(), num(r, "payable")) for r in done if r.answered_at])
     receipts = [Receipt(**x) for x in f["receipts"]]
+    paid_by: dict[str, float] = defaultdict(float)  # what was paid of each application
+    for x in receipts:
+        if x.record_id:
+            paid_by[str(x.record_id)] += x.amount
     paid = _cum([(x.day, x.amount) for x in receipts])
     today = datetime.now(TZ).date()
     # months from the first to the last thing that happened (or is planned)
@@ -183,7 +187,9 @@ def build(c: Ctx, a, rt) -> FinanceOut:
     return FinanceOut(contract_value=f["contract_value"], currency=f["currency"], can_edit=a.can_manage_project,
                       can_pay=p.can("create") or p.can("respond"), receipts=receipts,
                       applications=[{"id": str(r.id), "number": r.number, "rev_no": r.rev_no, "state": r.state_category,
-                                     "payable": num(r, "payable"), "certified": num(r, "certified"), "claimed": num(r, "claimed")}
+                                     "payable": num(r, "payable"), "certified": num(r, "certified"), "claimed": num(r, "claimed"),
+                                     "paid": round(paid_by.get(str(r.id), 0.0), 2),
+                                     "remaining": round(max(0.0, num(r, "payable") - paid_by.get(str(r.id), 0.0)), 2)}
                                     for r in apps],
                       planned=planned, baseline=baseline, earned=earned, certified=certified, payable=payable_c, paid=paid, months=months, totals=totals)
 
@@ -218,11 +224,19 @@ def add_receipt(project_id: uuid.UUID, body: Receipt, c: Ctx = Depends(ctx)):
     require(p.can("create") or p.can("respond"), "cannot_record_payment")
     if body.day > datetime.now(TZ).date():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_in_future")
+    f = settings_of(a.project)
     if body.record_id is not None:
         r = c.db.get(Record, body.record_id)
-        if r is None or r.project_id != a.project.id or r.record_type_id != rt.id:
+        if r is None or r.project_id != a.project.id or r.record_type_id != rt.id or r.state_category != "approved":
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_application")
-    f = settings_of(a.project)
+        # an application is paid up to its payable amount (in one or more payments)
+        try:
+            payable = float((r.custom or {}).get("payable") or 0)
+        except ValueError:
+            payable = 0.0
+        done = sum(float(x["amount"]) for x in f["receipts"] if x.get("record_id") == str(r.id))
+        if body.amount > payable - done + 0.005:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_exceeds_payable")
     x = body.model_dump(mode="json") | {"id": uuid.uuid4().hex[:12], "by": str(c.user.id), "at": datetime.now(UTC).isoformat()}
     f["receipts"] = sorted([*f["receipts"], x], key=lambda y: y["day"])
     _save(a.project, f)

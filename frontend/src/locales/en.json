@@ -178,7 +178,8 @@
     "invalid_currency": "Unsupported currency.",
     "payment_in_future": "The payment date is in the future.",
     "invalid_application": "Invalid application.",
-    "cannot_record_payment": "You cannot record payments."
+    "cannot_record_payment": "You cannot record payments.",
+    "payment_exceeds_payable": "The amount is more than what is left to pay of this application."
   },
   "common": {
     "cancel": "Cancel",
@@ -1441,7 +1442,9 @@
     "monthlyHint": "Values are cumulative to the end of the month.",
     "contract": "Contract amount",
     "contractHint": "Each stage's value = its weight × the contract (shown under the weight). Seen only by those who see payments.",
-    "currency": "Currency"
+    "currency": "Currency",
+    "left": "left",
+    "noneToPay": "No certified application left to pay"
   },
   "pay": {
     "certifyTitle": "Payment review",

@@ -10,7 +10,7 @@ export interface Point { day: string; value: number }
 export interface Receipt { id: string; day: string; amount: number; kind: 'advance' | 'payment' | 'other'; record_id: string | null; note: string | null }
 export interface FinanceT {
   contract_value: number | null; currency: string; can_edit: boolean; can_pay: boolean; receipts: Receipt[];
-  applications: { id: string; number: string; rev_no: number; state: string; payable: number; certified: number; claimed: number }[];
+  applications: { id: string; number: string; rev_no: number; state: string; payable: number; certified: number; claimed: number; paid: number; remaining: number }[];
   planned: Point[]; baseline: Point[]; earned: Point[]; certified: Point[]; payable: Point[]; paid: Point[];
   months: { month: string; planned: number | null; earned: number | null; certified: number; payable: number; paid: number }[];
   totals: Record<string, number | null>;
@@ -119,7 +119,8 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
   const tt = f.totals;
   const cur = f.currency;
   const m = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${money(v)} ${cur}`);
-  const apps = f.applications.filter((x) => x.state === 'approved');
+  // certified applications not fully paid yet (what is left of each)
+  const apps = f.applications.filter((x) => x.state === 'approved' && x.remaining > 0);
   const appLabel = (id: string | null) => { const a = f.applications.find((x) => x.id === id); return a ? `${a.number} R${a.rev_no}` : ''; };
   const pct = (v: number | null | undefined) => (v != null && f.contract_value ? ` · ${(100 * v / f.contract_value).toFixed(1)}%` : '');
   return (
@@ -157,8 +158,10 @@ export default function CashflowPanel({ projectId }: { projectId: string }) {
             <Select label={t('cash.kind')} w={170} value={rc.kind} allowDeselect={false} onChange={(v) => setRc({ ...rc, kind: (v ?? 'payment') as Receipt['kind'] })}
               data={(['payment', 'advance', 'other'] as const).map((k) => ({ value: k, label: t(`cash.k.${k}`) }))} />
             {rc.kind === 'payment' && (
-              <Select label={t('cash.application')} w={190} clearable value={rc.record_id} onChange={(v) => setRc({ ...rc, record_id: v })}
-                data={apps.map((a) => ({ value: a.id, label: `${a.number} R${a.rev_no} · ${money(a.payable)}` }))} />
+              <Select label={t('cash.application')} w={230} clearable value={rc.record_id} placeholder={apps.length ? undefined : t('cash.noneToPay')}
+                onChange={(v) => setRc({ ...rc, record_id: v, amount: v ? (apps.find((a) => a.id === v)?.remaining ?? rc.amount) : rc.amount })}
+                data={apps.map((a) => ({ value: a.id, label: `${a.number} R${a.rev_no} · ${t('cash.left')} ${money(a.remaining)}` }))}
+                nothingFoundMessage={t('cash.noneToPay')} />
             )}
             <NumberInput label={`${t('cash.amount')} (${cur})`} w={170} min={0} thousandSeparator="," hideControls value={rc.amount}
               onChange={(v) => setRc({ ...rc, amount: v === '' ? '' : Number(v) })} />

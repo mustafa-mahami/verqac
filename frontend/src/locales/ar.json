@@ -178,7 +178,8 @@
     "invalid_currency": "عملة غير مدعومة.",
     "payment_in_future": "تاريخ الصرف في المستقبل.",
     "invalid_application": "الدفعة المختارة غير صحيحة.",
-    "cannot_record_payment": "لا تملك تسجيل الصرف."
+    "cannot_record_payment": "لا تملك تسجيل الصرف.",
+    "payment_exceeds_payable": "المبلغ أكبر من المتبقي للصرف من هذه الدفعة."
   },
   "common": {
     "cancel": "إلغاء",
@@ -1441,7 +1442,9 @@
     "monthlyHint": "القيم تراكمية حتى نهاية الشهر.",
     "contract": "مبلغ العقد",
     "contractHint": "قيمة كل مرحلة = وزنها × مبلغ العقد (تظهر تحت الوزن). يراه من يرى الدفعات فقط.",
-    "currency": "العملة"
+    "currency": "العملة",
+    "left": "المتبقي",
+    "noneToPay": "لا دفعات معتمدة بانتظار الصرف"
   },
   "pay": {
     "certifyTitle": "تدقيق الدفعة",
