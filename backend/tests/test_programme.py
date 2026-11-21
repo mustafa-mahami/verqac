@@ -98,7 +98,7 @@ def test_programme_import_template_and_match(client, site):
     xml = f"""<?xml version="1.0"?><Project xmlns="http://schemas.microsoft.com/project"><Tasks>
       <Task><Name>P</Name><OutlineLevel>0</OutlineLevel></Task>
       <Task><Name>{floor['name_ar']}</Name><OutlineLevel>1</OutlineLevel><Summary>1</Summary></Task>
-      <Task><Name>{st['stages'][0]['name_ar']}</Name><OutlineLevel>2</OutlineLevel><Summary>0</Summary>
+      <Task><Name>{st['stages'][2]['name_ar']}</Name><OutlineLevel>2</OutlineLevel><Summary>0</Summary>
         <Start>2026-12-01T08:00:00</Start><Finish>2026-12-10T17:00:00</Finish></Task></Tasks></Project>"""
     rows = client.post(f"/api/v1/records/{rid}/programme/import", headers=s["hqa"],
                        files={"file": ("p.xml", xml.encode())}).json()
@@ -106,7 +106,7 @@ def test_programme_import_template_and_match(client, site):
     xer = "\n".join(["ERMHDR\t19.12", "%T\tPROJWBS", "%F\twbs_id\tparent_wbs_id\twbs_name\tproj_node_flag",
                      "%R\t1\t\tP\tY", f"%R\t2\t1\t{floor['name_en']}\tN",
                      "%T\tTASK", "%F\ttask_id\twbs_id\ttask_name\ttarget_start_date\ttarget_end_date",
-                     f"%R\t10\t2\t{st['stages'][0]['name_en']} works\t2026-12-01 08:00\t2026-12-15 17:00"])
+                     f"%R\t10\t2\t{st['stages'][2]['name_en']} works\t2026-12-01 08:00\t2026-12-15 17:00"])
     rows = client.post(f"/api/v1/records/{rid}/programme/import", headers=s["hqa"],
                        files={"file": ("p.xer", xer.encode())}).json()
     assert rows[0]["stage_id"] == st["stages"][2]["id"] and rows[0]["location_id"] == floor["id"]
