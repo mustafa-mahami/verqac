@@ -2,6 +2,7 @@ import { Alert, Badge, Card, Group, ScrollArea, Skeleton, Stack, Table, Text, Te
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PAGE_WIDTH } from '../format';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useFmt, type Kpi } from './KpiPanel';
@@ -32,7 +33,7 @@ export default function Portfolio() {
     { green: 0, amber: 0, red: 0 });
 
   return (
-    <Stack>
+    <Stack maw={PAGE_WIDTH} mx="auto">
       <Group justify="space-between" align="end">
         <Title order={3}>{t('portfolio.title')}</Title>
         <Group>

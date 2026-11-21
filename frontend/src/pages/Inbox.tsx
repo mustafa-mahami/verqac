@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, type InboxItem } from '../api';
-import { fmtDate, requiredColor, stateColor } from '../format';
+import { fmtDate, requiredColor, stateColor, PAGE_WIDTH } from '../format';
 import { pick } from '../i18n';
 
 const reasonColor = { reply: 'blue', verify: 'grape', returned: 'orange', draft: 'gray' } as const;
@@ -23,7 +23,7 @@ export default function Inbox() {
   const shown = all.filter((i) => (!project || i.project_id === project) && (!kind || kindName(i) === kind));
 
   return (
-    <Stack maw={1300} mx="auto">
+    <Stack maw={PAGE_WIDTH} mx="auto">
       <Group justify="space-between">
         <Title order={3}>{t('inbox.title')}</Title>
         <Group gap="xs">

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { api, type ProjectItem, type ProjectSettings as SettingsT } from '../api';
 import { pick } from '../i18n';
+import { PAGE_WIDTH } from '../format';
 import BackButton from './BackButton';
 import ProjectSettings from './ProjectSettings';
 import ProjectTeam from './ProjectTeam';
@@ -55,7 +56,7 @@ export default function ProjectPage() {
   };
 
   return (
-    <Stack maw={leaf === 'progress' ? '100%' : 1200} mx="auto">
+    <Stack maw={PAGE_WIDTH} mx="auto">
       <BackButton to="/projects" label={t('back.projects')} />
       {item.data && (
         <div>

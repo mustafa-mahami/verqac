@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, ApiError, type ProjectItem, type ProjectTypeT } from '../api';
 import { useAuth } from '../auth';
 import { pick } from '../i18n';
-import { fmtDate } from '../format';
+import { fmtDate, PAGE_WIDTH } from '../format';
 
 function partyName(item: ProjectItem, kind: string) {
   const p = item.parties.find((x) => x.kind === kind);
@@ -161,7 +161,7 @@ export default function Projects() {
   const canCreate = (me?.orgs ?? []).some((m) => m.org_role === 'admin' && m.org.kind !== 'owner');
 
   return (
-    <Stack maw={1300} mx="auto">
+    <Stack maw={PAGE_WIDTH} mx="auto">
       <Group justify="space-between">
         <Title order={3}>{t('projects.title')}</Title>
         {canCreate && <Button onClick={open}>{t('projects.new')}</Button>}

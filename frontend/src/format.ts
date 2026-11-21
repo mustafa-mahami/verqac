@@ -1,6 +1,9 @@
 import i18n from './i18n';
 
 /** Dates with Latin digits in both languages (engineering documents use them). */
+/** One page width everywhere: moving between tabs and pages, the content keeps its edges (wide tables scroll inside). */
+export const PAGE_WIDTH = 1440;
+
 export function fmtDate(iso: string | null | undefined, withTime = false): string {
   if (!iso) return '';
   const d = new Date(iso);

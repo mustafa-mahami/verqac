@@ -1,5 +1,6 @@
 import { Stack, Tabs } from '@mantine/core';
 import { useTranslation } from 'react-i18next';
+import { PAGE_WIDTH } from '../format';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth';
 import OrgUsers from './OrgUsers';
@@ -16,7 +17,7 @@ export default function OrgPage() {
   const admin = (me?.orgs ?? []).find((m) => m.org_role === 'admin');
   if (!admin) return null;
   return (
-    <Stack maw={1200} mx="auto" w="100%">
+    <Stack maw={PAGE_WIDTH} mx="auto" w="100%">
       <Tabs value={tab} onChange={(v) => setParams({ tab: v ?? 'users' }, { replace: true })} keepMounted={false}>
         <Tabs.List mb="md">
           <Tabs.Tab value="users">{t('org.tabs.users')}</Tabs.Tab>

@@ -12,7 +12,7 @@ import {
   api, ApiError, openProtected, type CheckLine, type LinkedRef, type Place, type RecordDetail, type RecordMeta, type Team, type Transition,
   type Attachment,
 } from '../api';
-import { daysUntil, fmtDate, fmtSize, requiredColor, stateColor } from '../format';
+import { daysUntil, PAGE_WIDTH, fmtDate, fmtSize, requiredColor, stateColor } from '../format';
 import i18n, { pick } from '../i18n';
 import BackButton from './BackButton';
 import Photos, { isPhoto, PdfViewer, shrinkPhoto } from './Photos';
@@ -461,7 +461,7 @@ export default function RecordPage() {
 
   const wide = ['programme', 'daily_report'].includes(r.record_type.code); // the programme / the daily report tables take the full width
   return (
-    <Stack maw={wide ? '100%' : 1200} mx="auto">
+    <Stack maw={PAGE_WIDTH} mx="auto">
       <Group justify="space-between" wrap="nowrap">
         <BackButton to={nav?.back ?? `/projects/${r.project_id}?tab=${profile(r.record_type.code).tab}`}
           label={typeText(r.record_type.code, 'back', 'back.submittals')} />
