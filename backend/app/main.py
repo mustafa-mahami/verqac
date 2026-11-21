@@ -49,6 +49,33 @@ class JsonGzip:
 
 app.add_middleware(JsonGzip)
 
+
+class Timing:
+    """How long each API call takes: a Server-Timing header (browser dev tools), and a SLOW line in the log
+    for calls over half a second (docker compose logs api | grep SLOW)."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not scope.get("path", "").startswith("/api/"):
+            return await self.app(scope, receive, send)
+        import logging
+        import time
+        t0 = time.perf_counter()
+
+        async def timed(msg):
+            if msg["type"] == "http.response.start":
+                ms = (time.perf_counter() - t0) * 1000
+                msg.setdefault("headers", []).append((b"server-timing", f"app;dur={ms:.0f}".encode()))
+                if ms > 500:
+                    logging.getLogger("uvicorn.error").warning("SLOW %s %s %.0f ms", scope["method"], scope["path"], ms)
+            await send(msg)
+        await self.app(scope, receive, timed)
+
+
+app.add_middleware(Timing)
+
 for r in (auth.router, account.router, push.router, projects.router, team.router, orgs.router, invitations.router, records.router, notifications.router, meta.router, verify.router, structure.router, lab.router, daily.router, programme.router, periodic.router, kpi.router, finance.router):
     app.include_router(r, prefix="/api/v1")
 
