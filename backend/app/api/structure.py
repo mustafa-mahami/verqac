@@ -129,15 +129,18 @@ def _used_ids(project_id: uuid.UUID) -> tuple[set, set, set]:
 
 
 def progress_stages(project_id: uuid.UUID) -> set:
-    """Stages that approved daily reports gave a %: changing their scope would move or drop that progress."""
-    from app.models.daily import DailyReport
+    """Stages that approved daily reports gave a %: changing their scope would move or drop that progress.
+    Worked out in the database (hundreds of reports' work lines would otherwise travel to be read here)."""
+    from sqlalchemy import text
     with session_scope(bypass=True) as s:
-        out = set()
-        for works in s.scalars(select(DailyReport.works).join(Record, Record.id == DailyReport.record_id)
-                               .where(DailyReport.project_id == project_id,
-                                      Record.state_category.in_(("approved", "approved_as_noted")))):
-            out.update(uuid.UUID(str(w["stage_id"])) for w in works if w.get("stage_id") and w.get("progress") is not None)
-    return out
+        rows = s.execute(text("""
+            SELECT DISTINCT w->>'stage_id' FROM daily_reports d
+              JOIN records r ON r.id = d.record_id
+              CROSS JOIN LATERAL jsonb_array_elements(d.works) w
+             WHERE d.project_id = :p AND r.state_category IN ('approved', 'approved_as_noted')
+               AND jsonb_typeof(d.works) = 'array' AND w->>'stage_id' IS NOT NULL AND w->>'progress' IS NOT NULL
+        """), {"p": project_id}).scalars()
+        return {uuid.UUID(x) for x in rows if x}
 
 
 def structure_of(c: Ctx, project: Project, can_edit: bool) -> StructureOut:

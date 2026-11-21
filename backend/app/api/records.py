@@ -182,7 +182,12 @@ def _resubmit_overdue(rec: Record) -> bool:
 
 # ----------------------------------------------------------------------------- serialisation
 def _state(c: Ctx, state_id) -> WorkflowState:
-    return c.db.get(WorkflowState, state_id)
+    """Workflow states, held for the request: the session's identity map lets go of objects nobody keeps,
+    so a register of a thousand rows would read the same few states a thousand times."""
+    held = c.db.info.setdefault("states", {})
+    if state_id not in held:
+        held[state_id] = c.db.get(WorkflowState, state_id)
+    return held[state_id]
 
 
 def _user(c: Ctx, uid) -> UserOut | None:

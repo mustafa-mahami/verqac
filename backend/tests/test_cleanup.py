@@ -38,13 +38,13 @@ def test_merge_placeholder_into_real_account(client, site):
     with session_scope(bypass=True) as db:
         qa_email = client.get("/api/v1/auth/me", headers=site["hqa"]).json()["user"]["email"]
         src = db.scalar(select(User).where(User.email == qa_email))
-        src.email = "odoo-t-u9@import.verqac.invalid"  # stand in for an imported placeholder
+        src.email = "odoo-zztest-u9@import.verqac.invalid"  # stand in for an imported placeholder
         db.flush()
         dst = db.scalar(select(User).where(User.email == real))
         counts = merge(db, src, dst)
         assert counts.get("records.created_by") and counts.get("record_events.actor_id")
     with session_scope(bypass=True) as db:
-        assert db.scalar(select(User).where(User.email == "odoo-t-u9@import.verqac.invalid")) is None
+        assert db.scalar(select(User).where(User.email == "odoo-zztest-u9@import.verqac.invalid")) is None
         r = db.get(Record, rid)
         assert db.get(User, r.created_by).email == real
 
@@ -109,7 +109,7 @@ def test_claim_placeholder_as_a_working_account(client, site, tmp_path):
         role = db.scalar(select(ProjectMember.role_id).where(ProjectMember.project_id == uuid.UUID(site["pid"]),
                                                              ProjectMember.party_id == party.id))
         for k in ("u77", "p88"):
-            u = User(id=uuid.uuid4(), email=f"odoo-t-{k}@import.verqac.invalid", password_hash="!", full_name_ar="م. سامر",
+            u = User(id=uuid.uuid4(), email=f"odoo-zztest-{k}@import.verqac.invalid", password_hash="!", full_name_ar="م. سامر",
                      full_name_en="Samer", is_active=False)
             db.add(u)
             db.flush()
@@ -123,7 +123,7 @@ def test_claim_placeholder_as_a_working_account(client, site, tmp_path):
     with session_scope(bypass=True) as db:
         u = db.scalar(select(User).where(User.email == "samer@madar.example"))
         assert u.is_active and db.scalar(select(ProjectMember.is_active).where(ProjectMember.user_id == u.id))
-        assert db.scalar(select(func.count()).select_from(User).where(User.email.like("odoo-t-%"))) == 0
+        assert db.scalar(select(func.count()).select_from(User).where(User.email.like("odoo-zztest-%"))) == 0
         assert db.scalar(select(OrgMember.id).where(OrgMember.user_id == u.id, OrgMember.org_id == org))
 
 
@@ -133,7 +133,7 @@ def test_team_hides_imported_people_who_never_joined(client, site):
     from app.models.core import ProjectMember, User
     with session_scope(bypass=True) as db:
         m = db.scalar(select(ProjectMember).where(ProjectMember.project_id == uuid.UUID(site["pid"])))
-        u = User(id=uuid.uuid4(), email="odoo-t-u5@import.verqac.invalid", password_hash="!", full_name_ar="قديم",
+        u = User(id=uuid.uuid4(), email="odoo-zztest-u5@import.verqac.invalid", password_hash="!", full_name_ar="قديم",
                  full_name_en="Old", is_active=False)
         db.add(u)
         db.flush()
