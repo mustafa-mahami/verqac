@@ -186,9 +186,9 @@ TIMED_TYPES = ("inspection", "material")
 # extra fields kept in records.custom, per type
 CUSTOM_FIELDS = {"rfi": ("proposed", "impact"), "material": ("delivery_note", "storage"),
                  "ncr": ("severity", "required_action"),
-                 "payment": ("period_from", "period_to", "claimed", "certified", "payable"),
+                 "payment": ("period_from", "period_to", "claimed_gross", "claimed", "certified", "payable"),
                  "document": ("kind", "direction", "doc_date", "sender", "recipient", "their_ref")}
 # fields the answering party writes (when certifying), not the author
 RESPONSE_FIELDS = {"payment": ("certified", "payable")}
-NUMBER_FIELDS = ("claimed", "certified", "payable")
+NUMBER_FIELDS = ("claimed_gross", "claimed", "certified", "payable")
 DATE_FIELDS = ("period_from", "period_to", "doc_date")

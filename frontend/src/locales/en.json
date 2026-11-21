@@ -172,7 +172,7 @@
     "invalid_range": "The start date is after the end date.",
     "no_project_type": "This project has no type.",
     "no_stages": "No active stages.",
-    "payment_claim_required": "Enter the claimed amount before submitting.",
+    "payment_claim_required": "Enter the claim value and the net amount requested before submitting.",
     "payment_amounts_required": "Enter and save the certified and payable amounts before certifying.",
     "invalid_amount": "Invalid amount.",
     "invalid_currency": "Unsupported currency.",
@@ -180,7 +180,8 @@
     "invalid_application": "Invalid application.",
     "cannot_record_payment": "You cannot record payments.",
     "payment_exceeds_payable": "The amount is more than what is left to pay of this application.",
-    "payable_exceeds_certified": "The amount for payment cannot exceed the certified amount (with retention)."
+    "payable_exceeds_certified": "The amount for payment cannot exceed the certified amount (with retention).",
+    "net_exceeds_claim": "The net amount requested cannot exceed the claim value."
   },
   "common": {
     "cancel": "Cancel",
@@ -401,12 +402,13 @@
     "prevPage": "Previous page",
     "nextPage": "Next page",
     "money": {
-      "claimed": "Claimed",
+      "claimed": "Net requested",
       "certified": "Certified",
       "payable": "For payment",
       "paid": "Paid",
       "remaining": "Remaining",
-      "total": "Total ({{n}})"
+      "total": "Total ({{n}})",
+      "claimed_gross": "Claim value"
     }
   },
   "back": {
@@ -822,7 +824,7 @@
     },
     "period_from": "Period from",
     "period_to": "to",
-    "claimed": "Claimed (net)",
+    "claimed": "Net amount requested",
     "certified": "Certified (incl. retention)",
     "payable": "Payable",
     "kind": "Document type",
@@ -830,7 +832,8 @@
     "doc_date": "Document date",
     "their_ref": "Their reference",
     "sender": "From",
-    "recipient": "To"
+    "recipient": "To",
+    "claimed_gross": "Claim value (work done)"
   },
   "lab": {
     "title": "Laboratory test results",
@@ -1497,11 +1500,12 @@
   },
   "pay": {
     "certifyTitle": "Payment review",
-    "certifyHint": "Claimed (net): {{claimed}}. Enter the certified and payable amounts, then “Certify” below.",
+    "certifyHint": "The contractor's figures are shown beside each box, and the boxes start with them: correct what you do not accept, save the amounts, then certify below.",
     "certifiedHint": "Value of the works certified, with the retention",
     "payableHint": "Net amount to pay after retention and recoveries",
     "saveAmounts": "Save amounts",
-    "amountsSaved": "Amounts saved"
+    "amountsSaved": "Amounts saved",
+    "byContractor": "{{f}} — contractor"
   },
   "portfolio": {
     "title": "QA KPIs across projects",

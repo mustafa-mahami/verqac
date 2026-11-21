@@ -317,7 +317,7 @@ export default function Submittals({ projectId, type = 'submittal' }: { projectI
     const v = Number(r.custom?.[k] ?? 0);
     return Number.isFinite(v) ? v : 0;
   };
-  const MONEY = ['claimed', 'certified', 'payable', 'paid', 'remaining'];
+  const MONEY = ['claimed_gross', 'claimed', 'certified', 'payable', 'paid', 'remaining'];
   const total = (k: string) => shown.reduce((sum, r) => sum + amt(r, k), 0);
   const goPage = (n: number) => {
     const next = new URLSearchParams(params);

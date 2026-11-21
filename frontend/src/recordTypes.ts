@@ -34,7 +34,7 @@ export const PROFILES: Record<RegisterType, TypeProfile> = {
     custom: [{ key: 'severity', kind: 'select', options: ['minor', 'major'] }, { key: 'required_action', kind: 'long' }],
     kind: false, timed: false, requiredBy: false, checklist: false, tab: 'ncrs' },
   // payment application: the contractor's claim; the certified amounts are written by supervision (response fields)
-  payment: { keys: [], custom: [{ key: 'period_from', kind: 'date' }, { key: 'period_to', kind: 'date' }, { key: 'claimed', kind: 'number' },
+  payment: { keys: [], custom: [{ key: 'period_from', kind: 'date' }, { key: 'period_to', kind: 'date' }, { key: 'claimed_gross', kind: 'number' }, { key: 'claimed', kind: 'number' },
     { key: 'certified', kind: 'number', response: true }, { key: 'payable', kind: 'number', response: true }],
   kind: false, timed: false, requiredBy: false, checklist: false, tab: 'payments', place: false, discipline: false },
   // the project archive: letters in / out, minutes, tender and contract documents, reports
@@ -49,7 +49,7 @@ export const profile = (code: string): TypeProfile => PROFILES[code as RegisterT
 // the programme lives in the progress tab, not in a register of its own
 export const TYPE_TABS: [RegisterType, string][] = (Object.keys(PROFILES) as RegisterType[]).filter((k) => k !== 'programme').map((k) => [k, PROFILES[k].tab]);
 
-export const LTR_KEYS = new Set(['drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'delivery_note', 'claimed', 'certified', 'payable', 'period_from', 'period_to', 'their_ref']);
+export const LTR_KEYS = new Set(['drawing_ref', 'spec_ref', 'boq_ref', 'quantity', 'delivery_note', 'claimed_gross', 'claimed', 'certified', 'payable', 'period_from', 'period_to', 'their_ref']);
 export const money = (v: string | number | null | undefined) => (v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 }));
 
 /** Field label: a type may name a field its own way (an inspection's "item" is the work inspected). */

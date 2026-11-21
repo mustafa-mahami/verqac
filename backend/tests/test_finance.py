@@ -3,10 +3,10 @@ from datetime import date, timedelta
 from tests.test_records import act, site  # noqa: F401 (fixture)
 
 
-def _app(client, s, claimed="100000", **kw):
+def _app(client, s, claimed="100000", gross="110000", **kw):
     r = client.post(f"/api/v1/projects/{s['pid']}/records", headers=s["hc"], json={
         "record_type": "payment", "title": "الدفعة الأولى",
-        "custom": {"period_from": "2026-01-01", "period_to": "2026-01-31", "claimed": claimed}, **kw})
+        "custom": {"period_from": "2026-01-01", "period_to": "2026-01-31", "claimed_gross": gross, "claimed": claimed}, **kw})
     assert r.status_code == 201, r.text
     return r.json()
 
@@ -21,6 +21,10 @@ def test_payments_certification_and_cashflow(client, site):
     f = client.put(f"/api/v1/projects/{pid}/finance/settings", headers=site["hc"], json={"contract_value": 1000000, "currency": "ils"})
     assert f.status_code == 200 and f.json()["currency"] == "ILS"
     # the contractor claims, the consultant certifies (with retention) and the amount to pay
+    # the contractor claims the value of the work done and the net it asks to be paid (never more than the claim)
+    bad = _app(client, site, claimed="120000")
+    assert act(client, site["hc"], bad["id"], "submit").json()["detail"] == "net_exceeds_claim"
+    client.post(f"/api/v1/records/{bad['id']}/transitions", headers=site["hc"], json={"action": "cancel"})
     ipc = _app(client, site)
     assert ipc["number"].endswith("IPC-001") or "IPC" in ipc["number"]
     assert act(client, site["hc"], ipc["id"], "submit").status_code == 200
@@ -67,7 +71,7 @@ def test_payments_certification_and_cashflow(client, site):
     # the consultant PM reads it too
     assert client.get(f"/api/v1/projects/{pid}/finance", headers=site["hk"]).status_code == 200
     # a returned application is claimed again as a revision, without the earlier certified amounts
-    ipc2 = _app(client, site, claimed="200000")
+    ipc2 = _app(client, site, claimed="200000", gross="220000")
     act(client, site["hc"], ipc2["id"], "submit")
     client.put(f"/api/v1/records/{ipc2['id']}/certification", headers=site["hk"], json={"certified": "10"})
     assert act(client, site["hk"], ipc2["id"], "return", comment="الكميات زائدة").status_code == 200

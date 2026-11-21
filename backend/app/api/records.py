@@ -603,7 +603,7 @@ def _linked_out(c: Ctx, a: ProjectAccess, rec: Record, rt: RecordType) -> tuple[
 
 
 LIST_FIELDS = {"document": ("kind", "direction", "doc_date", "sender", "recipient", "their_ref"),
-               "payment": ("claimed", "certified", "payable")}
+               "payment": ("claimed_gross", "claimed", "certified", "payable")}
 CHOICES = {"impact": ("none", "cost", "time", "cost_time"), "severity": ("minor", "major"),
            "kind": DOCUMENT_KINDS, "direction": ("incoming", "outgoing", "internal")}
 
@@ -799,8 +799,10 @@ def transition(record_id: uuid.UUID, body: TransitionIn, bg: BackgroundTasks, c:
     now = datetime.now(UTC)
     if rt.code == "payment":
         cu = rec.custom or {}
-        if t.effect == "submit" and not cu.get("claimed"):
+        if t.effect == "submit" and not (cu.get("claimed_gross") and cu.get("claimed")):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_claim_required")
+        if t.effect == "submit" and float(cu["claimed"]) > float(cu["claimed_gross"]):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "net_exceeds_claim")
         if to.category == "approved" and not (cu.get("certified") and cu.get("payable")):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "payment_amounts_required")
         if to.category == "approved":

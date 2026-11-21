@@ -84,8 +84,9 @@ function ActionForm({ rec, tr, onDone }: { rec: RecordDetail; tr: Transition; on
 /** Supervision writes the certified amount (with the retention kept) and the amount to pay, then certifies. */
 function CertifyPanel({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDetail) => void }) {
   const { t } = useTranslation();
-  const [certified, setCertified] = useState(rec.custom.certified ?? '');
-  const [payable, setPayable] = useState(rec.custom.payable ?? '');
+  // starts from the contractor's figures: supervision corrects what it does not accept
+  const [certified, setCertified] = useState(rec.custom.certified ?? rec.custom.claimed_gross ?? '');
+  const [payable, setPayable] = useState(rec.custom.payable ?? rec.custom.claimed ?? '');
   const [err, setErr] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: () => api<RecordDetail>(`/records/${rec.id}/certification`, { method: 'PUT', body: JSON.stringify({ certified, payable }) }),
@@ -96,11 +97,12 @@ function CertifyPanel({ rec, onDone }: { rec: RecordDetail; onDone: (r: RecordDe
   return (
     <Card withBorder>
       <Title order={5} mb={4}>{t('pay.certifyTitle')}</Title>
-      <Text size="sm" c="dimmed" mb="sm">{t('pay.certifyHint', { claimed: money(rec.custom.claimed) })}</Text>
-      <SimpleGrid cols={{ base: 1, sm: 3 }}>
-        <TextInput label={t('custom.claimed')} value={money(rec.custom.claimed)} readOnly dir="ltr" />
+      <Text size="sm" c="dimmed" mb="sm">{t('pay.certifyHint')}</Text>
+      <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        <TextInput label={t('pay.byContractor', { f: t('custom.claimed_gross') })} value={money(rec.custom.claimed_gross)} readOnly dir="ltr" variant="filled" />
         <TextInput label={t('custom.certified')} description={t('pay.certifiedHint')} value={certified} dir="ltr" inputMode="decimal"
           onChange={(e) => setCertified(e.currentTarget.value.replace(/[^0-9.,]/g, ''))} />
+        <TextInput label={t('pay.byContractor', { f: t('custom.claimed') })} value={money(rec.custom.claimed)} readOnly dir="ltr" variant="filled" />
         <TextInput label={t('custom.payable')} description={t('pay.payableHint')} value={payable} dir="ltr" inputMode="decimal"
           onChange={(e) => setPayable(e.currentTarget.value.replace(/[^0-9.,]/g, ''))} />
       </SimpleGrid>
