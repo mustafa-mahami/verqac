@@ -441,7 +441,7 @@ export default function RecordPage() {
     onSuccess: put, onError: (e) => setError(errText(e)),
   });
   const revise = useMutation({
-    mutationFn: () => api<RecordDetail>(`/records/${id}/revise`, { method: 'POST' }),
+    mutationFn: (from?: string) => api<RecordDetail>(`/records/${id}/revise${from ? `?from_record=${from}` : ''}`, { method: 'POST' }),
     onSuccess: (r) => { put(r); navigate(`/records/${r.id}`); }, onError: (e) => setError(errText(e)),
   });
   const addComment = useMutation({
@@ -459,6 +459,9 @@ export default function RecordPage() {
   const responses = r.transitions.filter((x) => x.effect === 'respond');
   const others = r.transitions.filter((x) => x.effect !== 'respond');
 
+  // a programme whose last revision was withdrawn or rejected: the next one may start again from the one in force
+  const inForce = r.record_type.code === 'programme' && r.state.category !== 'approved'
+    ? [...r.revisions].filter((x) => x.state.category === 'approved' && x.id !== r.id).sort((x, y) => y.rev_no - x.rev_no)[0] : undefined;
   const wide = ['programme', 'daily_report'].includes(r.record_type.code); // the programme / the daily report tables take the full width
   return (
     <Stack maw={PAGE_WIDTH} mx="auto">
@@ -519,7 +522,12 @@ export default function RecordPage() {
               onClick={() => setAction(tr)}>{pick(tr, 'name')}</Button>
           ))}
           {r.can_edit && !['daily_report', 'programme'].includes(r.record_type.code) && <Button variant="light" onClick={() => setEditing(true)}>{t('rec.edit')}</Button>}
-          {r.can_revise && <Button variant="light" loading={revise.isPending} onClick={() => revise.mutate()}>{t('rec.newRevision')}</Button>}
+          {r.can_revise && <Button variant="light" loading={revise.isPending} onClick={() => revise.mutate(undefined)}>
+            {inForce ? t('prg.fromThis', { rev: r.rev_no }) : t('rec.newRevision')}</Button>}
+          {r.can_revise && inForce && (
+            <Button variant="light" color="green" loading={revise.isPending} onClick={() => revise.mutate(inForce.id)}>
+              {t('prg.fromInForce', { rev: inForce.rev_no })}</Button>
+          )}
         </Group>
       )}
 

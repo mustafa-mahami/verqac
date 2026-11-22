@@ -181,7 +181,8 @@
     "cannot_record_payment": "You cannot record payments.",
     "payment_exceeds_payable": "The amount is more than what is left to pay of this application.",
     "payable_exceeds_certified": "The amount for payment cannot exceed the certified amount (with retention).",
-    "net_exceeds_claim": "The net amount requested cannot exceed the claim value."
+    "net_exceeds_claim": "The net amount requested cannot exceed the claim value.",
+    "invalid_source_revision": "The chosen revision is not an approved revision of this programme."
   },
   "common": {
     "cancel": "Cancel",
@@ -1266,7 +1267,9 @@
     "ssTxt": "next floor {{n}}d after its start",
     "driftTitle": "Dates that do not follow the links",
     "drift": "These stages have dates other than their links and floor cycle give: {{list}}. This happens when dates are edited by hand after generating, or stages are generated in parts. The result: false float and a short critical path.",
-    "driftFix": "Recompute all linked stages together"
+    "driftFix": "Recompute all linked stages together",
+    "fromThis": "Update starting from this R{{rev}}",
+    "fromInForce": "Update starting from the approved R{{rev}} in force"
   },
   "gantt": {
     "byFloor": "By floor",

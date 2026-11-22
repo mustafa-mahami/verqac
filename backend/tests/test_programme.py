@@ -60,6 +60,21 @@ def test_programme_cycle_approval_and_plan(client, site):
     p = client.get(f"/api/v1/projects/{pid}/progress", headers=s["hc"]).json()
     assert p["programme_id"] == rid2 and p["baseline_id"] == rid
     assert p["planned"] == 0 and p["planned_baseline"] == 7.0 and p["baseline_curve"]
+    # R2 goes wrong and is withdrawn: R1 stays in force, and R3 can start again from R1 instead of the withdrawn R2
+    rid3 = client.post(f"/api/v1/records/{rid2}/revise", headers=s["hqa"]).json()["id"]
+    bad = [{**x, "start": (date.fromisoformat(x["start"]) + timedelta(days=99)).isoformat(),
+            "finish": (date.fromisoformat(x["finish"]) + timedelta(days=99)).isoformat()} for x in lines2]
+    client.put(f"/api/v1/records/{rid3}/programme", headers=s["hqa"], json={"lines": bad})
+    act(client, s["hqa"], rid3, "submit")
+    assert act(client, s["hqa"], rid3, "cancel", comment="خطأ في التواريخ").status_code == 200
+    assert client.get(f"/api/v1/projects/{pid}/progress", headers=s["hc"]).json()["programme_id"] == rid2  # still in force
+    import uuid
+    other = client.post(f"/api/v1/records/{rid3}/revise?from_record={uuid.uuid4()}", headers=s["hqa"])  # not one of its own
+    assert other.json()["detail"] == "invalid_source_revision"
+    r4 = client.post(f"/api/v1/records/{rid3}/revise?from_record={rid2}", headers=s["hqa"])
+    assert r4.status_code == 201, r4.text
+    got = client.get(f"/api/v1/records/{r4.json()['id']}/programme", headers=s["hqa"]).json()["lines"]
+    assert sorted(x["start"] for x in got) == sorted(x["start"] for x in lines2)  # R1's dates, not the withdrawn ones
 
 
 def test_programme_import_template_and_match(client, site):

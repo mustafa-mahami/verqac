@@ -1027,11 +1027,18 @@ def inbox(c: Ctx = Depends(ctx)):
 
 
 @router.post("/records/{record_id}/revise", response_model=RecordDetail, status_code=201)
-def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
-    """R(n+1) of the same number: copies the content, clears the answer, starts as a draft."""
+def new_revision(record_id: uuid.UUID, from_record: uuid.UUID | None = Query(None), c: Ctx = Depends(ctx)):
+    """R(n+1) of the same number: copies the content, clears the answer, starts as a draft.
+    A programme may start from an earlier approved revision instead (the one in force, when the last was withdrawn)."""
     rec, a, rt, p = _load(c, record_id)
     detail = _detail(c, rec, a, rt, p)
     require(detail.can_revise, "cannot_revise")
+    source = rec
+    if from_record is not None and from_record != rec.id:
+        source = c.db.get(Record, from_record)
+        if (source is None or rt.code != "programme" or source.revision_group_id != rec.revision_group_id
+                or source.state_category != "approved"):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "invalid_source_revision")
     initial = c.db.scalar(select(WorkflowState).where(WorkflowState.workflow_id == rt.workflow_id,
                                                       WorkflowState.is_initial))
     new = Record(project_id=rec.project_id, record_type_id=rt.id, number=rec.number, rev_no=rec.rev_no + 1,
@@ -1058,14 +1065,14 @@ def new_revision(record_id: uuid.UUID, c: Ctx = Depends(ctx)):
                                quantity_uom=old.quantity_uom, specimen_count=old.specimen_count,
                                specification=old.specification,
                                lines=[{**x, "value": None, "text": None, "legible": True} for x in old.lines]))
-    if rt.code == "programme":  # the update starts from the previous programme
+    if rt.code == "programme":  # the update starts from the previous programme (or the chosen approved one)
         from app.models.programme import Programme
-        old = c.db.get(Programme, rec.id)
+        old = c.db.get(Programme, source.id)
         c.db.add(Programme(record_id=new.id, project_id=rec.project_id, lines=old.lines if old else [],
                            cycles=old.cycles if old else [], source=old.source if old else "manual"))
     c.db.add(RecordEvent(record_id=new.id, action="new_revision", to_state_id=initial.id, actor_id=c.user.id,
-                         comment=f"R{rec.rev_no} → R{new.rev_no}"))
-    _audit(c, new, "revise", {"from_record": str(rec.id), "rev": new.rev_no}, a)
+                         comment=f"R{source.rev_no} → R{new.rev_no}"))
+    _audit(c, new, "revise", {"from_record": str(source.id), "rev": new.rev_no}, a)
     c.db.flush()
     return _detail(c, new, a, rt, Perms(c, a, rt))
 
