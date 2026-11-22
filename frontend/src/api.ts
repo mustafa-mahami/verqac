@@ -93,12 +93,26 @@ export async function fetchBlob(path: string): Promise<Blob> {
   const go = () => fetch(`/api/v1${path}`, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}, credentials: 'include' });
   let r = await go();
   if (r.status === 401 && (await refreshSession())) r = await go();
-  if (!r.ok) throw new ApiError(r.status, 'generic');
+  if (!r.ok) {
+    let code = 'generic';
+    try { const j = await r.json(); if (typeof j.detail === 'string') code = j.detail; } catch { /* not JSON */ }
+    throw new ApiError(r.status, code);
+  }
   return r.blob();
 }
 
 export async function openProtected(path: string, filename: string, inline = false) {
-  const url = URL.createObjectURL(await fetchBlob(path));
+  let blob: Blob;
+  try {
+    blob = await fetchBlob(path);
+  } catch (e) {
+    // a download that fails says so (it used to fail silently: the button seemed to do nothing)
+    const [{ notifications }, { default: i18n }] = await Promise.all([import('@mantine/notifications'), import('./i18n')]);
+    const code = e instanceof ApiError ? e.code : 'generic';
+    notifications.show({ color: 'red', message: `${i18n.t(`errors.${code}`, i18n.t('errors.generic'))} (${e instanceof ApiError ? e.status : '—'})` });
+    return;
+  }
+  const url = URL.createObjectURL(blob);
   if (inline) {
     window.open(url, '_blank');
   } else {
