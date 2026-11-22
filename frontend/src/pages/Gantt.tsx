@@ -80,8 +80,20 @@ export default function Gantt({ items, showActual, toolbar, links = [] }: { item
       if (!m.has(key)) m.set(key, { key, label, rows: [] });
       m.get(key)!.rows.push(it);
     }
-    const out = [...m.values()];
-    if (by === 'floor') out.sort((a, b) => (a.key === '_whole' ? 1 : b.key === '_whole' ? -1 : 0));
+    let out = [...m.values()];
+    if (by === 'floor') {
+      // whole-project stages that come before the floors (excavation, foundations) open the programme;
+      // the ones that run alongside or after them (lifts, site works) close it
+      const floorStart = out.filter((g) => g.key !== '_whole').flatMap((g) => g.rows).map((r) => r.plan?.start).filter(Boolean).sort()[0];
+      const whole = m.get('_whole');
+      out = out.filter((g) => g.key !== '_whole');
+      if (whole) {
+        const first = floorStart ? whole.rows.filter((r) => r.plan && r.plan.start < floorStart) : [];
+        const rest = whole.rows.filter((r) => !first.includes(r));
+        if (first.length) out.unshift({ key: '_whole_first', label: t('gantt.beforeFloors'), rows: first });
+        if (rest.length) out.push({ ...whole, rows: rest });
+      }
+    }
     return out;
   }, [shown, by, t]);
 

@@ -1311,7 +1311,8 @@
     "arrows": "Link arrows",
     "critArrows": "Critical path arrows only",
     "fcToggle": "Forecast from actual",
-    "fc": "Forecast"
+    "fc": "Forecast",
+    "beforeFloors": "Before the floors (whole project)"
   },
   "per": {
     "week": "Weekly",
