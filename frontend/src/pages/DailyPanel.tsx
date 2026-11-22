@@ -50,9 +50,17 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
   const teamItems = settings ? (settings.lists[crewList(settings, 'labour')] ?? []).filter((x) => x.active) : [];
   const teamOpts = teamItems.map((x) => itemLabel(x, lang));
   const subs = settings ? (settings.lists.subcontractors ?? []).filter((x) => x.active).map((x) => itemLabel(x, lang)) : [];
+  // a team linked to stages (Daily report settings): picking it fills the stage, or narrows the choice to its stages
+  const teamOf = (w: WorkLine) => teamItems.find((x) => x.ar === w.team);
+  const liveStage = (id: string) => s.stages.some((x) => x.id === id && x.is_active);
+  const teamStages = (w: WorkLine) => (teamOf(w)?.stage_ids ?? []).filter(liveStage);
   const pickTeam = (i: number, v: string) => {
     const it = teamItems[teamOpts.indexOf(v)];
-    set(i, it ? { team: it.ar, team_en: it.en } : { team: v || null, team_en: null });
+    if (!it) { set(i, { team: v || null, team_en: null }); return; }
+    const own = (it.stage_ids ?? []).filter(liveStage);
+    const w = lines[i];
+    const stage = own.length === 1 ? own[0] : own.length > 1 && w.stage_id && !own.includes(w.stage_id) ? null : w.stage_id;
+    set(i, { team: it.ar, team_en: it.en, ...(stage !== w.stage_id ? { stage_id: stage, topic_id: null } : {}) });
   };
   const teamShown = (w: WorkLine) => (lang === 'en' ? w.team_en || w.team : w.team) ?? '';
   return (
@@ -61,12 +69,12 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
         <Table verticalSpacing={3} horizontalSpacing={4} withRowBorders striped style={{ tableLayout: 'fixed' }}>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th w={180}>{t('structure.stage')}</Table.Th>
               <Table.Th w={190}>{t('structure.location')}</Table.Th>
+              <Table.Th w={170}>{t('daily.team')}</Table.Th>
+              <Table.Th w={180}>{t('structure.stage')}</Table.Th>
               <Table.Th>{t('daily.desc')}</Table.Th>
               {showQty && <Table.Th w={58}>{t('daily.qty')}</Table.Th>}
               {showQty && <Table.Th w={48}>{t('daily.unit')}</Table.Th>}
-              <Table.Th w={170}>{t('daily.team')}</Table.Th>
               <Table.Th w={46}>{t('daily.crewN')}</Table.Th>
               <Table.Th w={46}>{t('daily.hoursShort')}</Table.Th>
               {withProgress && <Table.Th w={70}>%</Table.Th>}
@@ -78,19 +86,12 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
               const st = s.stages.find((x) => x.id === w.stage_id);
               const whole = st?.scope === 'whole';
               const topics = (st?.topics ?? []).filter((x) => x.id && x.is_active !== false).map((x) => ({ value: x.id!, label: pick(x, 'name') }));
+              const own = teamStages(w);  // the stages of the line's team, when it has some
               const hasDates = !!(w.actual_start || w.actual_finish);
               const showDates = withProgress && actualDates && !!st && (dates[i] ?? hasDates);
               return (
                 <Fragment key={i}>
                   <Table.Tr>
-                    <Table.Td>
-                      <Select size="xs" data={stages} value={w.stage_id} disabled={!editable} searchable clearable placeholder={t('structure.stage')}
-                        onChange={(v) => set(i, { stage_id: v, topic_id: null })} />
-                      {topics.length > 0 && (
-                        <Select size="xs" mt={2} data={topics} value={w.topic_id} disabled={!editable} clearable searchable placeholder={t('structure.topic')}
-                          onChange={(v) => set(i, { topic_id: v })} />
-                      )}
-                    </Table.Td>
                     <Table.Td>
                       {whole ? <Text size="xs" c="dimmed">{t('daily.wholeStage')}</Text> : (
                         <MultiSelect size="xs" searchable clearable disabled={!editable}
@@ -103,11 +104,6 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
                       )}
                     </Table.Td>
                     <Table.Td>
-                      <TextInput size="xs" value={w.description ?? ''} disabled={!editable} onChange={(e) => set(i, { description: e.currentTarget.value || null })} />
-                    </Table.Td>
-                    {showQty && <Table.Td><NumberInput size="xs" hideControls value={w.qty ?? ''} disabled={!editable} onChange={(v) => set(i, { qty: num(v) })} /></Table.Td>}
-                    {showQty && <Table.Td><TextInput size="xs" dir="ltr" value={w.unit ?? ''} disabled={!editable} onChange={(e) => set(i, { unit: e.currentTarget.value || null })} /></Table.Td>}
-                    <Table.Td>
                       <Autocomplete size="xs" data={teamOpts} value={teamShown(w)} disabled={!editable} placeholder={t('daily.team')}
                         onChange={(v) => pickTeam(i, v)} />
                       {subs.length > 0 && (w.team || w.sub) && (
@@ -115,6 +111,19 @@ function WorksTable({ lines, onChange, editable, projectId, current, withProgres
                           onChange={(v) => set(i, { sub: v })} />
                       )}
                     </Table.Td>
+                    <Table.Td>
+                      <Select size="xs" data={own.length ? stages.filter((x) => own.includes(x.value) || x.value === w.stage_id) : stages} value={w.stage_id} disabled={!editable} searchable clearable placeholder={t('structure.stage')}
+                        onChange={(v) => set(i, { stage_id: v, topic_id: null })} />
+                      {topics.length > 0 && (
+                        <Select size="xs" mt={2} data={topics} value={w.topic_id} disabled={!editable} clearable searchable placeholder={t('structure.topic')}
+                          onChange={(v) => set(i, { topic_id: v })} />
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <TextInput size="xs" value={w.description ?? ''} disabled={!editable} onChange={(e) => set(i, { description: e.currentTarget.value || null })} />
+                    </Table.Td>
+                    {showQty && <Table.Td><NumberInput size="xs" hideControls value={w.qty ?? ''} disabled={!editable} onChange={(v) => set(i, { qty: num(v) })} /></Table.Td>}
+                    {showQty && <Table.Td><TextInput size="xs" dir="ltr" value={w.unit ?? ''} disabled={!editable} onChange={(e) => set(i, { unit: e.currentTarget.value || null })} /></Table.Td>}
                     <Table.Td><NumberInput size="xs" hideControls value={w.crew ?? ''} disabled={!editable} onChange={(v) => set(i, { crew: num(v) })} /></Table.Td>
                     <Table.Td><NumberInput size="xs" hideControls min={0} max={24} value={w.hours ?? ''} disabled={!editable} onChange={(v) => set(i, { hours: num(v) })} /></Table.Td>
                     {withProgress && (

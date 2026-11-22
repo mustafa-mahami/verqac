@@ -1169,7 +1169,9 @@
     "defaultsHint": "Adds the usual positions, trades and equipment in both languages without repeating what is there, and fills the Arabic name of items that had only an English one. A name entered twice (other case or spacing) is kept once.",
     "defaultsDone": "{{added}} items added; Arabic name filled for {{translated}}.",
     "showQty": "Show quantity and unit in the works executed",
-    "showQtyHint": "Turn off if the project does not record quantities daily: the two columns are hidden and the description is wider. A line that has a quantity still shows it, and the PDF prints the column only when there is a quantity."
+    "showQtyHint": "Turn off if the project does not record quantities daily: the two columns are hidden and the description is wider. A line that has a quantity still shows it, and the PDF prints the column only when there is a quantity.",
+    "teamStages": "Team's stages",
+    "anyStage": "Any stage"
   },
   "roleHint": {
     "contractor_pm": "Everything in all disciplines: create, submit, cancel and delete all requests, manage the project and team, answer NCRs.",

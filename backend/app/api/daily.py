@@ -141,6 +141,8 @@ class ListItem(BaseModel):
     role_ar: str | None = Field(default=None, max_length=150)  # people: position
     role_en: str | None = Field(default=None, max_length=150)
     active: bool = True
+    # labour teams: the stages the team works on (its work line takes the stage from it)
+    stage_ids: list[uuid.UUID] = Field(default=[], max_length=40)
 
     @classmethod
     def of(cls, x):
@@ -235,12 +237,12 @@ def put_daily_settings(project_id: uuid.UUID, body: DailySettings, c: Ctx = Depe
             if not (ar or en) or (ar or en) in seen:
                 continue
             seen.add(ar or en)
-            item = {**x.model_dump(), "ar": ar or en, "en": en or ar}
+            item = {**x.model_dump(mode="json"), "ar": ar or en, "en": en or ar}
             if not k.endswith("_names"):
                 item["role_ar"] = item["role_en"] = None  # positions only for people
             rows.append(item)
         clean[k] = dedupe(rows)[:300]  # one item per name, whatever its case or spacing
-    a.project.settings = {**(a.project.settings or {}), "daily": {**body.model_dump(), "lists": clean}}
+    a.project.settings = {**(a.project.settings or {}), "daily": {**body.model_dump(mode="json"), "lists": clean}}
     c.db.flush()
     return daily_settings(a.project)
 
@@ -256,7 +258,7 @@ def add_daily_defaults(project_id: uuid.UUID, c: Ctx = Depends(ctx)):
     """Add the default positions, trades and equipment (both languages) to the project's lists; what is there stays."""
     a = project_access(c, project_id)
     require(a.can_manage_project, "manage_project_required")
-    cur = daily_settings(a.project).model_dump()
+    cur = daily_settings(a.project).model_dump(mode="json")
     lists, rep = merge(cur["lists"])
     lists = {k: dedupe(v)[:300] for k, v in lists.items()}
     a.project.settings = {**(a.project.settings or {}), "daily": {**cur, "lists": lists}}

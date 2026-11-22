@@ -1,7 +1,9 @@
-import { ActionIcon, Alert, Button, Card, Group, Radio, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Alert, Button, Card, Group, MultiSelect, Radio, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useStructure } from './Structure';
+import { pick } from '../i18n';
 import { api, ApiError } from '../api';
 import { GROUPS, OTHER_LISTS, type DailySettings, type ListItem } from '../daily';
 
@@ -10,6 +12,7 @@ import { GROUPS, OTHER_LISTS, type DailySettings, type ListItem } from '../daily
 export default function DailySettingsCard({ projectId, editable }: { projectId: string; editable: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const structure = useStructure(projectId);
   const q = useQuery({ queryKey: ['dailySettings', projectId], queryFn: () => api<DailySettings>(`/projects/${projectId}/daily-settings`) });
   const [s, setS] = useState<DailySettings | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -29,12 +32,14 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
     onError: () => setMsg({ ok: false, text: t('errors.generic') }),
   });
   if (!s) return null;
+  const stageOpts = (structure.data?.stages ?? []).filter((x) => x.is_active).map((x) => ({ value: x.id!, label: pick(x, 'name') }));
   const rows = (k: string) => s.lists[k] ?? [];
   const setRows = (k: string, v: ListItem[]) => setS({ ...s, lists: { ...s.lists, [k]: v } });
   const setRow = (k: string, i: number, p: Partial<ListItem>) => setRows(k, rows(k).map((x, j) => (j === i ? { ...x, ...p } : x)));
   /** One list; people take their position from the group's descriptions (no second typing). */
   const table = (k: string, rolesFrom?: string) => {
     const people = !!rolesFrom;
+    const teams = k.startsWith('labour_') && stageOpts.length > 0;  // a labour team works on its stages
     const roles = rolesFrom ? rows(rolesFrom).filter((x) => x.ar) : [];
     return (
       <>
@@ -44,6 +49,7 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
             <Table.Thead><Table.Tr>
               <Table.Th>{t(people ? 'dset.nameAr' : 'dset.descAr')}</Table.Th><Table.Th>{t(people ? 'dset.nameEn' : 'dset.descEn')}</Table.Th>
               {people && <Table.Th w={230}>{t('dset.position')}</Table.Th>}
+              {teams && <Table.Th w={300}>{t('dset.teamStages')}</Table.Th>}
               <Table.Th w={70}>{t('dset.active')}</Table.Th>{editable && <Table.Th w={30} />}
             </Table.Tr></Table.Thead>
             <Table.Tbody>
@@ -58,6 +64,12 @@ export default function DailySettingsCard({ projectId, editable }: { projectId: 
                         data={Array.from(new Set([...roles.map((r) => r.ar), ...(x.role_ar ? [x.role_ar] : [])]))
                           .map((v) => ({ value: v, label: (() => { const r = roles.find((y) => y.ar === v); return r && r.en && r.en !== r.ar ? `${r.ar} · ${r.en}` : v; })() }))}
                         onChange={(v) => { const r = roles.find((y) => y.ar === v); setRow(k, i, { role_ar: v, role_en: r?.en ?? v }); }} />
+                    </Table.Td>
+                  )}
+                  {teams && (
+                    <Table.Td>
+                      <MultiSelect size="xs" searchable clearable disabled={!editable} data={stageOpts} value={x.stage_ids ?? []}
+                        placeholder={(x.stage_ids ?? []).length ? undefined : t('dset.anyStage')} onChange={(v) => setRow(k, i, { stage_ids: v })} />
                     </Table.Td>
                   )}
                   <Table.Td><Switch size="xs" disabled={!editable} checked={x.active} onChange={(e) => setRow(k, i, { active: e.currentTarget.checked })} /></Table.Td>
