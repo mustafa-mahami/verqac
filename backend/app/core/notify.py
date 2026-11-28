@@ -97,7 +97,7 @@ def _post_mahami(payload: dict) -> None:
         s.mahami_url.rstrip("/") + "/integrations/odoo/notify", data=json.dumps(payload).encode(), method="POST",
         headers={"X-API-Key": s.mahami_key, "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=8) as r:  # noqa: S310 - fixed https URL from settings
+        with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310 - fixed https URL from settings (Mahami pushes before it answers)
             if r.status != 200:
                 log.warning("Mahami notify HTTP %s", r.status)
     except Exception:  # noqa: BLE001 - never break the caller
